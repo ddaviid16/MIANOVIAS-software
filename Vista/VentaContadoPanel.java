@@ -128,7 +128,7 @@ public class VentaContadoPanel extends JPanel {
     private JTextField txtSubtotal, txtTotal;
     private JTextField txtTC, txtTD, txtAMX, txtTRF, txtDEP, txtEFE;
     // === Pago con Devolución ===
-    private JComboBox<String> cbFolioDV; // Folio de devolución
+    private JComboBox<DVOption> cbFolioDV; // Folio de devolución
     private JTextField txtMontoDV;       // Monto de devolución
     private double montoDVAplicado = 0;  // Valor interno aplicado
 
@@ -747,6 +747,22 @@ private static Printable combinarEnDosPaginas(Printable p0, Printable p1){
     };
 }
 
+private static class DVOption {
+    final int numeroNotaDV;
+    final String folio;
+    final double saldoDisponible;
+
+    DVOption(int numeroNotaDV, String folio, double saldoDisponible) {
+        this.numeroNotaDV = numeroNotaDV;
+        this.folio = folio;
+        this.saldoDisponible = saldoDisponible;
+    }
+
+    @Override
+    public String toString() {
+        return folio + " - $" + String.format("%.2f", saldoDisponible);
+    }
+}
 
 
     // ======= Carga de cliente/nota =======
@@ -775,16 +791,18 @@ private static Printable combinarEnDosPaginas(Printable p0, Printable p1){
             Integer ult = ndao.obtenerUltimaNotaPorTelefono(tel);
             txtUltimaNota.setText(ult == null ? "" : String.valueOf(ult));
 
-            // === Cargar folios de devolución del cliente ===
+// === Cargar folios de devolución del cliente ===
 try (Connection cn = Conexion.Conecta.getConnection();
      PreparedStatement ps = cn.prepareStatement("""
         SELECT 
+            n.numero_nota,
             n.folio,
-            n.total AS total_original,
-            COALESCE(n.total - SUM(fp.devolucion), n.total) AS saldo_disponible,
+            n.saldo AS saldo_inicial,
+            COALESCE(n.saldo - SUM(fp.devolucion), n.saldo) AS saldo_disponible,
             MAX(n.fecha_registro) AS fecha_reciente
         FROM Notas n
-        JOIN Devoluciones d ON d.numero_nota_dv = n.numero_nota
+        JOIN Devoluciones d 
+            ON d.numero_nota_dv = n.numero_nota
         LEFT JOIN Formas_Pago fp
             ON fp.referencia_dv = n.folio
             AND fp.status = 'A'
@@ -792,33 +810,40 @@ try (Connection cn = Conexion.Conecta.getConnection();
         WHERE n.tipo = 'DV'
           AND n.status = 'A'
           AND n.telefono = ?
-        GROUP BY n.folio, n.total
-        HAVING COALESCE(n.total - SUM(fp.devolucion), n.total) > 0
-        ORDER BY fecha_reciente DESC;
+        GROUP BY n.numero_nota, n.folio, n.saldo
+        HAVING COALESCE(n.saldo - SUM(fp.devolucion), n.saldo) > 0
+        ORDER BY fecha_reciente DESC
      """)) {
+
     ps.setString(1, tel);
     try (ResultSet rs = ps.executeQuery()) {
         cbFolioDV.removeAllItems();
+        cbFolioDV.addItem(null); // Placeholder para "sin selección"
 
-        // Agregar item inicial "placeholder" sin valor real
-        cbFolioDV.addItem("--- Pagar con folio de devolución ---");
-
-        // Luego agregar los folios disponibles del cliente
         while (rs.next()) {
+            int numeroNotaDV = rs.getInt("numero_nota");
             String folio = rs.getString("folio");
-            double saldo = rs.getDouble("saldo_disponible");
-            cbFolioDV.addItem(folio + " - $" + String.format("%.2f", saldo));
+            double saldoDisp = rs.getDouble("saldo_disponible");
+
+            cbFolioDV.addItem(new DVOption(numeroNotaDV, folio, saldoDisp));
         }
-
-        // Seleccionar por defecto el mensaje inicial
+        cbFolioDV.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value,
+                                                          int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value == null) setText("--- Pagar con folio de devolución ---");
+                return this;
+            }
+        });
         cbFolioDV.setSelectedIndex(0);
-
     }
 } catch (SQLException ex) {
     JOptionPane.showMessageDialog(this,
         "Error al cargar devoluciones: " + ex.getMessage(),
         "Error", JOptionPane.ERROR_MESSAGE);
 }
+
 
 
 
@@ -1363,14 +1388,15 @@ if (selItem != null) {
 if (p.getDevolucion() != null && p.getDevolucion() > 0 &&
     p.getReferenciaDV() != null && !p.getReferenciaDV().isBlank()) {
     try {
-        // Extraer número de nota DV desde el folio, ejemplo "DV0007" → 7
-        String folioRef = p.getReferenciaDV().trim();
+        // Obtener el número real de la nota DV desde el combo
         int numeroNotaDV = 0;
-        try {
-            numeroNotaDV = Integer.parseInt(folioRef.replaceAll("[^0-9]", ""));
-        } catch (Exception exNum) {
-            throw new SQLException("Folio de devolución inválido: " + folioRef);
+        selItem = cbFolioDV.getSelectedItem();
+        if (selItem instanceof DVOption opt) {
+            numeroNotaDV = opt.numeroNotaDV;
+        } else {
+            throw new SQLException("No se pudo determinar la nota de devolución seleccionada.");
         }
+
 
         // Crear registro y aplicar el monto en Devoluciones.monto_usado
         java.util.List<Modelo.PagoDV> lst = new java.util.ArrayList<>();

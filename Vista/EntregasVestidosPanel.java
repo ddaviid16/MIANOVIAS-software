@@ -1,5 +1,6 @@
 package Vista;
 
+import Controlador.ExportadorCSV;
 import Controlador.PedidosDAO;
 
 import javax.swing.*;
@@ -62,6 +63,11 @@ public class EntregasVestidosPanel extends JPanel {
         JButton btGuardar = new JButton("Guardar entregas");
         btGuardar.addActionListener(_e -> guardarEntregas());
         north.add(btGuardar);
+
+        // Agregar botón de Exportar CSV
+        JButton btExportar = new JButton("Exportar CSV");
+        btExportar.addActionListener(_e -> exportarCSV());
+        north.add(btExportar);
 
         add(north, BorderLayout.NORTH);
 
@@ -131,7 +137,7 @@ public class EntregasVestidosPanel extends JPanel {
 
 
                 modelEnt.addRow(new Object[]{
-                        r.numeroNota,
+                        (r.folio == null ? String.valueOf(r.numeroNota) : r.folio),
                         safe(r.articulo),
                         safe(r.marca),
                         safe(r.modelo),
@@ -262,4 +268,62 @@ public class EntregasVestidosPanel extends JPanel {
         }
         private void refreshYear() { lbYear.setText(String.valueOf(year)); pack(); }
     }
+private void exportarCSV() {
+    // Preguntar al usuario qué pestaña quiere exportar
+    String[] opciones = {"Pendientes", "Entregados"};
+    int seleccion = JOptionPane.showOptionDialog(this,
+            "¿Qué pestaña deseas exportar a CSV?",
+            "Seleccionar pestaña",
+            JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, opciones, opciones[0]);
+
+    if (seleccion == JOptionPane.CLOSED_OPTION) return;
+
+    try {
+        if (seleccion == 0) { // Pendientes
+            exportarPendientes();
+        } else if (seleccion == 1) { // Entregados
+            exportarEntregados();
+        }
+    } catch (Exception e) {
+        JOptionPane.showMessageDialog(this, "Error al exportar CSV: " + e.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
+    private void exportarPendientes() {
+        List<PedidosDAO.EntregaVestidoRow> datos = new java.util.ArrayList<>();
+        for (int i = 0; i < modelPend.getRowCount(); i++) {
+            PedidosDAO.EntregaVestidoRow r = new PedidosDAO.EntregaVestidoRow();
+            r.folio = String.valueOf(modelPend.getValueAt(i, 0));
+            r.articulo = String.valueOf(modelPend.getValueAt(i, 1));
+            r.marca = String.valueOf(modelPend.getValueAt(i, 2));
+            r.modelo = String.valueOf(modelPend.getValueAt(i, 3));
+            r.talla = String.valueOf(modelPend.getValueAt(i, 4));
+            r.color = String.valueOf(modelPend.getValueAt(i, 5));
+            r.fechaEntrega = java.sql.Date.valueOf(LocalDate.parse(String.valueOf(modelPend.getValueAt(i, 6)), MX));
+            datos.add(r);
+        }
+
+        ExportadorCSV.guardarListaCSV(datos, "Entregas_Vestidos_Pendientes",
+                "folio", "articulo", "marca", "modelo", "talla", "color", "fechaEntrega");
+    }
+
+    private void exportarEntregados() {
+        List<PedidosDAO.EntregaVestidoRow> datos = new java.util.ArrayList<>();
+        for (int i = 0; i < modelEnt.getRowCount(); i++) {
+            PedidosDAO.EntregaVestidoRow r = new PedidosDAO.EntregaVestidoRow();
+            r.folio = String.valueOf(modelEnt.getValueAt(i, 0));
+            r.articulo = String.valueOf(modelEnt.getValueAt(i, 1));
+            r.marca = String.valueOf(modelEnt.getValueAt(i, 2));
+            r.modelo = String.valueOf(modelEnt.getValueAt(i, 3));
+            r.talla = String.valueOf(modelEnt.getValueAt(i, 4));
+            r.color = String.valueOf(modelEnt.getValueAt(i, 5));
+            r.fechaEntrega = java.sql.Date.valueOf(LocalDate.parse(String.valueOf(modelEnt.getValueAt(i, 6)), MX));
+            datos.add(r);
+        }
+
+        ExportadorCSV.guardarListaCSV(datos, "Entregas_Vestidos_Entregados",
+                "folio", "articulo", "marca", "modelo", "talla", "color", "fechaEntrega");
+    }
+
+    
 }

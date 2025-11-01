@@ -168,9 +168,9 @@ public class CorteCajaDAO {
 }
 
     /** Inserta el corte en la tabla Cortes_Caja (según tu estructura). */
-    public void guardar(Corte c) throws SQLException {
+public void guardar(Corte c) throws SQLException {
     try (Connection cn = Conecta.getConnection()) {
-        // 1) Intentar ACTUALIZAR el corte del mismo día
+        // Primero intentamos hacer un UPDATE si ya existe un corte para la fecha seleccionada
         String up = "UPDATE cortes_caja SET " +
                 "tarjeta_debito=?, tarjeta_credito=?, american_express=?, " +
                 "transferencia_bancaria=?, deposito_bancario=?, efectivo=?, " +
@@ -188,23 +188,14 @@ public class CorteCajaDAO {
             ps.setDate(9, java.sql.Date.valueOf(c.fecha));
 
             int updated = ps.executeUpdate();
-            if (updated > 0) return; // ya existía: quedó sobreescrito
+            if (updated > 0) return; // Ya existía, el corte fue actualizado
         }
 
-        // 2) Si no existía, INSERTAR
+        // Si no se hizo el UPDATE, entonces realizamos un INSERT
         String ins = "INSERT INTO cortes_caja(" +
-    "fecha, tarjeta_debito, tarjeta_credito, american_express, " +
-    "transferencia_bancaria, deposito_bancario, efectivo, retiros, efectivo_neto) " +
-    "VALUES (?,?,?,?,?,?,?,?,?) " +
-    "ON DUPLICATE KEY UPDATE " +
-    "tarjeta_debito=VALUES(tarjeta_debito), " +
-    "tarjeta_credito=VALUES(tarjeta_credito), " +
-    "american_express=VALUES(american_express), " +
-    "transferencia_bancaria=VALUES(transferencia_bancaria), " +
-    "deposito_bancario=VALUES(deposito_bancario), " +
-    "efectivo=VALUES(efectivo), " +
-    "retiros=VALUES(retiros), " +
-    "efectivo_neto=VALUES(efectivo_neto)";
+                "fecha, tarjeta_debito, tarjeta_credito, american_express, " +
+                "transferencia_bancaria, deposito_bancario, efectivo, retiros, efectivo_neto) " +
+                "VALUES (?,?,?,?,?,?,?,?,?)";
         try (PreparedStatement ps = cn.prepareStatement(ins)) {
             ps.setDate(1, java.sql.Date.valueOf(c.fecha));
             ps.setBigDecimal(2, c.tarjetaDebito);

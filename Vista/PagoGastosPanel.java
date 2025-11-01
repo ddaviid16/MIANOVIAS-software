@@ -53,6 +53,42 @@ public class PagoGastosPanel extends JPanel {
         c.weightx = 1;
 
         int y = 0;
+        // === Agregar calendario popup ===
+JButton btFecha = new JButton("Cambiar fecha");
+btFecha.addActionListener(_e -> {
+    LocalDate hoy = LocalDate.now();
+    LocalDate nueva = hoy;
+    try {
+    // Mostrar el cuadro de diálogo para seleccionar una fecha
+    String inputFecha = javax.swing.JOptionPane.showInputDialog(this, "Introduce fecha (YYYY-MM-DD):", txtFecha.getText());
+    
+    // Si el input es null (el usuario presionó cancelar), usamos la fecha actual.
+    if (inputFecha == null) {
+        return;  // Canceló la operación
+    }
+
+    // Intentamos parsear la fecha introducida. Si no es válida, lanzará una excepción.
+    nueva = LocalDate.parse(inputFecha);
+    
+    // Establecemos la nueva fecha en el campo de texto
+    txtFecha.setText(nueva.toString());
+    // Recargamos los datos con la nueva fecha
+    cargarDia(nueva);
+    actualizarDisponibleDeHoy();
+    bloquearSiNoEsHoy(nueva);
+
+} catch (Exception ex) {
+    // Si ocurre un error (como un formato inválido de fecha), mostramos un mensaje.
+    JOptionPane.showMessageDialog(this, "Formato inválido de fecha (YYYY-MM-DD).");
+}
+
+    txtFecha.setText(nueva.toString());
+    cargarDia(nueva);
+    actualizarDisponibleDeHoy();
+    bloquearSiNoEsHoy(nueva);
+});
+addCell(form, c, 2, 0, btFecha, 1, false);
+
 
         txtFecha.setText(LocalDate.now().toString());
         addCell(form, c, 0, y, new JLabel("Fecha:"), 1, false);
@@ -72,6 +108,27 @@ public class PagoGastosPanel extends JPanel {
         addCell(form, c, 1, y, btGuardar, 1, false);
 
         add(form, BorderLayout.NORTH);
+
+        // === Botón exportar CSV ===
+JButton btExportar = new JButton("Exportar CSV");
+btExportar.addActionListener(_e -> {
+    try {
+        LocalDate fecha = LocalDate.parse(txtFecha.getText());
+        var retiros = new PagoGastosDAO().listarPorDia(fecha);
+        if (retiros.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No hay retiros registrados para hoy.");
+            return;
+        }
+        ExportadorCSV.guardarListaCSV(retiros, "pagos_gastos",
+                "ts","efectivoDia","monto","motivo");
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, "Error exportando: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+    }
+});
+addCell(form, c, 2, y, btExportar, 1, false);
+
+
 
         tabla.setRowHeight(22);
 
@@ -114,6 +171,17 @@ public class PagoGastosPanel extends JPanel {
             System.err.println("efectivoDisponible(hoy): " + ex.getMessage());
         }
     }
+    private void bloquearSiNoEsHoy(LocalDate fecha) {
+    boolean esHoy = fecha.equals(LocalDate.now());
+    txtMonto.setEditable(esHoy);
+    txtMotivo.setEditable(esHoy);
+    for (Component comp : this.getComponents()) {
+        if (comp instanceof JButton b && b.getText().contains("Registrar retiro")) {
+            b.setEnabled(esHoy);
+        }
+    }
+}
+
 
     /** Registra el retiro y notifica a CorteCajaPanel. */
     private void guardar() {

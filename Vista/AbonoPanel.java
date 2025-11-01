@@ -4,7 +4,6 @@ import Controlador.NotasDAO;
 import Controlador.AbonoService;
 import Controlador.EmpresaDAO;
 import Controlador.clienteDAO;
-import Controlador.NotasMemoDAO;
 
 
 import Modelo.ClienteResumen;
@@ -375,7 +374,6 @@ private String n(String s) {
     return (s == null) ? "" : s;
 }
 private String obtenerOModificarCondiciones(int numeroNota, Connection cn) throws SQLException {
-    NotasMemoDAO dao = new NotasMemoDAO();
     String memo;
 
     // usar la misma conexión

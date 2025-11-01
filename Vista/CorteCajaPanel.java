@@ -4,9 +4,15 @@ import Controlador.CorteCajaDAO;
 import Controlador.PagoGastosDAO;
 
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.text.NumberFormatter;
 import java.awt.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.text.NumberFormat;
 import java.time.LocalDate;
@@ -148,6 +154,11 @@ private void actualizarTextoFecha() {
         JButton btGuardar = new JButton("Guardar corte");
         btGuardar.addActionListener(_e -> guardar());
         south.add(btGuardar);
+
+        // Export CSV button
+        JButton btExportar = new JButton("Exportar CSV");
+        btExportar.addActionListener(_e -> exportarCSV());
+        south.add(btExportar);
         add(south, BorderLayout.SOUTH);
 
         // Alineación a la IZQUIERDA en todos los campos
@@ -165,48 +176,90 @@ private void actualizarTextoFecha() {
 
 
     }
-    private void exportarCSV() {
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setDialogTitle("Guardar archivo CSV");
-        fileChooser.setFileFilter(new FileNameExtensionFilter("Archivos CSV", "csv"));
-        fileChooser.setSelectedFile(new File("corte_de_caja.csv")); // Nombre predeterminado
+    private static String esc(String s) {
+    if (s == null) return "";
+    if (s.contains(",") || s.contains("\"")) {
+        s = "\"" + s.replace("\"", "\"\"") + "\"";
+    }
+    return s;
+}
 
-        int result = fileChooser.showSaveDialog(null); // Mostrar el cuadro de diálogo de guardar
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File selectedFile = fileChooser.getSelectedFile();
-            String filePath = selectedFile.getAbsolutePath();
-            if (!filePath.endsWith(".csv")) {
-                selectedFile = new File(filePath + ".csv");
+private void exportarCSV() {
+    JFileChooser fileChooser = new JFileChooser();
+    fileChooser.setDialogTitle("Guardar archivo CSV");
+    fileChooser.setFileFilter(new FileNameExtensionFilter("Archivos CSV", "csv"));
+    fileChooser.setSelectedFile(new File("corte_de_caja.csv")); // Nombre predeterminado
+
+    int result = fileChooser.showSaveDialog(null); // Mostrar el cuadro de diálogo de guardar
+    if (result == JFileChooser.APPROVE_OPTION) {
+        File selectedFile = fileChooser.getSelectedFile();
+        String filePath = selectedFile.getAbsolutePath();
+        if (!filePath.endsWith(".csv")) {
+            selectedFile = new File(filePath + ".csv");
+        }
+
+        try {
+            // Exportar resumen del corte
+            CorteCajaDAO.Corte corte = new CorteCajaDAO().leerCortePorFecha(selectedDate);
+            if (corte == null) {
+                JOptionPane.showMessageDialog(this, "No hay corte guardado para esta fecha.");
+                return;
+            }
+            CorteCajaDAO.Ingresos ingresos = new CorteCajaDAO().leerIngresosPorOperacion(selectedDate);
+            if (ingresos == null) {
+                JOptionPane.showMessageDialog(this, "No hay ingresos por operación para esta fecha.");
+                return;
             }
 
-            try {
-                // Exportar resumen del corte
-                CorteCajaDAO.Corte corte = new CorteCajaDAO().leerCortePorFecha(selectedDate);
-                if (corte == null) {
-                    JOptionPane.showMessageDialog(this, "No hay corte guardado para esta fecha.");
-                    return;
-                }
-                java.util.List<CorteCajaDAO.Corte> lista = java.util.Collections.singletonList(corte);
-                ExportadorCSV.guardarListaCSV(lista, selectedFile.getAbsolutePath(),
-                        "fecha", "tarjetaDebito", "tarjetaCredito", "americanExpress", 
-                        "transferenciaBanc", "depositoBancario", "efectivo", "retiros", "efectivoNeto");
+            // Unificar toda la información en un solo archivo CSV
+            String[] headers = {
+                "fecha", "contado", "credito", "abono", "tarjetaDebito", "tarjetaCredito",
+                "americanExpress", "transferenciaBanc", "depositoBanc", "efectivo", "retiros", "efectivoNeto"
+            };
 
-                // Exportar también ingresos por tipo de operación (CN/CR/AB)
-                CorteCajaDAO.Ingresos ingresos = new CorteCajaDAO().leerIngresosPorOperacion(selectedDate);
-                class IngresosWrap {
-                    public LocalDate fecha = selectedDate;
-                    public BigDecimal contado = ingresos.contado, credito = ingresos.credito, abonos = ingresos.abonos;
-                }
-                ExportadorCSV.guardarListaCSV(java.util.List.of(new IngresosWrap()), selectedFile.getAbsolutePath(),
-                        "fecha", "contado", "credito", "abonos");
+            // Crear una lista con los datos a exportar
+            String[] row = {
+                corte.fecha.toString(), // Formato YYYY-MM-DD
+                ingresos.contado.toString(),
+                ingresos.credito.toString(),
+                ingresos.abonos.toString(),
+                corte.tarjetaDebito.toString(),
+                corte.tarjetaCredito.toString(),
+                corte.americanExpress.toString(),
+                corte.transferenciaBanc.toString(),
+                corte.depositoBancario.toString(),
+                corte.efectivo.toString(),
+                corte.retiros.toString(),
+                corte.efectivoNeto.toString()
+            };
 
+            // Crear el archivo CSV
+            try (PrintWriter pw = new PrintWriter(new OutputStreamWriter(new FileOutputStream(selectedFile), StandardCharsets.UTF_8))) {
+                // Escribir los encabezados
+                for (int i = 0; i < headers.length; i++) {
+                    if (i > 0) pw.print(",");
+                    pw.print(esc(headers[i]));
+                }
+                pw.println(); // Nueva línea después de los encabezados
+
+                // Escribir la fila con los datos del corte
+                for (int i = 0; i < row.length; i++) {
+                    if (i > 0) pw.print(",");
+                    pw.print(esc(row[i]));
+                }
+                pw.println(); // Nueva línea después de la fila de datos
+
+                // Mostrar mensaje de éxito
                 JOptionPane.showMessageDialog(this, "Archivo exportado exitosamente.", "Exportación exitosa", JOptionPane.INFORMATION_MESSAGE);
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Error exportando: " + ex.getMessage(),
-                        "Error", JOptionPane.ERROR_MESSAGE);
             }
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error exportando: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
+}
+
+
 
     private LocalDate obtenerFechaSeleccionada() {
     return selectedDate;
@@ -322,39 +375,49 @@ private void calcularNeto() {
     BigDecimal neto = efMan; // el efectivo físico contado, no lo restamos
     txtEfecNeto.setText(fmt(neto) + "   " + estado);
 }
+private void guardar() {
+    // Verificar si la fecha seleccionada es anterior a hoy
+    if (selectedDate.isBefore(LocalDate.now())) {
+        int response = JOptionPane.showConfirmDialog(this,
+            "Estás por guardar el corte de caja correspondiente a una fecha anterior a hoy. ¿Continuar?",
+            "Confirmar corte de caja", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
 
-    private void guardar() {
-        Object[] ops = {"SI","NO"};
-        int r = JOptionPane.showOptionDialog(this,"¿Guardar corte de caja?",
-                "Confirmación", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
-                null, ops, ops[0]);
-        if (r != JOptionPane.YES_OPTION) return;
-
-        try {
-            CorteCajaDAO.Corte c = new CorteCajaDAO.Corte();
-            c.fecha            = LocalDate.now();
-            c.tarjetaDebito    = valueOrSystem(manDebito,  sysDebito);
-            c.tarjetaCredito   = valueOrSystem(manCredito, sysCredito);
-            c.americanExpress  = valueOrSystem(manAmex,    sysAmex);
-            c.transferenciaBanc= valueOrSystem(manTransf,  sysTransf);
-            c.depositoBancario = valueOrSystem(manDepo,    sysDepo);
-            c.efectivo         = valueOrSystem(manEfec,    sysEfec);
-
-            // leer retiros actualizados desde BD antes de calcular y guardar
-            BigDecimal retirosHoy = new PagoGastosDAO().totalRetirado(LocalDate.now());
-            txtRetirosHoy.setText(fmt(retirosHoy));
-            c.retiros = (retirosHoy != null) ? retirosHoy : BigDecimal.ZERO;
-
-            c.efectivoNeto     = c.efectivo.subtract(c.retiros).max(BigDecimal.ZERO);
-
-            new CorteCajaDAO().guardar(c);
-            JOptionPane.showMessageDialog(this, "Corte guardado.");
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error al guardar: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+        if (response != JOptionPane.YES_OPTION) {
+            return; // Si el usuario no confirma, no guardamos
         }
     }
-    // --- Formato con separador de miles para mostrar en JTextField (solo lectura)
+
+    Object[] ops = {"SI","NO"};
+    int r = JOptionPane.showOptionDialog(this,"¿Guardar corte de caja?",
+            "Confirmación", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
+            null, ops, ops[0]);
+    if (r != JOptionPane.YES_OPTION) return;
+
+    try {
+        CorteCajaDAO.Corte c = new CorteCajaDAO.Corte();
+        c.fecha = selectedDate; // Usamos la fecha seleccionada
+        c.tarjetaDebito = valueOrSystem(manDebito, sysDebito);
+        c.tarjetaCredito = valueOrSystem(manCredito, sysCredito);
+        c.americanExpress = valueOrSystem(manAmex, sysAmex);
+        c.transferenciaBanc = valueOrSystem(manTransf, sysTransf);
+        c.depositoBancario = valueOrSystem(manDepo, sysDepo);
+        c.efectivo = valueOrSystem(manEfec, sysEfec);
+
+        // leer retiros actualizados desde BD antes de calcular y guardar
+        BigDecimal retirosHoy = new PagoGastosDAO().totalRetirado(LocalDate.now());
+        txtRetirosHoy.setText(fmt(retirosHoy));
+        c.retiros = (retirosHoy != null) ? retirosHoy : BigDecimal.ZERO;
+
+        c.efectivoNeto = c.efectivo.subtract(c.retiros).max(BigDecimal.ZERO);
+
+        new CorteCajaDAO().guardar(c); // Llamamos a la DAO para guardar el corte
+        JOptionPane.showMessageDialog(this, "Corte guardado.");
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this, "Error al guardar: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
+// --- Formato con separador de miles para mostrar en JTextField (solo lectura)
     private static final NumberFormat NF_DISPLAY = buildFmt();
     private static NumberFormat buildFmt() {
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);

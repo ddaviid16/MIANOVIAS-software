@@ -1,5 +1,6 @@
 package Vista;
 
+import Controlador.ExportadorCSV;
 import Controlador.InventarioDAO;
 import Modelo.Inventario;
 
@@ -42,6 +43,13 @@ public class InventarioPanel extends JPanel {
         rightPanel.add(btnBuscar);
         rightPanel.add(btnActualizar);
         top.add(rightPanel, BorderLayout.EAST);
+
+        JButton btExportar = new JButton("Exportar CSV");
+        btExportar.addActionListener(_e -> exportarCSV());
+
+        // Aquí agregamos el botón de exportar
+        left.add(btExportar);
+        top.add(left, BorderLayout.CENTER);
 
         add(top, BorderLayout.NORTH);
 
@@ -195,5 +203,18 @@ public class InventarioPanel extends JPanel {
             f.setContentPane(new InventarioPanel());
             f.setVisible(true);
         });
+    }
+    // Método para exportar a CSV
+    private void exportarCSV() {
+        try {
+            List<Inventario> lista = new InventarioDAO().listar(null); // Obtener la lista de inventarios
+
+            ExportadorCSV.guardarListaCSV(lista, "inventario_articulos", "codigoArticulo", "articulo", "marca", "modelo", "talla", "color", "precio", "descuento", "existencia");
+
+            JOptionPane.showMessageDialog(this, "Archivo exportado exitosamente.", "Exportación exitosa", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error al exportar CSV: " + e.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 }

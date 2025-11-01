@@ -1,5 +1,6 @@
 package Vista;
 
+import Controlador.ExportadorCSV;
 import Controlador.ObsequioInvDAO;
 import Modelo.ObsequioInv;
 
@@ -22,32 +23,37 @@ public class ObsequiosInvPanel extends JPanel {
     public ObsequiosInvPanel() {
         setLayout(new BorderLayout());
 
-        // ====== Barra superior (buscador + acciones)
-        JPanel top = new JPanel(new GridBagLayout());
-        GridBagConstraints c = new GridBagConstraints();
-        c.insets = new Insets(6, 6, 6, 6);
-        c.fill = GridBagConstraints.HORIZONTAL;
+        // ---- Barra superior ----
+        JPanel top = new JPanel(new BorderLayout());
 
-        int x = 0, y = 0;
-
-        c.gridx = x++; c.gridy = y; c.weightx = 0;
-        top.add(new JLabel("Buscar (artículo / talla / color):"), c);
-
-        txtFiltro = new JTextField();
-        c.gridx = x++; c.weightx = 1;
-        top.add(txtFiltro, c);
-
-        JButton btBuscar = new JButton("Buscar");
-        btBuscar.addActionListener(_e -> cargar());
-        c.gridx = x++; c.weightx = 0;
-        top.add(btBuscar, c);
-
-        JButton btLimpiar = new JButton("Limpiar");
-        btLimpiar.addActionListener(_e -> { txtFiltro.setText(""); cargar(); });
-        c.gridx = x++;
-        top.add(btLimpiar, c);
-
+        // Panel izquierdo
+        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton btNuevo = new JButton("Nuevo registro");
+        left.add(btNuevo);
+
+        JButton btExportar = new JButton("Exportar CSV");
+        btExportar.addActionListener(_e -> exportarCSV());
+        left.add(btExportar);
+
+        top.add(left, BorderLayout.WEST);
+
+        // Panel derecho
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        txtFiltro = new JTextField(30);
+        JButton btnBuscar = new JButton("Buscar");
+        JButton btnActualizar = new JButton("Actualizar");
+
+        rightPanel.add(new JLabel("Buscar (artículo / talla / color):"));
+        rightPanel.add(txtFiltro);
+        rightPanel.add(btnBuscar);
+        rightPanel.add(btnActualizar);
+
+        top.add(rightPanel, BorderLayout.EAST);
+
+        add(top, BorderLayout.NORTH);
+
+        // ENTER en el buscador = Buscar
+        txtFiltro.addActionListener(_e -> cargar());
         btNuevo.addActionListener(_e -> {
             // Obtener owner (Frame) desde este panel
             Window w = SwingUtilities.getWindowAncestor(ObsequiosInvPanel.this);
@@ -57,13 +63,7 @@ public class ObsequiosInvPanel extends JPanel {
             dlg.setVisible(true);
             if (dlg.isGuardado()) cargar();
         });
-        c.gridx = x++;
-        top.add(btNuevo, c);
-
-        add(top, BorderLayout.NORTH);
-
-        // ENTER en el buscador = Buscar
-        txtFiltro.addActionListener(_e -> cargar());
+        
 
         // ====== Tabla
         String[] cols = {"Código","Artículo","Marca","Modelo","Talla","Color",
@@ -187,6 +187,19 @@ public class ObsequiosInvPanel extends JPanel {
             fireEditingStopped();
             action.actionPerformed(new java.awt.event.ActionEvent(
                     table, java.awt.event.ActionEvent.ACTION_PERFORMED, String.valueOf(row)));
+        }
+    }
+// Método para exportar a CSV
+    private void exportarCSV() {
+        try {
+            List<ObsequioInv> lista = new ObsequioInvDAO().listar(); // Obtener la lista de obsequios
+
+            ExportadorCSV.guardarListaCSV(lista, "inventario_obsequios", "codigoArticulo", "articulo", "marca", "modelo", "talla", "color", "precio", "descuento", "existencia");
+
+            JOptionPane.showMessageDialog(this, "Archivo exportado exitosamente.", "Exportación exitosa", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error al exportar CSV: " + e.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 }
