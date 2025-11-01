@@ -2,6 +2,7 @@ package Vista;
 
 import Controlador.PagoGastosDAO;
 import Controlador.CorteCajaDAO;
+import Controlador.ExportadorCSV;
 import Utilidades.EventBus;
 
 import javax.swing.*;

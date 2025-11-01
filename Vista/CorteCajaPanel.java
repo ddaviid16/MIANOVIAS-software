@@ -165,6 +165,48 @@ private void actualizarTextoFecha() {
 
 
     }
+    private void exportarCSV() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Guardar archivo CSV");
+        fileChooser.setFileFilter(new FileNameExtensionFilter("Archivos CSV", "csv"));
+        fileChooser.setSelectedFile(new File("corte_de_caja.csv")); // Nombre predeterminado
+
+        int result = fileChooser.showSaveDialog(null); // Mostrar el cuadro de diálogo de guardar
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            String filePath = selectedFile.getAbsolutePath();
+            if (!filePath.endsWith(".csv")) {
+                selectedFile = new File(filePath + ".csv");
+            }
+
+            try {
+                // Exportar resumen del corte
+                CorteCajaDAO.Corte corte = new CorteCajaDAO().leerCortePorFecha(selectedDate);
+                if (corte == null) {
+                    JOptionPane.showMessageDialog(this, "No hay corte guardado para esta fecha.");
+                    return;
+                }
+                java.util.List<CorteCajaDAO.Corte> lista = java.util.Collections.singletonList(corte);
+                ExportadorCSV.guardarListaCSV(lista, selectedFile.getAbsolutePath(),
+                        "fecha", "tarjetaDebito", "tarjetaCredito", "americanExpress", 
+                        "transferenciaBanc", "depositoBancario", "efectivo", "retiros", "efectivoNeto");
+
+                // Exportar también ingresos por tipo de operación (CN/CR/AB)
+                CorteCajaDAO.Ingresos ingresos = new CorteCajaDAO().leerIngresosPorOperacion(selectedDate);
+                class IngresosWrap {
+                    public LocalDate fecha = selectedDate;
+                    public BigDecimal contado = ingresos.contado, credito = ingresos.credito, abonos = ingresos.abonos;
+                }
+                ExportadorCSV.guardarListaCSV(java.util.List.of(new IngresosWrap()), selectedFile.getAbsolutePath(),
+                        "fecha", "contado", "credito", "abonos");
+
+                JOptionPane.showMessageDialog(this, "Archivo exportado exitosamente.", "Exportación exitosa", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Error exportando: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
 
     private LocalDate obtenerFechaSeleccionada() {
     return selectedDate;
