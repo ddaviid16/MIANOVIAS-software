@@ -102,6 +102,7 @@ public class menuPrincipal extends JFrame {
         mainPanel.add(new HojasAjustePanel(),        ReportesPanel.CARD_REP_AJUSTES);
         mainPanel.add(new ReporteObsequiosPanel(),    ReportesPanel.CARD_REP_OBSEQ);
         mainPanel.add(new VentasPorVendedorPanel(),   ReportesPanel.CARD_REP_VENTVEND);
+        mainPanel.add(new NotasPorMesPanel(), ReportesPanel.CARD_REP_NOTAS_MES);
 
         // Mostrar
         pack();
@@ -214,6 +215,7 @@ public class menuPrincipal extends JFrame {
             case ReportesPanel.CARD_REP_AJUSTES:  return "Hojas de ajustes";
             case ReportesPanel.CARD_REP_OBSEQ:    return "Reporte de obsequios";
             case ReportesPanel.CARD_REP_VENTVEND: return "Ventas por vendedor";
+            case ReportesPanel.CARD_REP_NOTAS_MES: return "Notas por mes";
             // Los siguientes ya son “humanos”; devuélvelos tal cual:
             case "Venta de contado":
             case "Venta a crédito":

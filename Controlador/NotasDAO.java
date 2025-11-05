@@ -9,6 +9,36 @@ import java.time.LocalDate;
 import java.util.*;
 
 public class NotasDAO {
+    /** Notas (todas) por rango de fechas de registro [ini, fin), más recientes primero. */
+    public List<NotaResumen> listarNotasPorRangoResumen(java.time.LocalDate ini, java.time.LocalDate fin) throws SQLException {
+        String sql = "SELECT numero_nota, tipo, folio, DATE(fecha_registro) AS fecha, total, saldo, status " +
+                     "FROM Notas " +
+                     "WHERE fecha_registro >= ? AND fecha_registro < ? " +
+                     "ORDER BY fecha_registro DESC, numero_nota DESC";
+        try (java.sql.Connection cn = Conexion.Conecta.getConnection();
+             java.sql.PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setDate(1, java.sql.Date.valueOf(ini));
+            ps.setDate(2, java.sql.Date.valueOf(fin));
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                java.util.List<NotaResumen> out = new java.util.ArrayList<>();
+                while (rs.next()) {
+                    NotaResumen r = new NotaResumen();
+                    r.numero = rs.getInt("numero_nota");
+                    r.tipo   = rs.getString("tipo");
+                    try { r.folio = rs.getString("folio"); } catch (Throwable ignore) {}
+                    java.sql.Date f = rs.getDate("fecha");
+                    r.fecha = (f == null ? null : f.toLocalDate());
+                    try { r.total = (rs.getBigDecimal("total")==null? null : rs.getBigDecimal("total").doubleValue()); }
+                    catch(Throwable t){ r.total = rs.getDouble("total"); }
+                    try { r.saldo = (rs.getBigDecimal("saldo")==null? null : rs.getBigDecimal("saldo").doubleValue()); }
+                    catch(Throwable t){ r.saldo = rs.getDouble("saldo"); }
+                    r.status = rs.getString("status");
+                    out.add(r);
+                }
+                return out;
+            }
+        }
+    }
 
     public List<Nota> listarCreditosConSaldo(String telefono) throws SQLException {
         String sql =

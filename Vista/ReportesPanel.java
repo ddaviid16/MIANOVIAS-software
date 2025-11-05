@@ -19,6 +19,7 @@ public class ReportesPanel extends JPanel {
     public static final String CARD_REP_AJUSTES    = "Hojas de ajustes";
     public static final String CARD_REP_OBSEQ      = "Reporte de obsequios";
     public static final String CARD_REP_VENTVEND   = "Ventas por vendedor";
+    public static final String CARD_REP_NOTAS_MES = "Notas por mes";
 
     public ReportesPanel(Consumer<String> navigate) {
         this.navigate = navigate;
@@ -36,7 +37,7 @@ public class ReportesPanel extends JPanel {
         center.add(tile("Hojas de ajustes",     CARD_REP_AJUSTES));
         center.add(tile("Reporte de obsequios", CARD_REP_OBSEQ));
         center.add(tile("Ventas por vendedor",  CARD_REP_VENTVEND));
-
+        center.add(tile("Notas por mes",       CARD_REP_NOTAS_MES));
         add(center, BorderLayout.CENTER);
     }
 

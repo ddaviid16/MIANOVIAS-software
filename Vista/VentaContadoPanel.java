@@ -462,10 +462,29 @@ private String obtenerCondicionesPredeterminadas() {
     try (Connection cn = Conexion.Conecta.getConnection();
          PreparedStatement ps = cn.prepareStatement("SELECT texto FROM empresa_condiciones WHERE id=1");
          ResultSet rs = ps.executeQuery()) {
-        if (rs.next()) return rs.getString("texto");
+
+        if (rs.next()) {
+            String texto = rs.getString("texto");
+
+            // 🧹 Normalización y restauración de saltos de línea
+            if (texto != null) {
+                texto = texto
+                        .replace("\\r\\n", "\n")  // por si se guardaron escapados
+                        .replace("\\n", "\n")     // interpreta saltos reales
+                        .replace("\\r", "\n")
+                        .replaceAll("(?<!\\n)([.!?])(?=\\S)", "$1 ") // espacio tras punto
+                        .replaceAll("(?<=:)(?=\\S)", " ")            // espacio tras dos puntos
+                        .replaceAll("(?<=\\p{Ll})(?=\\p{Lu})", "\n") // salto antes de mayúscula
+                        .trim();
+            }
+
+            return texto;
+        }
+
     } catch (SQLException ex) {
         System.err.println("Error leyendo condiciones predeterminadas: " + ex.getMessage());
     }
+
     return ""; // fallback vacío si no hay registro
 }
 
@@ -612,7 +631,7 @@ private Map<String,String> buildMemoVars(EmpresaInfo emp, Nota n, java.util.List
     return v;
 }
 
-// Segunda página con las condiciones (formato de formulario + cuerpo del memo)
+// Segunda página con las condiciones, ahora con formato controlado y encabezado
 private Printable construirPrintableCondiciones(
         EmpresaInfo emp,
         Nota n,
@@ -624,57 +643,76 @@ private Printable construirPrintableCondiciones(
         LocalDate fechaEnTienda,
         String clienteNombre) {
 
-    final String tel1     = n.getTelefono()==null ? "" : n.getTelefono();
-
-    // Primer artículo "real"
-    NotaDetalle d0 = null;
-    for (NotaDetalle d : dets) { if (d.getCodigoArticulo() > 0) { d0 = d; break; } }
-    if (d0 == null && !dets.isEmpty()) d0 = dets.get(0);
-
-
-    // Medidas del cliente (efectivamente final)
-    String _b="", _c1="", _c2="";
-    try {
-        clienteDAO cdao = new clienteDAO();
-        java.util.Map<String,String> raw = cdao.detalleGenericoPorTelefono(tel1);
-        if (raw != null) {
-            for (java.util.Map.Entry<String,String> e : raw.entrySet()) {
-                String k = e.getKey()==null ? "" : e.getKey().toLowerCase();
-                String v = e.getValue()==null ? "" : e.getValue();
-                if (k.equals("busto"))   _b  = v;
-                if (k.equals("cintura")) _c1 = v;
-                if (k.equals("cadera"))  _c2 = v;
-            }
-        }
-    } catch (Exception ignore) { }
-
     return (g, pf, pageIndex) -> {
-    if (pageIndex > 0) return Printable.NO_SUCH_PAGE;
-    Graphics2D g2 = (Graphics2D) g;
+        if (pageIndex > 0) return Printable.NO_SUCH_PAGE;
+        Graphics2D g2 = (Graphics2D) g;
+        g2.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING,
+                            java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-    final int M = 50; // márgenes más amplios
-    int x = (int) pf.getImageableX() + M;
-    int y = (int) pf.getImageableY() + M;
-    int w = (int) pf.getImageableWidth() - (M * 2);
+        // Márgenes estándar carta (~2.5 cm ≈ 70 px)
+        final int M = 70;
+        int x = (int) pf.getImageableX() + M;
+        int y = (int) pf.getImageableY() + M;
+        int w = (int) pf.getImageableWidth() - (M * 2);
 
-    // Títulos y estilos
-    Font fTitle = g2.getFont().deriveFont(Font.BOLD, 13f);
-    Font fBody = g2.getFont().deriveFont(11f);
-    Font fSmall = g2.getFont().deriveFont(10f);
-    g2.setFont(fTitle);
+        // === Encabezado ===
+        Font titleFont = new Font("Arial", Font.BOLD, 13);
+        g2.setFont(titleFont);
+        centerText(g2, "CONDICIONES DE COMPRA Y ENTREGA", x, w, y);
+        y += 35;
 
-    // Cuerpo del memo con interlineado mejorado
-    g2.setFont(fSmall);
-    y = drawWrappedSimple(g2, memoCuerpoRenderizado == null ? "" : memoCuerpoRenderizado, x, y, w);
-    y += 20;
+        // === Cuerpo del texto ===
+        Font bodyFont = new Font("Arial", Font.PLAIN, 11);
+        g2.setFont(bodyFont);
 
-    // Separador
-    g2.drawLine(x, y, x + w, y);
-    y += 25;
+        // Normaliza saltos de línea y agrega espacios después de dos puntos si faltan
+String textoLimpio = (memoCuerpoRenderizado == null ? "" : memoCuerpoRenderizado)
+        .replaceAll("\\r\\n", "\n")   // normaliza saltos Windows
+        .replaceAll("\\r", "\n")      // normaliza saltos Mac
+        .replaceAll("(?<=:)(?=\\S)", " ") // asegura espacio tras dos puntos
+        .replaceAll(" {2,}", " ")     // colapsa solo espacios dobles, no saltos
+        .trim();
 
 
-    return Printable.PAGE_EXISTS;
-};
+        drawWrappedSimple(g2, textoLimpio, x, y, w);
+
+
+        return Printable.PAGE_EXISTS;
+    };
+}
+
+// ---- Funciones auxiliares para formateo ----
+private static void centerText(Graphics2D g2, String text, int x, int w, int y) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    int cx = x + (w - fm.stringWidth(text)) / 2;
+    g2.drawString(text, cx, y);
+}
+
+private static int drawParagraph(Graphics2D g2, String text,
+                                 int x, int y, int width, float interline) {
+    if (text == null || text.isBlank()) return y;
+
+    java.text.AttributedString attrStr = new java.text.AttributedString(text);
+    attrStr.addAttribute(java.awt.font.TextAttribute.FONT, g2.getFont());
+    java.text.AttributedCharacterIterator it = attrStr.getIterator();
+
+    java.awt.font.FontRenderContext frc = g2.getFontRenderContext();
+    java.awt.font.LineBreakMeasurer measurer =
+            new java.awt.font.LineBreakMeasurer(it, frc);
+
+    float wrapWidth = (float) width;
+    float drawPosY = (float) y;
+
+    while (measurer.getPosition() < it.getEndIndex()) {
+        java.awt.font.TextLayout layout =
+                measurer.nextLayout(wrapWidth);
+
+        drawPosY += layout.getAscent();
+        layout.draw(g2, x, drawPosY);
+        drawPosY += layout.getDescent() + layout.getLeading() + (layout.getAscent() * (interline - 1));
+    }
+
+    return (int) drawPosY;
 }
 
 
@@ -685,25 +723,30 @@ private static void centerSimple(Graphics2D g2, String s, int x, int w, int y){
     int cx = x + (w - fm.stringWidth(s)) / 2;
     g2.drawString(s, cx, y);
 }
-private static int drawWrappedSimple(Graphics2D g2, String text, int x, int y, int maxWidth){
-    if (text == null) return y;
-    text = text.trim();
-    if (text.isEmpty()) return y;
+private static int drawWrappedSimple(Graphics2D g2, String text, int x, int y, int maxWidth) {
+    if (text == null || text.trim().isEmpty()) return y;  // Se asegura que no intente dibujar texto vacío
     java.awt.FontMetrics fm = g2.getFontMetrics();
     String[] words = text.split("\\s+");
     StringBuilder line = new StringBuilder();
-    for (String w : words){
-        String tryLine = (line.length()==0 ? w : line + " " + w);
-        if (fm.stringWidth(tryLine) <= maxWidth){
-            line.setLength(0); line.append(tryLine);
+    
+    for (String word : words) {
+        String tryLine = (line.length() == 0 ? word : line + " " + word);
+        if (fm.stringWidth(tryLine) <= maxWidth) {
+            line.setLength(0);  // Restablece la línea
+            line.append(tryLine);
         } else {
-            g2.drawString(line.toString(), x, y);
-            y += 12;
-            line.setLength(0); line.append(w);
+            g2.drawString(line.toString(), x, y);  // Dibuja la línea
+            y += fm.getHeight();  // Aumenta la altura de la línea
+            line.setLength(0);  // Restablece la línea
+            line.append(word);  // Inicia la nueva línea con la palabra actual
         }
     }
-    if (line.length()>0){ g2.drawString(line.toString(), x, y); }
-    return y + 12;
+    
+    if (line.length() > 0) {
+        g2.drawString(line.toString(), x, y);  // Dibuja la última línea
+    }
+
+    return y + fm.getHeight();  // Asegura que se agregue el espacio adecuado para la última línea
 }
 /** Dibuja: LABEL ________ y escribe valor si viene. Devuelve el nuevo y. */
 private static int drawFieldLine(Graphics2D g2, int x, int y, int w, String label, String value) {

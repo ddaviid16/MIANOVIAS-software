@@ -346,22 +346,26 @@ private void exportarCSV() {
     }
 
 private void calcularNeto() {
-    BigDecimal efSis = parse(sysEfec);     // efectivo del sistema (formas_pago)
-    BigDecimal efMan = parseMoney(manEfec); // efectivo físico contado por el usuario
-    BigDecimal retiros = parse(txtRetirosHoy); // solo referencia
+    BigDecimal efSis = parse(sysEfec);      // Efectivo del sistema (formas_pago)
+    BigDecimal efMan = parseMoney(manEfec); // Efectivo contado manualmente
+    BigDecimal retiros = parse(txtRetirosHoy); // Total de retiros del día
 
     if (efSis == null) efSis = BigDecimal.ZERO;
     if (efMan == null) efMan = BigDecimal.ZERO;
     if (retiros == null) retiros = BigDecimal.ZERO;
 
-    // Efectivo disponible teórico después de retiros
-    BigDecimal efDisponible = efSis.subtract(retiros);
-    if (efDisponible.compareTo(BigDecimal.ZERO) < 0) efDisponible = BigDecimal.ZERO;
+    // Efectivo disponible teórico del sistema (ya restando retiros)
+    BigDecimal disponibleSistema = efSis.subtract(retiros);
+    if (disponibleSistema.compareTo(BigDecimal.ZERO) < 0) disponibleSistema = BigDecimal.ZERO;
 
-    // Diferencia física (manual - disponible)
-    BigDecimal diferencia = efMan.subtract(efDisponible);
+    // Efectivo neto real (lo que el usuario tiene físicamente tras restar retiros)
+    BigDecimal efectivoNeto = efMan.subtract(retiros);
+    if (efectivoNeto.compareTo(BigDecimal.ZERO) < 0) efectivoNeto = BigDecimal.ZERO;
 
-    // Texto de resultado
+    // Diferencia entre lo que el sistema espera y lo que el usuario cuenta
+    BigDecimal diferencia = efectivoNeto.subtract(disponibleSistema);
+
+    // Determinar mensaje
     String estado;
     int cmp = diferencia.compareTo(BigDecimal.ZERO);
     if (cmp > 0) {
@@ -372,8 +376,8 @@ private void calcularNeto() {
         estado = "→ SIN DIFERENCIA";
     }
 
-    BigDecimal neto = efMan; // el efectivo físico contado, no lo restamos
-    txtEfecNeto.setText(fmt(neto) + "   " + estado);
+    // Mostrar efectivo neto calculado y estado
+    txtEfecNeto.setText(fmt(efectivoNeto) + "   " + estado);
 }
 private void guardar() {
     // Verificar si la fecha seleccionada es anterior a hoy
@@ -382,20 +386,18 @@ private void guardar() {
             "Estás por guardar el corte de caja correspondiente a una fecha anterior a hoy. ¿Continuar?",
             "Confirmar corte de caja", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
 
-        if (response != JOptionPane.YES_OPTION) {
-            return; // Si el usuario no confirma, no guardamos
-        }
+        if (response != JOptionPane.YES_OPTION) return;
     }
 
-    Object[] ops = {"SI","NO"};
-    int r = JOptionPane.showOptionDialog(this,"¿Guardar corte de caja?",
+    Object[] ops = {"SI", "NO"};
+    int r = JOptionPane.showOptionDialog(this, "¿Guardar corte de caja?",
             "Confirmación", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
             null, ops, ops[0]);
     if (r != JOptionPane.YES_OPTION) return;
 
     try {
         CorteCajaDAO.Corte c = new CorteCajaDAO.Corte();
-        c.fecha = selectedDate; // Usamos la fecha seleccionada
+        c.fecha = selectedDate; // fecha seleccionada en el calendario
         c.tarjetaDebito = valueOrSystem(manDebito, sysDebito);
         c.tarjetaCredito = valueOrSystem(manCredito, sysCredito);
         c.americanExpress = valueOrSystem(manAmex, sysAmex);
@@ -404,14 +406,16 @@ private void guardar() {
         c.efectivo = valueOrSystem(manEfec, sysEfec);
 
         // leer retiros actualizados desde BD antes de calcular y guardar
-        BigDecimal retirosHoy = new PagoGastosDAO().totalRetirado(LocalDate.now());
+        BigDecimal retirosHoy = new PagoGastosDAO().totalRetirado(selectedDate);
         txtRetirosHoy.setText(fmt(retirosHoy));
         c.retiros = (retirosHoy != null) ? retirosHoy : BigDecimal.ZERO;
 
-        c.efectivoNeto = c.efectivo.subtract(c.retiros).max(BigDecimal.ZERO);
+        // El efectivo neto debe ser lo que queda físicamente tras los retiros
+        c.efectivoNeto = c.efectivo.subtract(c.retiros);
+        if (c.efectivoNeto.compareTo(BigDecimal.ZERO) < 0) c.efectivoNeto = BigDecimal.ZERO;
 
-        new CorteCajaDAO().guardar(c); // Llamamos a la DAO para guardar el corte
-        JOptionPane.showMessageDialog(this, "Corte guardado.");
+        new CorteCajaDAO().guardar(c);
+        JOptionPane.showMessageDialog(this, "Corte guardado correctamente.");
     } catch (SQLException ex) {
         JOptionPane.showMessageDialog(this, "Error al guardar: " + ex.getMessage(),
                 "Error", JOptionPane.ERROR_MESSAGE);

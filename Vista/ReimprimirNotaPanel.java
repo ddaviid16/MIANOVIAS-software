@@ -1797,7 +1797,10 @@ if (observacionesTexto != null && !observacionesTexto.isBlank()) {
                 y += 22;
 
                 g2.setFont(fText);
-                String abonoLetra = numeroALetras(abonoRealizado);  // Convierte el abono a letras
+                java.math.BigDecimal bdAbono = java.math.BigDecimal.valueOf(abonoRealizado)
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+        String abonoLetra = numeroALetras(bdAbono.doubleValue());
+        // Convierte el abono a letras
                 int anchoLetras = w - 230;
                 
                 int yInicioTotales = y - 24; // solo hubo una línea (TOTAL)
@@ -1965,6 +1968,65 @@ if (observacionesTexto != null && !observacionesTexto.isBlank()) {
                 }
                 return drawWrapped(g2, text == null ? "" : text.trim(), tx, baseline, maxWidth - (tx - x));
             }
+
+            private String numeroALetras(double valor) {
+    long pesos = Math.round(Math.floor(valor + 1e-6));
+    int centavos = (int) Math.round((valor - pesos) * 100.0);
+    if (centavos == 100) { pesos += 1; centavos = 0; }
+
+    if (pesos == 0) return "cero pesos " + String.format("%02d", centavos) + "/100 M.N.";
+
+    final String[] UN = {"", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve",
+            "diez", "once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete",
+            "dieciocho", "diecinueve", "veinte", "veintiuno", "veintidós", "veintitrés",
+            "veinticuatro", "veinticinco", "veintiséis", "veintisiete", "veintiocho", "veintinueve"};
+    final String[] DE = {"", "", "veinte", "treinta", "cuarenta", "cincuenta", "sesenta", "setenta", "ochenta", "noventa"};
+    final String[] CE = {"", "ciento", "doscientos", "trescientos", "cuatrocientos", "quinientos",
+            "seiscientos", "setecientos", "ochocientos", "novecientos"};
+
+    java.util.function.Function<Integer,String> tres = n -> {
+        if (n == 0) return "";
+        if (n == 100) return "cien";
+        int c = n / 100, r = n % 100, d = r / 10, u = r % 10;
+        String s = (c > 0 ? CE[c] : "");
+        if (r > 0) {
+            if (!s.isEmpty()) s += " ";
+            if (r < 30) s += UN[r];
+            else {
+                s += DE[d];
+                if (u > 0) s += " y " + UN[u];
+            }
+        }
+        return s.trim();
+    };
+
+    StringBuilder sb = new StringBuilder();
+    int millones = (int)((pesos / 1_000_000) % 1000);
+    int miles    = (int)((pesos / 1_000) % 1000);
+    int cientos  = (int)(pesos % 1000);
+
+    long milesDeMillones = pesos / 1_000_000_000L;
+    if (milesDeMillones > 0) {
+        sb.append(tres.apply((int)(milesDeMillones % 1000))).append(" mil millones");
+        if (millones>0 || miles>0 || cientos>0) sb.append(" ");
+    }
+    if (millones > 0) {
+        sb.append(tres.apply(millones)).append(millones==1 ? " millón" : " millones");
+        if (miles>0 || cientos>0) sb.append(" ");
+    }
+    if (miles > 0) {
+        if (miles == 1) sb.append("mil");
+        else sb.append(tres.apply(miles)).append(" mil");
+        if (cientos>0) sb.append(" ");
+    }
+    if (cientos > 0) sb.append(tres.apply(cientos));
+
+    String texto = sb.toString().trim();
+    texto = texto.replaceAll("\\buno(?=\\s+(mil|millón|millones|pesos)\\b)", "un");
+    texto = texto.replaceAll("\\bveintiuno(?=\\s+(mil|millón|millones|pesos)\\b)", "veintiún");
+
+    return texto + " pesos " + String.format("%02d", centavos) + "/100 M.N.";
+}
 
         };
     }
@@ -2306,6 +2368,65 @@ private Printable construirPrintableDevolucion(
             gg.dispose();
             return out;
         }
+        private String numeroALetras(double valor) {
+    long pesos = Math.round(Math.floor(valor + 1e-6));
+    int centavos = (int) Math.round((valor - pesos) * 100.0);
+    if (centavos == 100) { pesos += 1; centavos = 0; }
+
+    if (pesos == 0) return "cero pesos " + String.format("%02d", centavos) + "/100 M.N.";
+
+    final String[] UN = {"", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve",
+            "diez", "once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete",
+            "dieciocho", "diecinueve", "veinte", "veintiuno", "veintidós", "veintitrés",
+            "veinticuatro", "veinticinco", "veintiséis", "veintisiete", "veintiocho", "veintinueve"};
+    final String[] DE = {"", "", "veinte", "treinta", "cuarenta", "cincuenta", "sesenta", "setenta", "ochenta", "noventa"};
+    final String[] CE = {"", "ciento", "doscientos", "trescientos", "cuatrocientos", "quinientos",
+            "seiscientos", "setecientos", "ochocientos", "novecientos"};
+
+    java.util.function.Function<Integer,String> tres = n -> {
+        if (n == 0) return "";
+        if (n == 100) return "cien";
+        int c = n / 100, r = n % 100, d = r / 10, u = r % 10;
+        String s = (c > 0 ? CE[c] : "");
+        if (r > 0) {
+            if (!s.isEmpty()) s += " ";
+            if (r < 30) s += UN[r];
+            else {
+                s += DE[d];
+                if (u > 0) s += " y " + UN[u];
+            }
+        }
+        return s.trim();
+    };
+
+    StringBuilder sb = new StringBuilder();
+    int millones = (int)((pesos / 1_000_000) % 1000);
+    int miles    = (int)((pesos / 1_000) % 1000);
+    int cientos  = (int)(pesos % 1000);
+
+    long milesDeMillones = pesos / 1_000_000_000L;
+    if (milesDeMillones > 0) {
+        sb.append(tres.apply((int)(milesDeMillones % 1000))).append(" mil millones");
+        if (millones>0 || miles>0 || cientos>0) sb.append(" ");
+    }
+    if (millones > 0) {
+        sb.append(tres.apply(millones)).append(millones==1 ? " millón" : " millones");
+        if (miles>0 || cientos>0) sb.append(" ");
+    }
+    if (miles > 0) {
+        if (miles == 1) sb.append("mil");
+        else sb.append(tres.apply(miles)).append(" mil");
+        if (cientos>0) sb.append(" ");
+    }
+    if (cientos > 0) sb.append(tres.apply(cientos));
+
+    String texto = sb.toString().trim();
+    texto = texto.replaceAll("\\buno(?=\\s+(mil|millón|millones|pesos)\\b)", "un");
+    texto = texto.replaceAll("\\bveintiuno(?=\\s+(mil|millón|millones|pesos)\\b)", "veintiún");
+
+    return texto + " pesos " + String.format("%02d", centavos) + "/100 M.N.";
+}
+
     };
 }
 
