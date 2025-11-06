@@ -1,6 +1,8 @@
 package Controlador;
 
 import Conexion.Conecta;
+import Modelo.Inventario;
+
 
 import java.math.BigDecimal;
 import java.sql.*;
@@ -152,6 +154,7 @@ public class PedidosDAO {
 
     /** Estructura para mostrar pedidos en el panel de "Artículos a pedir". */
     public static class PedidoRow {
+        public String folio;
         public int numeroNota;
         public Date fechaRegistro;
         public String articulo, marca, modelo, talla, color;
@@ -192,6 +195,92 @@ public class PedidosDAO {
             ps.executeBatch();
         }
     }
+    /** 
+ * Actualiza Pedidos.codigo_articulo.
+ * Si el código NO existe en Inventarios, crea el artículo con los datos del pedido y existencia=1 (status 'A').
+ */
+public void actualizarCodigoArticulo(int numeroNota, Integer codigoNuevo) throws SQLException {
+    try (Connection cn = Conecta.getConnection()) {
+        boolean auto = cn.getAutoCommit();
+        cn.setAutoCommit(false);
+        try {
+            // 1) Si hay código: crear en Inventarios si no existe
+            if (codigoNuevo != null) {
+                InventarioDAO invDao = new InventarioDAO();
+                Inventario ya = invDao.buscarPorCodigo(codigoNuevo);
+                if (ya == null) {
+                    PedidoRow p = leerPedidoBasico(cn, numeroNota);
+                    if (p == null) throw new SQLException("Pedido no encontrado para nota " + numeroNota);
+
+                    Inventario inv = new Inventario();
+                    inv.setCodigoArticulo(codigoNuevo);
+                    inv.setArticulo(nz(p.articulo));
+                    inv.setMarca(nz(p.marca));
+                    inv.setModelo(nz(p.modelo));
+                    inv.setTalla(nz(p.talla));
+                    inv.setColor(nz(p.color));
+                    inv.setPrecio(p.precio == null ? 0.0 : p.precio.doubleValue());
+                    inv.setDescuento(p.descuento == null ? null : p.descuento.doubleValue());
+                    inv.setExistencia(1);          // <- pieza que llegó a tienda
+                    inv.setStatus("A");
+                    invDao.insertar(inv);          // fecha_registro la pone el INSERT (CURDATE)
+                }
+            }
+
+            // 2) Escribir el código (o NULL) en Pedidos
+            try (PreparedStatement up = cn.prepareStatement(
+                    "UPDATE Pedidos SET codigo_articulo=? WHERE numero_nota=?")) {
+                if (codigoNuevo == null) up.setNull(1, java.sql.Types.INTEGER);
+                else                      up.setInt(1,  codigoNuevo);
+                up.setInt(2, numeroNota);
+                up.executeUpdate();
+            }
+
+            cn.commit();
+        } catch (SQLException ex) {
+            cn.rollback();
+            throw ex;
+        } finally {
+            cn.setAutoCommit(auto);
+        }
+    }
+}
+
+    public void actualizarCodigoArticuloPorNota(int numeroNota, Integer codigoArticulo) throws SQLException {
+    try (var cn = Conecta.getConnection()) {
+        // Si viene un código, validar que exista para no violar la FK
+        if (codigoArticulo != null) {
+            try (var chk = cn.prepareStatement(
+                    "SELECT 1 FROM Inventarios WHERE codigo_articulo=? LIMIT 1")) {
+                chk.setInt(1, codigoArticulo);
+                try (var rs = chk.executeQuery()) {
+                    if (!rs.next()) {
+                        throw new SQLException("El código de artículo " + codigoArticulo +
+                                " no existe en Inventarios.");
+                    }
+                }
+            }
+        }
+        try (var ps = cn.prepareStatement(
+                "UPDATE Pedidos SET codigo_articulo=? WHERE numero_nota=?")) {
+            if (codigoArticulo == null) ps.setNull(1, java.sql.Types.INTEGER);
+            else ps.setInt(1, codigoArticulo);
+            ps.setInt(2, numeroNota);
+            ps.executeUpdate();
+        }
+    }
+}
+
+// ¿Existe ese código en Inventarios?
+public boolean existeCodigoArticulo(int codigo) throws SQLException {
+    try (var cn = Conecta.getConnection();
+         var ps = cn.prepareStatement(
+             "SELECT 1 FROM Inventarios WHERE codigo_articulo=? LIMIT 1")) {
+        ps.setInt(1, codigo);
+        try (var rs = ps.executeQuery()) { return rs.next(); }
+    }
+}
+
 
     // ===================== LECTURA / MARCADO =====================
 
@@ -242,53 +331,109 @@ public class PedidosDAO {
     }
 
     /** Lista SOLO los pendientes (con fechaEntrega calculada). */
-    public List<PedidoRow> listarPendientes() throws SQLException {
-        try (Connection cn = Conecta.getConnection()) {
-            boolean tieneEnTienda = hasColumn(cn, "Pedidos", "en_tienda");
+public List<PedidoRow> listarPendientes() throws SQLException {
+    try (Connection cn = Conecta.getConnection()) {
+        boolean tieneEnTienda = hasColumn(cn, "Pedidos", "en_tienda");
+        String fc = folioCol(cn);
+        String folioSel = (fc == null) ? "CONCAT(p.numero_nota,'') AS folio" : ("n."+fc+" AS folio");
 
-            String select =
-                "SELECT numero_nota, fecha_registro, articulo, marca, modelo, talla, color," +
-                "       precio, descuento, fecha_evento, telefono, codigo_articulo, status" +
-                (tieneEnTienda ? ", en_tienda" : "") +
-                ", COALESCE(fecha_evento, fecha_registro) AS fecha_entrega " +
-                "FROM Pedidos " +
-                (tieneEnTienda
-                    ? "WHERE COALESCE(en_tienda,'N') <> 'S' "
-                    : "WHERE COALESCE(status,'A') <> 'C' ") +
-                "ORDER BY COALESCE(fecha_registro, CURRENT_DATE) DESC, numero_nota DESC";
+        String select =
+            "SELECT " + folioSel + ", p.numero_nota, p.fecha_registro, p.articulo, p.marca, p.modelo, p.talla, p.color," +
+            "       p.precio, p.descuento, p.fecha_evento, p.telefono, p.codigo_articulo, p.status " +
+            (tieneEnTienda ? ", p.en_tienda " : "") +
+            ", COALESCE(p.fecha_evento, p.fecha_registro) AS fecha_entrega " +
+            "FROM Pedidos p " +
+            "LEFT JOIN Notas n ON n.numero_nota = p.numero_nota " +
+            (tieneEnTienda
+                ? "WHERE COALESCE(p.en_tienda,'N') <> 'S' "
+                : "WHERE COALESCE(p.status,'A') <> 'C' ") +
+            "ORDER BY COALESCE(p.fecha_registro, CURRENT_DATE) DESC, p.numero_nota DESC";
 
-            try (PreparedStatement ps = cn.prepareStatement(select);
-                 ResultSet rs = ps.executeQuery()) {
-                List<PedidoRow> out = new ArrayList<>();
-                while (rs.next()) {
-                    PedidoRow r = new PedidoRow();
-                    r.numeroNota     = rs.getInt("numero_nota");
-                    r.fechaRegistro  = rs.getDate("fecha_registro");
-                    r.articulo       = rs.getString("articulo");
-                    r.marca          = rs.getString("marca");
-                    r.modelo         = rs.getString("modelo");
-                    r.talla          = rs.getString("talla");
-                    r.color          = rs.getString("color");
-                    r.precio         = rs.getBigDecimal("precio");
-                    r.descuento      = rs.getBigDecimal("descuento");
-                    r.fechaEvento    = rs.getDate("fecha_evento");
-                    r.fechaEntrega   = rs.getDate("fecha_entrega");
-                    r.telefono       = rs.getString("telefono");
-                    int cod          = rs.getInt("codigo_articulo");
-                    r.codigoArticulo = rs.wasNull() ? null : cod;
-                    r.status         = rs.getString("status");
-                    if (tieneEnTienda) {
-                        String en = rs.getString("en_tienda");
-                        r.enTienda = "S".equalsIgnoreCase(en) || "1".equals(en) || "true".equalsIgnoreCase(en);
-                    } else {
-                        r.enTienda = "C".equalsIgnoreCase(r.status == null ? "" : r.status);
-                    }
-                    out.add(r);
+        try (PreparedStatement ps = cn.prepareStatement(select);
+             ResultSet rs = ps.executeQuery()) {
+            List<PedidoRow> out = new ArrayList<>();
+            while (rs.next()) {
+                PedidoRow r = new PedidoRow();
+                r.folio          = rs.getString("folio");
+                r.numeroNota     = rs.getInt("numero_nota");
+                r.fechaRegistro  = rs.getDate("fecha_registro");
+                r.articulo       = rs.getString("articulo");
+                r.marca          = rs.getString("marca");
+                r.modelo         = rs.getString("modelo");
+                r.talla          = rs.getString("talla");
+                r.color          = rs.getString("color");
+                r.precio         = rs.getBigDecimal("precio");
+                r.descuento      = rs.getBigDecimal("descuento");
+                r.fechaEvento    = rs.getDate("fecha_evento");
+                r.fechaEntrega   = rs.getDate("fecha_entrega");
+                r.telefono       = rs.getString("telefono");
+                int cod          = rs.getInt("codigo_articulo");
+                r.codigoArticulo = rs.wasNull() ? null : cod;
+                r.status         = rs.getString("status");
+                if (tieneEnTienda) {
+                    String en = rs.getString("en_tienda");
+                    r.enTienda = "S".equalsIgnoreCase(en) || "1".equals(en) || "true".equalsIgnoreCase(en);
+                } else {
+                    r.enTienda = "C".equalsIgnoreCase(r.status == null ? "" : r.status);
                 }
-                return out;
+                out.add(r);
             }
+            return out;
         }
     }
+}
+
+public List<PedidoRow> listarEnTienda() throws SQLException {
+    try (Connection cn = Conecta.getConnection()) {
+        boolean tieneEnTienda = hasColumn(cn, "Pedidos", "en_tienda");
+        String fc = folioCol(cn);
+        String folioSel = (fc == null) ? "CONCAT(p.numero_nota,'') AS folio" : ("n."+fc+" AS folio");
+
+        String select =
+            "SELECT " + folioSel + ", p.numero_nota, p.fecha_registro, p.articulo, p.marca, p.modelo, p.talla, p.color," +
+            "       p.precio, p.descuento, p.fecha_evento, p.telefono, p.codigo_articulo, p.status " +
+            (tieneEnTienda ? ", p.en_tienda " : "") +
+            ", COALESCE(p.fecha_evento, p.fecha_registro) AS fecha_entrega " +
+            "FROM Pedidos p " +
+            "LEFT JOIN Notas n ON n.numero_nota = p.numero_nota " +
+            (tieneEnTienda
+                ? "WHERE COALESCE(p.en_tienda,'N') = 'S' "
+                : "WHERE COALESCE(p.status,'A') = 'C' ") +
+            "ORDER BY COALESCE(p.fecha_registro, CURRENT_DATE) DESC, p.numero_nota DESC";
+
+        try (PreparedStatement ps = cn.prepareStatement(select);
+             ResultSet rs = ps.executeQuery()) {
+            List<PedidoRow> out = new ArrayList<>();
+            while (rs.next()) {
+                PedidoRow r = new PedidoRow();
+                r.folio          = rs.getString("folio");
+                r.numeroNota     = rs.getInt("numero_nota");
+                r.fechaRegistro  = rs.getDate("fecha_registro");
+                r.articulo       = rs.getString("articulo");
+                r.marca          = rs.getString("marca");
+                r.modelo         = rs.getString("modelo");
+                r.talla          = rs.getString("talla");
+                r.color          = rs.getString("color");
+                r.precio         = rs.getBigDecimal("precio");
+                r.descuento      = rs.getBigDecimal("descuento");
+                r.fechaEvento    = rs.getDate("fecha_evento");
+                r.fechaEntrega   = rs.getDate("fecha_entrega");
+                r.telefono       = rs.getString("telefono");
+                int cod          = rs.getInt("codigo_articulo");
+                r.codigoArticulo = rs.wasNull() ? null : cod;
+                r.status         = rs.getString("status");
+                if (tieneEnTienda) {
+                    String en = rs.getString("en_tienda");
+                    r.enTienda = "S".equalsIgnoreCase(en) || "1".equals(en) || "true".equalsIgnoreCase(en);
+                } else {
+                    r.enTienda = "C".equalsIgnoreCase(r.status == null ? "" : r.status);
+                }
+                out.add(r);
+            }
+            return out;
+        }
+    }
+}
 
     /** Marca/desmarca “en tienda” para renglones de NOTA_DETALLE y también actualiza Pedidos/entregas_vestidos. */
     public void setEntregaEnTienda(int detId, int numeroNota, boolean enTienda) throws SQLException {
@@ -437,7 +582,28 @@ public class PedidosDAO {
         }
     }
 
+
     // ===================== HELPERS =====================
+    /** Lee los campos del pedido necesarios para crear inventario. */
+private PedidoRow leerPedidoBasico(Connection cn, int numeroNota) throws SQLException {
+    String q = "SELECT articulo, marca, modelo, talla, color, precio, descuento " +
+               "FROM Pedidos WHERE numero_nota=? LIMIT 1";
+    try (PreparedStatement ps = cn.prepareStatement(q)) {
+        ps.setInt(1, numeroNota);
+        try (ResultSet rs = ps.executeQuery()) {
+            if (!rs.next()) return null;
+            PedidoRow r = new PedidoRow();
+            r.articulo  = rs.getString("articulo");
+            r.marca     = rs.getString("marca");
+            r.modelo    = rs.getString("modelo");
+            r.talla     = rs.getString("talla");
+            r.color     = rs.getString("color");
+            r.precio    = rs.getBigDecimal("precio");
+            r.descuento = rs.getBigDecimal("descuento");
+            return r;
+        }
+    }
+}
 
     private static String nz(String s){ return (s == null) ? "" : s.trim(); }
 

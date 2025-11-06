@@ -232,6 +232,7 @@ public class NotasPorMesPanel extends JPanel {
         String tipoSel = getTipoNotaSeleccionada();
         if ("AB".equalsIgnoreCase(tipoSel)) {
             String folioCR = obtenerFolioCreditoAbonado(numeroNota);
+            folioCR = (folioCR == null) ? "" : folioCR.trim();
             lbAbonaA.setText(folioCR.isBlank() ? "Abona a: (sin relación)" : "Abona a: " + folioCR);
         } else {
             lbAbonaA.setText(" ");
