@@ -247,5 +247,7 @@ public class menuPrincipal extends JFrame {
                 if ("Nimbus".equals(i.getName())) { UIManager.setLookAndFeel(i.getClassName()); break; }
         } catch (Exception ignore) {}
         SwingUtilities.invokeLater(menuPrincipal::new);
+        Conexion.BootstrapDB.ensure();   // crea DB/tablas si no existen
+    javax.swing.SwingUtilities.invokeLater(() -> new menuPrincipal().setVisible(true));
     }
 }

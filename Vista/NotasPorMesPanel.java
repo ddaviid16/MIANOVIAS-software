@@ -4,6 +4,7 @@ import Controlador.NotasDAO;
 import Controlador.clienteDAO;
 import Controlador.FormasPagoDAO;
 import Controlador.ExportadorCSV;
+import Controlador.FacturaDatosDAO;
 import Conexion.Conecta;
 
 import javax.swing.*;
@@ -31,7 +32,7 @@ public class NotasPorMesPanel extends JPanel {
 
     // -------- Notas (arriba)
     private final DefaultTableModel modelNotas = new DefaultTableModel(
-            new String[]{"# Nota","Tipo","Folio","Fecha","Total","Saldo","Status"}, 0) {
+            new String[]{"# Nota","Tipo","Folio","Fecha","Total","Saldo","Status", "Factura"}, 0) {
         @Override public boolean isCellEditable(int r, int c) { return false; }
         @Override public Class<?> getColumnClass(int c) {
             return switch (c) {
@@ -42,6 +43,17 @@ public class NotasPorMesPanel extends JPanel {
         }
     };
     private final JTable tbNotas = new JTable(modelNotas);
+
+    // --- NUEVO: cache para acceder al NotaResumen seleccionado ---
+private final Map<Integer, NotasDAO.NotaResumen> cacheNotas = new HashMap<>();
+
+// --- NUEVO: tabla Factura (clave/valor) ---
+private final DefaultTableModel modelFactura = new DefaultTableModel(
+        new String[]{"Campo", "Valor"}, 0) {
+    @Override public boolean isCellEditable(int r, int c) { return false; }
+};
+private final JTable tbFactura = new JTable(modelFactura);
+
 
     // -------- Tabs (abajo)
     // Detalle de artículos
@@ -75,6 +87,8 @@ public class NotasPorMesPanel extends JPanel {
     private final JTable tbCliente = new JTable(modelCliente);
 
     private final JTabbedPane tabs = new JTabbedPane();
+    
+
 
     public NotasPorMesPanel() {
         setLayout(new BorderLayout());
@@ -133,6 +147,8 @@ public class NotasPorMesPanel extends JPanel {
         tabs.addTab("Detalle", new JScrollPane(tbDet));
         tabs.addTab("Pagos", pagosPanel);
         tabs.addTab("Cliente", new JScrollPane(tbCliente));
+        tbFactura.setRowHeight(22);
+        tabs.addTab("Factura", new JScrollPane(tbFactura));
 
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, spNotas, tabs);
         split.setResizeWeight(0.45);
@@ -148,6 +164,7 @@ public class NotasPorMesPanel extends JPanel {
             }
             cargarDetalleYPagos(num);
             cargarCliente(num);
+            cargarFactura(num);
         });
 
         // Primera carga
@@ -158,6 +175,8 @@ public class NotasPorMesPanel extends JPanel {
     private void cargar() {
         modelNotas.setRowCount(0);
         limpiarDetallePagosCliente();
+        cacheNotas.clear();
+
 
         LocalDate ini = selectedYM.atDay(1);
         LocalDate fin = ini.plusMonths(1);
@@ -166,12 +185,15 @@ public class NotasPorMesPanel extends JPanel {
             NotasDAO dao = new NotasDAO();
             List<NotasDAO.NotaResumen> list = dao.listarNotasPorRangoResumen(ini, fin);
             for (NotasDAO.NotaResumen r : list) {
-                modelNotas.addRow(new Object[]{
-                        r.numero, r.tipo, safe(r.folio),
-                        r.fecha == null ? "" : r.fecha.format(DF),
-                        n(r.total), n(r.saldo), safe(r.status)
-                });
-            }
+    
+    cacheNotas.put(r.numero, r);
+
+    modelNotas.addRow(new Object[]{
+            r.numero, r.tipo, safe(r.folio),
+            r.fecha == null ? "" : r.fecha.format(DF),
+            n(r.total), n(r.saldo), safe(r.status),
+    });
+}
             if (list.isEmpty()) {
                 modelNotas.addRow(new Object[]{"—","—","—","—",0.0,0.0,"Sin registros"});
             }
@@ -262,12 +284,57 @@ public class NotasPorMesPanel extends JPanel {
         }
     }
 
+    private void cargarFactura(int numeroNota) {
+    modelFactura.setRowCount(0);
+
+    // 2) Datos capturados para facturar desde Factura_Datos
+    try {
+        Controlador.FacturaDatosDAO dao = new Controlador.FacturaDatosDAO();
+        Controlador.FacturaDatosDAO.Row fd = dao.obtenerPorNota(numeroNota);
+
+        if (fd != null) {
+            String personaFmt =
+                    (fd.persona == null) ? "" :
+                    (fd.persona.equalsIgnoreCase("PM") ? "Persona moral" :
+                     fd.persona.equalsIgnoreCase("PF") ? "Persona física" : fd.persona);
+
+            addKV(modelFactura, "Persona", personaFmt);
+            addKV(modelFactura, "RFC", n(fd.rfc));
+            addKV(modelFactura, "Régimen fiscal", n(fd.regimen));
+            addKV(modelFactura, "Uso del CFDI", n(fd.usoCfdi));
+            addKV(modelFactura, "Correo", n(fd.correo));
+
+            // (Opcional) Timestamps si quieres verlos:
+            if (fd.createdAt != null) addKV(modelFactura, "Capturado", fd.createdAt.toString());
+            if (fd.updatedAt != null) addKV(modelFactura, "Actualizado", fd.updatedAt.toString());
+        } else {
+            // Sin captura previa
+            addKV(modelFactura, "Persona", "");
+            addKV(modelFactura, "RFC", "");
+            addKV(modelFactura, "Régimen fiscal", "");
+            addKV(modelFactura, "Uso del CFDI", "");
+            addKV(modelFactura, "Correo", "");
+        }
+    } catch (Exception e) {
+        // Si prefieres visible:
+        // JOptionPane.showMessageDialog(this, "Factura_Datos: " + e.getMessage(), "Aviso", JOptionPane.WARNING_MESSAGE);
+    }
+}
+
+private static void addKV(DefaultTableModel m, String k, String v) {
+    m.addRow(new Object[]{k, (v == null ? "" : v)});
+}
+
+private static String n(String s) { return (s == null) ? "" : s; }
+
+
     // ====== Exportar CSV ======
     private void exportarCSV() {
         try {
             List<CsvRow> rows = new ArrayList<>();
             NotasDAO ndao = new NotasDAO();
             FormasPagoDAO fdao = new FormasPagoDAO();
+            FacturaDatosDAO fddao = new FacturaDatosDAO(); // <-- NUEVO
 
             for (int vr = 0; vr < tbNotas.getRowCount(); vr++) {
                 int mr = tbNotas.convertRowIndexToModel(vr);
@@ -289,6 +356,17 @@ public class NotasPorMesPanel extends JPanel {
                     var cr = new clienteDAO().buscarResumenPorTelefono(tel);
                     if (cr != null && cr.getNombreCompleto()!=null) nombre = cr.getNombreCompleto();
                 } catch (Exception ignore) {}
+
+                 String rfc = "", regimen = "", usoCFDI = "", correo = "";
+            try {
+                FacturaDatosDAO.Row fd = fddao.obtenerPorNota(numero);
+                if (fd != null) {
+                    rfc     = safe(fd.rfc);
+                    regimen = safe(fd.regimen);
+                    usoCFDI = safe(fd.usoCfdi);
+                    correo  = safe(fd.correo);
+                }
+            } catch (Exception ignore) {}
 
                 String folioCreditoAbonado = "";
                 if ("AB".equalsIgnoreCase(tipo)) {
@@ -331,7 +409,10 @@ public class NotasPorMesPanel extends JPanel {
                         r.precio=n(d.getPrecio()); r.descuento=n(d.getDescuento()); r.subtotal=n(d.getSubtotal());
                         r.p_efectivo=pef; r.p_tcredito=pcr; r.p_tdebito=pdb; r.p_amex=pam;
                         r.p_transfer=ptr; r.p_deposito=pdep; r.p_devolucion=pdv; r.p_ref_dv=refDV;
-                        r.saldo=saldo; r.folioCreditoAbonado = folioCreditoAbonado;
+                        r.saldo=saldo; r.folioCreditoAbonado = folioCreditoAbonado; 
+                        // NUEVO: facturación
+                        r.rfc = rfc; r.regimenFiscal = regimen; r.usoCFDI = usoCFDI; r.correo = correo;
+
                         rows.add(r);
                     }
                 }
@@ -344,7 +425,7 @@ public class NotasPorMesPanel extends JPanel {
                     "telefono","nombre","codigo","articulo","marca","modelo","talla","color",
                     "precio","descuento","subtotal",
                     "p_efectivo","p_tcredito","p_tdebito","p_amex","p_transfer","p_deposito","p_devolucion","p_ref_dv",
-                    "saldo", "folioCreditoAbonado"
+                    "saldo", "folioCreditoAbonado", "rfc","regimenFiscal","usoCFDI","correo"
             );
 
             JOptionPane.showMessageDialog(this, "CSV generado correctamente.");
@@ -457,6 +538,10 @@ public class NotasPorMesPanel extends JPanel {
         public String  p_ref_dv;    // lista de DVs usados como pago
         public Double saldo;        // saldo de la nota (si hay)
         public String folioCreditoAbonado;
+        public String rfc;
+        public String regimenFiscal;
+        public String usoCFDI;
+        public String correo;
     }
 
     // ======= Popup de selección de MES =======

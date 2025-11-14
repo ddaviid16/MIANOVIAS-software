@@ -6,6 +6,10 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import Controlador.NotasMemoDAO;
 
+import java.awt.FlowLayout;
+import Controlador.FacturaDatosDAO;
+
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -97,6 +101,9 @@ public class VentaContadoPanel extends JPanel {
     private String memoEditable; // texto crudo con placeholders (lo que edita el usuario)
     private String observacionesTexto; // texto libre capturado por operador
 
+    private JButton btFactura;
+    private DlgFactura.CapturaFactura facturaDraft; // nulo si el usuario no capturó
+    private JLabel lbFacturaBadge;                  // pequeño indicador visual
 
     private JButton btnAplicarDV;
     private java.util.List<Modelo.PagoDV> dvAplicadas = new java.util.ArrayList<>();
@@ -332,6 +339,7 @@ public class VentaContadoPanel extends JPanel {
         d.fill = GridBagConstraints.HORIZONTAL;
         d.weightx = 1;
 
+        
         int r=0;
         txtSubtotal = new JTextField(); txtSubtotal.setEditable(false);
         txtTotal = new JTextField(); txtTotal.setEditable(false);
@@ -339,6 +347,8 @@ public class VentaContadoPanel extends JPanel {
         addCell(bottom,d,3,r,txtSubtotal,1,true); r++;
         addCell(bottom,d,2,r,new JLabel("Total:"),1,false);
         addCell(bottom,d,3,r,txtTotal,1,true); r++;
+
+
 
         txtTC = moneyField(); txtTD = moneyField(); txtAMX = moneyField();
         txtTRF = moneyField(); txtDEP = moneyField(); txtEFE = moneyField();
@@ -371,7 +381,19 @@ txtMontoDV.getDocument().addDocumentListener((SimpleDocListener) () -> {
     montoDVAplicado = parseMoney(txtMontoDV.getText());
     validarSumaPagos();
 });
+        // ---- Factura: botón + badge ----
+        JPanel pnlFactura = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        btFactura = new JButton("Factura…");
+        btFactura.addActionListener(_e -> abrirDialogoFactura());
+        lbFacturaBadge = new JLabel("—");                       // muestra estado: — | CAPTURA
+        lbFacturaBadge.setOpaque(true);
+        lbFacturaBadge.setBackground(new Color(245,245,245));
+        lbFacturaBadge.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+        pnlFactura.add(btFactura);
+        pnlFactura.add(lbFacturaBadge);
 
+        // col 0 del mismo r donde agregas Observaciones/Condiciones/Guardar
+        addCell(bottom, d, 0, r, pnlFactura, 1, false);
 
 
         JButton btGuardar = new JButton("Registrar venta");
@@ -632,16 +654,27 @@ private Map<String,String> buildMemoVars(EmpresaInfo emp, Nota n, java.util.List
 }
 
 // Segunda página con las condiciones, ahora con formato controlado y encabezado
+// Segunda página con las condiciones, ahora con formato controlado y encabezado
 private Printable construirPrintableCondiciones(
         EmpresaInfo emp,
         Nota n,
         java.util.List<NotaDetalle> dets,
-        String memoCuerpoRenderizado,
+        Map<String, String> vars, // <-- Asegúrate que la firma acepte el Map
         String folio,
         String asesorNombre,
         LocalDate fechaEvento,
         LocalDate fechaEnTienda,
         String clienteNombre) {
+
+    // (Opcional) Carga el texto de las cláusulas desde la BD
+    // Esto asume que seguiste el PASO 1 y el texto SÓLO son las cláusulas.
+    final String clausulasTexto = obtenerCondicionesPredeterminadas();
+    
+    // Fallback por si la BD está vacía, basado en tu foto
+    final String P1_INTRO = "En MIANOVIAS, ¡te damos la bienvenida a vivir esta gran experiencia!";
+    final String P5_ACUERDO = "ESTOY DE ACUERDO:";
+    final String P6_FIRMA = "NOMBRE Y FIRMA DEL CLIENTE";
+
 
     return (g, pf, pageIndex) -> {
         if (pageIndex > 0) return Printable.NO_SUCH_PAGE;
@@ -655,32 +688,92 @@ private Printable construirPrintableCondiciones(
         int y = (int) pf.getImageableY() + M;
         int w = (int) pf.getImageableWidth() - (M * 2);
 
-        // === Encabezado ===
+        // === Fuentes ===
         Font titleFont = new Font("Arial", Font.BOLD, 13);
-        g2.setFont(titleFont);
-        centerText(g2, "CONDICIONES DE COMPRA Y ENTREGA", x, w, y);
-        y += 35;
-
-        // === Cuerpo del texto ===
         Font bodyFont = new Font("Arial", Font.PLAIN, 11);
+        Font labelFont = new Font("Arial", Font.BOLD, 10);
+        
         g2.setFont(bodyFont);
+        
+        // 1. Párrafo de Bienvenida
+        y = drawWrappedSimple(g2, P1_INTRO, x, y, w);
+        y += 18; // Espacio extra
 
-        // Normaliza saltos de línea y agrega espacios después de dos puntos si faltan
-String textoLimpio = (memoCuerpoRenderizado == null ? "" : memoCuerpoRenderizado)
-        .replaceAll("\\r\\n", "\n")   // normaliza saltos Windows
-        .replaceAll("\\r", "\n")      // normaliza saltos Mac
-        .replaceAll("(?<=:)(?=\\S)", " ") // asegura espacio tras dos puntos
-        .replaceAll(" {2,}", " ")     // colapsa solo espacios dobles, no saltos
-        .trim();
+        // === 2. Bloque de Datos (usando los helpers) ===
+        g2.setFont(labelFont); // Fuente negrita para etiquetas
 
+        // Extraer datos del mapa
+        String vNombre = vars.getOrDefault("cliente_nombre", "");
+        String vCompra = vars.getOrDefault("fecha_compra", "");
+        String vEvento = vars.getOrDefault("fecha_evento", "");
+        String vModelo = vars.getOrDefault("modelo", "");
+        String vTalla  = vars.getOrDefault("talla", "");
+        String vColor  = vars.getOrDefault("color", "");
+        String vMarca  = vars.getOrDefault("marca", "");
+        String vAsesora = vars.getOrDefault("asesora", "");
+        String vCodigo = vars.getOrDefault("codigo", "");
+        String vEntrega = vars.getOrDefault("fecha_en_tienda", "");
+        String vPrecio = vars.getOrDefault("precio", "");
+        String vDesc = vars.getOrDefault("descuento_pct", "");
+        String vPagar = vars.getOrDefault("precio_pagar", "");
+        String vBusto = vars.getOrDefault("busto", "");
+        String vCintura = vars.getOrDefault("cintura", "");
+        String vCadera = vars.getOrDefault("cadera", "");
 
-        drawWrappedSimple(g2, textoLimpio, x, y, w);
+        // Dibujar los campos
+        y = drawFieldLine(g2, x, y, w, "NOMBRE DE LA NOVIA:", vNombre);
+        y = drawTwoColsLine(g2, x, y, w, "FECHA DE COMPRA:", vCompra, "FECHA DE EVENTO:", vEvento);
+        y = drawThreeColsLine(g2, x, y, w, 
+            "MODELO SELECCIONADO:", vModelo, 
+            "TALLA:", vTalla,
+            "COLOR:", vColor);
+        y = drawFieldLine(g2, x, y, w, "DE LA MARCA:", vMarca);
+        y = drawFieldLine(g2, x, y, w, "TU ASESORA:", vAsesora);
+        y = drawTwoColsLine(g2, x, y, w, "CÓDIGO:", vCodigo, "TU VESTIDO ESTARÁ EN TIENDA EL DIA:", vEntrega);
+        y = drawFieldLine(g2, x, y, w, "PRECIO:", "$" + vPrecio);
+        y = drawFieldLine(g2,x,y,w,"APLICANDO UN DESCUENTO DEL:", vDesc + "%");
+        y = drawFieldLine(g2,x,y,w,"PRECIO A PAGAR:", "$" + vPagar);
+        
+        // Medidas
+        y += 6; // espacio
+        g2.drawString("MEDIDAS CORPORALES AL DIA DE HOY:", x, y + g2.getFontMetrics().getAscent());
+        y += 18;
+        y = drawThreeColsLine(g2, x, y, w, 
+            "C.BUSTO:", vBusto, 
+            "C.CINTURA:", vCintura, 
+            "C.CADERA:", vCadera);
+        
+        y += 18; // Espacio antes de las cláusulas
 
+        // === 3. Cláusulas ===
+        g2.setFont(bodyFont); // Volver a fuente normal
+        final String clausulasRenderizadas = renderMemo(clausulasTexto, vars);
+        // Dibuja el texto de la BD (que ahora SÓLO tiene cláusulas)
+        String[] parrafos = clausulasRenderizadas.split("\n");
+        for (String p : parrafos) {
+            if (p.trim().isEmpty()) continue;
+            y = drawWrappedSimple(g2, p.trim(), x, y, w);
+            y += 6; // Espacio entre párrafos
+        }
+        
+        y += 36; // Espacio grande antes de la firma
 
+        // === 4. Firma ===
+        // === 4. Firma ===
+        g2.setFont(labelFont);
+        
+        // Dibuja "ESTOY DE ACUERDO" SIN línea
+        g2.drawString(P5_ACUERDO, x, y + g2.getFontMetrics().getAscent());
+        y += 18; // Avanza una línea
+        
+        y += 36; // Espacio grande antes de la firma
+        
+        // Dibuja "NOMBRE Y FIRMA" CON línea
+        y = drawFieldLine(g2, x, y, w, P6_FIRMA, "");
+        
         return Printable.PAGE_EXISTS;
     };
 }
-
 // ---- Funciones auxiliares para formateo ----
 private static void centerText(Graphics2D g2, String text, int x, int w, int y) {
     java.awt.FontMetrics fm = g2.getFontMetrics();
@@ -748,38 +841,176 @@ private static int drawWrappedSimple(Graphics2D g2, String text, int x, int y, i
 
     return y + fm.getHeight();  // Asegura que se agregue el espacio adecuado para la última línea
 }
-/** Dibuja: LABEL ________ y escribe valor si viene. Devuelve el nuevo y. */
+// ----- INICIA BLOQUE DE NUEVOS HELPERS (REEMPLAZA LOS 4 ANTERIORES) -----
+
+/** Dibuja: LABEL: [Valor encima de la línea]. Devuelve el nuevo y. */
 private static int drawFieldLine(Graphics2D g2, int x, int y, int w, String label, String value) {
     java.awt.FontMetrics fm = g2.getFontMetrics();
     int yy = y + fm.getAscent();
     int lw = fm.stringWidth(label) + 6;
     g2.drawString(label, x, yy);
-    g2.drawLine(x + lw, yy + 3, x + w, yy + 3);
-    if (value != null && !value.isBlank()) g2.drawString(value, x + lw + 3, yy);
+    
+    int valueX = x + lw + 3;
+    int x_end = x + w;
+
+    // 1. Dibuja la LÍNEA PRIMERO (continua)
+    g2.drawLine(valueX, yy + 3, x_end, yy + 3);
+
+    // 2. Dibuja el VALOR ENCIMA de la línea
+    if (value != null && !value.isBlank()) {
+        g2.drawString(value, valueX, yy);
+    }
     return y + 18;
 }
 
-/** Dibuja dos campos en una fila (izquierda y derecha). Devuelve el nuevo y. */
-private static int drawTwoColsLine(Graphics2D g2, int x, int y, int w,
-                                   String leftLabel, String leftVal,
-                                   String rightLabel, String rightVal) {
+private static int drawTwoColsLine2575(Graphics2D g2, int x, int y, int w,
+                                       String leftLabel, String leftVal,
+                                       String rightLabel, String rightVal) {
     java.awt.FontMetrics fm = g2.getFontMetrics();
-    int half = (w - 20) / 2;
+    // ----- ESTE ES EL CAMBIO: 25% para la columna 1 -----
+    int col1_width = (int)((w - 20) * 0.15); // Más pequeño para CODIGO
+    int x1_end = x + col1_width;
+    // ---------------------------------------------------
+    int xr = x1_end + 20;
+    int x2_end = x + w;
     int yy = y + fm.getAscent();
 
+    // Col 1 (25%)
     int lw = fm.stringWidth(leftLabel) + 6;
     g2.drawString(leftLabel, x, yy);
-    g2.drawLine(x + lw, yy + 3, x + half, yy + 3);
-    if (leftVal != null && !leftVal.isBlank()) g2.drawString(leftVal, x + lw + 3, yy);
+    int value1X = x + lw + 3;
+    g2.drawLine(value1X, yy + 3, x1_end, yy + 3); // Dibuja línea
+    if (leftVal != null && !leftVal.isBlank()) {
+        g2.drawString(leftVal, value1X, yy); // Dibuja valor encima
+    }
 
-    int xr = x + half + 20;
+    // Col 2 (75%)
     int rw = fm.stringWidth(rightLabel) + 6;
     g2.drawString(rightLabel, xr, yy);
-    g2.drawLine(xr + rw, yy + 3, x + w, yy + 3);
-    if (rightVal != null && !rightVal.isBlank()) g2.drawString(rightVal, xr + rw + 3, yy);
+    int value2X = xr + rw + 3;
+    g2.drawLine(value2X, yy + 3, x2_end, yy + 3); // Dibuja línea
+    if (rightVal != null && !rightVal.isBlank()) {
+        g2.drawString(rightVal, value2X, yy); // Dibuja valor encima
+    }
 
     return y + 18;
 }
+
+/** Dibuja 2 columnas (35/65) [Valor encima de la línea]. (Para CODIGO y VESTIDO) */
+private static int drawTwoColsLine(Graphics2D g2, int x, int y, int w,
+                                       String leftLabel, String leftVal,
+                                       String rightLabel, String rightVal) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    // ----- ESTE ES EL CAMBIO: 35% para la columna 1 -----
+    int col1_width = (int)((w - 20) * 0.35);
+    int x1_end = x + col1_width;
+    // ---------------------------------------------------
+    int xr = x1_end + 20;
+    int x2_end = x + w;
+    int yy = y + fm.getAscent();
+
+    // Col 1 (35%)
+    int lw = fm.stringWidth(leftLabel) + 6;
+    g2.drawString(leftLabel, x, yy);
+    int value1X = x + lw + 3;
+    g2.drawLine(value1X, yy + 3, x1_end, yy + 3); // Dibuja línea
+    if (leftVal != null && !leftVal.isBlank()) {
+        g2.drawString(leftVal, value1X, yy); // Dibuja valor encima
+    }
+
+    // Col 2 (65%)
+    int rw = fm.stringWidth(rightLabel) + 6;
+    g2.drawString(rightLabel, xr, yy);
+    int value2X = xr + rw + 3;
+    g2.drawLine(value2X, yy + 3, x2_end, yy + 3); // Dibuja línea
+    if (rightVal != null && !rightVal.isBlank()) {
+        g2.drawString(rightVal, value2X, yy); // Dibuja valor encima
+    }
+
+    return y + 18;
+}
+
+/** Dibuja 2 columnas (70/30) [Valor encima de la línea]. (Para DESCUENTO y PAGAR) */
+private static int drawTwoColsLine7030(Graphics2D g2, int x, int y, int w,
+                                       String leftLabel, String leftVal,
+                                       String rightLabel, String rightVal) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    // ----- ESTE ES EL CAMBIO: 70% para la columna 1 -----
+    int col1_width = (int)((w - 20) * 0.70);
+    int x1_end = x + col1_width;
+    // ---------------------------------------------------
+    int xr = x1_end + 20;
+    int x2_end = x + w;
+    int yy = y + fm.getAscent();
+
+    // Col 1 (70%)
+    int lw = fm.stringWidth(leftLabel) + 6;
+    g2.drawString(leftLabel, x, yy);
+    int value1X = x + lw + 3;
+    g2.drawLine(value1X, yy + 3, x1_end, yy + 3); // Dibuja línea
+    if (leftVal != null && !leftVal.isBlank()) {
+        g2.drawString(leftVal, value1X, yy); // Dibuja valor encima
+    }
+
+    // Col 2 (30%)
+    int rw = fm.stringWidth(rightLabel) + 6;
+    g2.drawString(rightLabel, xr, yy);
+    int value2X = xr + rw + 3;
+    g2.drawLine(value2X, yy + 3, x2_end, yy + 3); // Dibuja línea
+    if (rightVal != null && !rightVal.isBlank()) {
+        g2.drawString(rightVal, value2X, yy); // Dibuja valor encima
+    }
+
+    return y + 18;
+}
+
+
+/** Dibuja 3 columnas (33/33/33) [Valor encima de la línea]. */
+private static int drawThreeColsLine(Graphics2D g2, int x, int y, int w,
+                                     String leftLabel, String leftVal,
+                                     String midLabel, String midVal,
+                                     String rightLabel, String rightVal) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    int third = (w - 40) / 3;
+    int yy = y + fm.getAscent();
+
+    int x1_end = x + third;
+    int xm = x1_end + 20;
+    int x2_end = xm + third;
+    int xr = x2_end + 20;
+    int x3_end = x + w;
+
+    // Col 1
+    int lw = fm.stringWidth(leftLabel) + 6;
+    g2.drawString(leftLabel, x, yy);
+    int value1X = x + lw + 3;
+    g2.drawLine(value1X, yy + 3, x1_end, yy + 3); // Dibuja línea
+    if (leftVal != null && !leftVal.isBlank()) {
+        g2.drawString(leftVal, value1X, yy); // Dibuja valor encima
+    }
+
+    // Col 2
+    int mw = fm.stringWidth(midLabel) + 6;
+    g2.drawString(midLabel, xm, yy);
+    int value2X = xm + mw + 3;
+    g2.drawLine(value2X, yy + 3, x2_end, yy + 3); // Dibuja línea
+    if (midVal != null && !midVal.isBlank()) {
+        g2.drawString(midVal, value2X, yy); // Dibuja valor encima
+    }
+
+    // Col 3
+    int rw = fm.stringWidth(rightLabel) + 6;
+    g2.drawString(rightLabel, xr, yy);
+    int value3X = xr + rw + 3;
+    g2.drawLine(value3X, yy + 3, x3_end, yy + 3); // Dibuja línea
+    if (rightVal != null && !rightVal.isBlank()) {
+        g2.drawString(rightVal, value3X, yy); // Dibuja valor encima
+    }
+
+    return y + 18;
+}
+
+// ----- TERMINA BLOQUE DE NUEVOS HELPERS -----
 
 // Empaqueta "ticket + condiciones" en un solo Printable
 private static Printable combinarEnDosPaginas(Printable p0, Printable p1){
@@ -1423,6 +1654,25 @@ if (selItem != null) {
             int numeroNota = svc.crearVentaContado(n, dets, p, fechaEventoDefault, fechaEntregaDefault);
             n.setNumeroNota(numeroNota); // <-- ¡asigna el número real antes de imprimir!
 
+            // ======= Factura: si hay captura, persístela en Factura_Datos =======
+try {
+    if (facturaDraft != null) {
+        new FacturaDatosDAO().upsert(
+            numeroNota,
+            facturaDraft.persona,        // "PF" o "PM"
+            facturaDraft.rfc.trim().toUpperCase(),
+            facturaDraft.regimen.trim().toUpperCase(),  // tú lo manejas como 4 chars
+            facturaDraft.usoCfdi.trim().toUpperCase(),  // G03, CP01, S01, ...
+            facturaDraft.correo == null ? null : facturaDraft.correo.trim()
+        );
+    }
+} catch (Exception ex) {
+    JOptionPane.showMessageDialog(this,
+        "La venta se registró, pero no se pudieron guardar los datos de facturación:\n" + ex.getMessage(),
+        "Factura", JOptionPane.WARNING_MESSAGE);
+}
+
+
 
             // Folio (preferimos el que retorna el servicio al objeto Nota)
             String folioImpresion = (n.getFolio()==null || n.getFolio().isBlank()) ? "—" : n.getFolio();
@@ -1539,13 +1789,12 @@ Map<String,String> varsFinal = buildMemoVars(
         emp, n, dets, entregaMostrar, eventoMostrar, sel.getNombreCompleto());
 String memoRender = renderMemo(memoCrudoAGuardar, varsFinal);
 
-// Printable de condiciones y combinación a dos páginas
-// NUEVA llamada: pasamos dets, asesor, fechas y nombre cliente
+// Pasamos 'varsFinal' (el mapa con los datos) en lugar de 'memoRender' (el texto renderizado)
 Printable condiciones = construirPrintableCondiciones(
         emp,
         n,
         dets,
-        memoRender,
+        varsFinal, // <-- ESTE ES EL CAMBIO IMPORTANTE
         folioImpresion,
         sel.getNombreCompleto(),
         eventoMostrar,
@@ -1597,6 +1846,10 @@ txtFechaPrueba1.setText("");
 txtFechaPrueba2.setText("");
 txtFechaEntrega.setText("");
 txtUltimaNota.setText("");
+
+// limpiar estado de factura en UI
+facturaDraft = null;
+actualizarFacturaBadge();
 
 // reset bandera
 lastTelefonoConsultado = null;
@@ -2421,4 +2674,172 @@ private static BufferedImage trimTransparent(BufferedImage src) {
         }
     };
     }
+    private void actualizarFacturaBadge() {
+    if (lbFacturaBadge == null) return;
+    if (facturaDraft == null) {
+        lbFacturaBadge.setText("—");
+        lbFacturaBadge.setForeground(new Color(100,100,100));
+    } else {
+        lbFacturaBadge.setText("CAPTURA");
+        lbFacturaBadge.setForeground(new Color(0,128,0));
+    }
+}
+
+private void abrirDialogoFactura() {
+    DlgFactura.CapturaFactura initial = (facturaDraft == null) ? null : facturaDraft;
+    Window owner = SwingUtilities.getWindowAncestor(this);
+    DlgFactura dlg = (owner instanceof Frame f)
+            ? new DlgFactura(f, initial)
+            : new DlgFactura((Frame) null, initial);
+    DlgFactura.CapturaFactura res = dlg.showDialog();
+    if (dlg.fueLimpiado()) {
+        facturaDraft = null;
+    } else if (res != null) {
+        facturaDraft = res;
+    }
+    actualizarFacturaBadge();
+}
+// ================== DLG FACTURA (captura básica previa al timbrado) ==================
+static class DlgFactura extends JDialog {
+    static class CapturaFactura {
+        String persona;  // "PF" o "PM"
+        String rfc;
+        String regimen;  // 3-4 chars
+        String usoCfdi;  // G03, CP01, S01, ...
+        String correo;   // opcional
+    }
+
+    private boolean limpiado = false;
+    boolean fueLimpiado(){ return limpiado; }
+
+    private CapturaFactura result;
+
+    private final JComboBox<String> cbPersona = new JComboBox<>(new String[]{"PF (Persona física)","PM (Persona moral)"});
+    private final JTextField tfRFC = new JTextField();
+    private final JComboBox<String> cbRegimen = new JComboBox<>(new String[]{
+            "", "601","603","605","606","607","608","609","610","611","612","614","616","620","621","622","623","624","625","626"
+    });
+    private final JComboBox<String> cbUso = new JComboBox<>(new String[]{
+            "", "G01","G02","G03","I01","I02","I03","I04","I05","I06","I07","D01","D02","D03","CP01","CN01","S01"
+    });
+    private final JTextField tfRegimenLibre = new JTextField(); // permite editar manual
+    private final JTextField tfUsoLibre = new JTextField();
+    private final JTextField tfCorreo = new JTextField();
+
+    DlgFactura(Frame owner, CapturaFactura init) {
+        super(owner, "Datos para facturar", true);
+        setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(6,6,6,6);
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.weightx = 1; int y=0;
+
+        addCell(p,c,0,y,new JLabel("Persona:"),1,false); addCell(p,c,1,y,cbPersona,1,true); y++;
+        addCell(p,c,0,y,new JLabel("RFC:"),1,false);     addCell(p,c,1,y,tfRFC,1,true);     y++;
+
+        addCell(p,c,0,y,new JLabel("Régimen fiscal:"),1,false);
+        JPanel pr = new JPanel(new BorderLayout(6,0));
+        pr.add(cbRegimen, BorderLayout.WEST);
+        pr.add(tfRegimenLibre, BorderLayout.CENTER);
+        addCell(p,c,1,y,pr,1,true); y++;
+
+        addCell(p,c,0,y,new JLabel("Uso del CFDI:"),1,false);
+        JPanel pu = new JPanel(new BorderLayout(6,0));
+        pu.add(cbUso, BorderLayout.WEST);
+        pu.add(tfUsoLibre, BorderLayout.CENTER);
+        addCell(p,c,1,y,pu,1,true); y++;
+
+        addCell(p,c,0,y,new JLabel("Correo:"),1,false); addCell(p,c,1,y,tfCorreo,1,true); y++;
+
+        JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btGuardar = new JButton("Guardar");
+        JButton btLimpiar = new JButton("Quitar captura");
+        JButton btCancelar= new JButton("Cancelar");
+        south.add(btLimpiar); south.add(btCancelar); south.add(btGuardar);
+
+        getContentPane().add(p, BorderLayout.CENTER);
+        getContentPane().add(south, BorderLayout.SOUTH);
+
+        // Sincroniza combos con campos libres
+        cbRegimen.addActionListener(_e -> {
+            String v = (String) cbRegimen.getSelectedItem();
+            tfRegimenLibre.setText(v == null ? "" : v);
+        });
+        cbUso.addActionListener(_e -> {
+            String v = (String) cbUso.getSelectedItem();
+            tfUsoLibre.setText(v == null ? "" : v);
+        });
+
+        // Cargar inicial
+        if (init != null) {
+            cbPersona.setSelectedIndex("PM".equalsIgnoreCase(init.persona) ? 1 : 0);
+            tfRFC.setText(init.rfc == null ? "" : init.rfc);
+            tfRegimenLibre.setText(init.regimen == null ? "" : init.regimen);
+            tfUsoLibre.setText(init.usoCfdi == null ? "" : init.usoCfdi);
+            tfCorreo.setText(init.correo == null ? "" : init.correo);
+        }
+
+        btGuardar.addActionListener(_e -> {
+            String persona = (cbPersona.getSelectedIndex()==1) ? "PM" : "PF";
+            String rfc = tfRFC.getText().trim().toUpperCase();
+            String regimen = tfRegimenLibre.getText().trim().toUpperCase();
+            String uso = tfUsoLibre.getText().trim().toUpperCase();
+            String correo = tfCorreo.getText().trim();
+
+            // Validaciones mínimas
+            if (persona.equals("PF") && rfc.length()!=13) {
+                JOptionPane.showMessageDialog(this,"El RFC de persona física debe tener 13 caracteres.");
+                return;
+            }
+            if (persona.equals("PM") && rfc.length()!=12) {
+                JOptionPane.showMessageDialog(this,"El RFC de persona moral debe tener 12 caracteres.");
+                return;
+            }
+            if (regimen.length() < 3 || regimen.length() > 4) {
+                JOptionPane.showMessageDialog(this,"Régimen debe ser de 3–4 caracteres (ej. 601).");
+                return;
+            }
+            if (uso.length() < 3 || uso.length() > 4) {
+                JOptionPane.showMessageDialog(this,"Uso de CFDI debe ser de 3–4 caracteres (ej. G03, CP01).");
+                return;
+            }
+            if (!correo.isBlank() && !correo.contains("@")) {
+                JOptionPane.showMessageDialog(this,"Correo inválido.");
+                return;
+            }
+
+            CapturaFactura cf = new CapturaFactura();
+            cf.persona = persona;
+            cf.rfc = rfc;
+            cf.regimen = regimen;
+            cf.usoCfdi = uso;
+            cf.correo = correo.isBlank()? null : correo;
+            result = cf;
+            dispose();
+        });
+
+        btLimpiar.addActionListener(_e -> {
+            limpiado = true;
+            result = null;
+            dispose();
+        });
+
+        btCancelar.addActionListener(_e -> {
+            result = null; dispose();
+        });
+
+        setSize(520, 300);
+        setLocationRelativeTo(owner);
+    }
+
+    DlgFactura.CapturaFactura showDialog() { setVisible(true); return result; }
+
+    // pequeño helper local para grid
+    private static void addCell(JPanel p, GridBagConstraints c, int x, int y, JComponent comp, int span, boolean growX){
+        c.gridx=x; c.gridy=y; c.gridwidth=span; c.weightx = growX?1:0; p.add(comp,c); c.gridwidth=1;
+    }
+}
+
 }

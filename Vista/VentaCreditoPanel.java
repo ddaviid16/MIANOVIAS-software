@@ -80,6 +80,7 @@ import Modelo.Inventario;
 import Modelo.Nota;
 import Modelo.NotaDetalle;
 import Modelo.PagoFormas;
+import Controlador.FacturaDatosDAO;
 
 public class VentaCreditoPanel extends JPanel {
 
@@ -97,6 +98,10 @@ public class VentaCreditoPanel extends JPanel {
     private String observacionesTexto; // texto libre capturado por operador
 
 
+    
+    private JButton btFactura;
+    private DlgFactura.CapturaFactura facturaDraft; // nulo si el usuario no capturó
+    private JLabel lbFacturaBadge;                  // pequeño indicador visual
 
     private JCheckBox chkUsarFechaCliente;
     private JTextField txtFechaEventoVenta;   // dd-MM-yyyy
@@ -357,6 +362,20 @@ public class VentaCreditoPanel extends JPanel {
         montoDVAplicado = parseMoney(txtMontoDV.getText());  // Actualiza montoDVAplicado
         validarSumaPagos();  // Recalcula los totales de pago
     });
+
+                // ---- Factura: botón + badge ----
+        JPanel pnlFactura = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        btFactura = new JButton("Factura…");
+        btFactura.addActionListener(_e -> abrirDialogoFactura());
+        lbFacturaBadge = new JLabel("—");                       // muestra estado: — | CAPTURA
+        lbFacturaBadge.setOpaque(true);
+        lbFacturaBadge.setBackground(new Color(245,245,245));
+        lbFacturaBadge.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+        pnlFactura.add(btFactura);
+        pnlFactura.add(lbFacturaBadge);
+
+        // col 0 del mismo r donde agregas Observaciones/Condiciones/Guardar
+        addCell(bottom, d, 0, r, pnlFactura, 1, false);
 
         btnCondiciones = new JButton("Condiciones…");
         btnCondiciones.addActionListener(_e -> editarMemoPrevia(false));
@@ -879,6 +898,23 @@ try (Connection cn = Conexion.Conecta.getConnection();
             // -> ahora pasamos evento y entrega
             int numeroNota = svc.crearVentaCredito(n, dets, p, fechaEventoDefault, fechaEntregaDefault);
             n.setNumeroNota(numeroNota); // <-- ¡asigna el número real antes de imprimir!
+            // ======= Factura: si hay captura, persístela en Factura_Datos =======
+try {
+    if (facturaDraft != null) {
+        new FacturaDatosDAO().upsert(
+            numeroNota,
+            facturaDraft.persona,        // "PF" o "PM"
+            facturaDraft.rfc.trim().toUpperCase(),
+            facturaDraft.regimen.trim().toUpperCase(),  // tú lo manejas como 4 chars
+            facturaDraft.usoCfdi.trim().toUpperCase(),  // G03, CP01, S01, ...
+            facturaDraft.correo == null ? null : facturaDraft.correo.trim()
+        );
+    }
+} catch (Exception ex) {
+    JOptionPane.showMessageDialog(this,
+        "La venta se registró, pero no se pudieron guardar los datos de facturación:\n" + ex.getMessage(),
+        "Factura", JOptionPane.WARNING_MESSAGE);
+}
             
 
             // ======= 1.1) Aplicar devoluciones usadas (DV) =======
@@ -2102,11 +2138,179 @@ y += 6; g2.drawLine(x, y, x + w, y); y += 16;
             // Aceptar
             dvAplicadas = nuevos;
             txtMontoDV.setText(String.format("%.2f", totalSel));
+            txtMontoDV.addActionListener(e -> validarSumaPagos());
             validarSumaPagos(); // refresca tooltips/sumas
             dlg.dispose();
         });
 
         dlg.setVisible(true);
     }
+private void actualizarFacturaBadge() {
+    if (lbFacturaBadge == null) return;
+    if (facturaDraft == null) {
+        lbFacturaBadge.setText("—");
+        lbFacturaBadge.setForeground(new Color(100,100,100));
+    } else {
+        lbFacturaBadge.setText("CAPTURA");
+        lbFacturaBadge.setForeground(new Color(0,128,0));
+    }
+}
+
+private void abrirDialogoFactura() {
+    DlgFactura.CapturaFactura initial = (facturaDraft == null) ? null : facturaDraft;
+    Window owner = SwingUtilities.getWindowAncestor(this);
+    DlgFactura dlg = (owner instanceof Frame f)
+            ? new DlgFactura(f, initial)
+            : new DlgFactura((Frame) null, initial);
+    DlgFactura.CapturaFactura res = dlg.showDialog();
+    if (dlg.fueLimpiado()) {
+        facturaDraft = null;
+    } else if (res != null) {
+        facturaDraft = res;
+    }
+    actualizarFacturaBadge();
+}
+// ================== DLG FACTURA (captura básica previa al timbrado) ==================
+static class DlgFactura extends JDialog {
+    static class CapturaFactura {
+        String persona;  // "PF" o "PM"
+        String rfc;
+        String regimen;  // 3-4 chars
+        String usoCfdi;  // G03, CP01, S01, ...
+        String correo;   // opcional
+    }
+
+    private boolean limpiado = false;
+    boolean fueLimpiado(){ return limpiado; }
+
+    private CapturaFactura result;
+
+    private final JComboBox<String> cbPersona = new JComboBox<>(new String[]{"PF (Persona física)","PM (Persona moral)"});
+    private final JTextField tfRFC = new JTextField();
+    private final JComboBox<String> cbRegimen = new JComboBox<>(new String[]{
+            "", "601","603","605","606","607","608","609","610","611","612","614","616","620","621","622","623","624","625","626"
+    });
+    private final JComboBox<String> cbUso = new JComboBox<>(new String[]{
+            "", "G01","G02","G03","I01","I02","I03","I04","I05","I06","I07","D01","D02","D03","CP01","CN01","S01"
+    });
+    private final JTextField tfRegimenLibre = new JTextField(); // permite editar manual
+    private final JTextField tfUsoLibre = new JTextField();
+    private final JTextField tfCorreo = new JTextField();
+
+    DlgFactura(Frame owner, CapturaFactura init) {
+        super(owner, "Datos para facturar", true);
+        setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(6,6,6,6);
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.weightx = 1; int y=0;
+
+        addCell(p,c,0,y,new JLabel("Persona:"),1,false); addCell(p,c,1,y,cbPersona,1,true); y++;
+        addCell(p,c,0,y,new JLabel("RFC:"),1,false);     addCell(p,c,1,y,tfRFC,1,true);     y++;
+
+        addCell(p,c,0,y,new JLabel("Régimen fiscal:"),1,false);
+        JPanel pr = new JPanel(new BorderLayout(6,0));
+        pr.add(cbRegimen, BorderLayout.WEST);
+        pr.add(tfRegimenLibre, BorderLayout.CENTER);
+        addCell(p,c,1,y,pr,1,true); y++;
+
+        addCell(p,c,0,y,new JLabel("Uso del CFDI:"),1,false);
+        JPanel pu = new JPanel(new BorderLayout(6,0));
+        pu.add(cbUso, BorderLayout.WEST);
+        pu.add(tfUsoLibre, BorderLayout.CENTER);
+        addCell(p,c,1,y,pu,1,true); y++;
+
+        addCell(p,c,0,y,new JLabel("Correo:"),1,false); addCell(p,c,1,y,tfCorreo,1,true); y++;
+
+        JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btGuardar = new JButton("Guardar");
+        JButton btLimpiar = new JButton("Quitar captura");
+        JButton btCancelar= new JButton("Cancelar");
+        south.add(btLimpiar); south.add(btCancelar); south.add(btGuardar);
+
+        getContentPane().add(p, BorderLayout.CENTER);
+        getContentPane().add(south, BorderLayout.SOUTH);
+
+        // Sincroniza combos con campos libres
+        cbRegimen.addActionListener(_e -> {
+            String v = (String) cbRegimen.getSelectedItem();
+            tfRegimenLibre.setText(v == null ? "" : v);
+        });
+        cbUso.addActionListener(_e -> {
+            String v = (String) cbUso.getSelectedItem();
+            tfUsoLibre.setText(v == null ? "" : v);
+        });
+
+        // Cargar inicial
+        if (init != null) {
+            cbPersona.setSelectedIndex("PM".equalsIgnoreCase(init.persona) ? 1 : 0);
+            tfRFC.setText(init.rfc == null ? "" : init.rfc);
+            tfRegimenLibre.setText(init.regimen == null ? "" : init.regimen);
+            tfUsoLibre.setText(init.usoCfdi == null ? "" : init.usoCfdi);
+            tfCorreo.setText(init.correo == null ? "" : init.correo);
+        }
+
+        btGuardar.addActionListener(_e -> {
+            String persona = (cbPersona.getSelectedIndex()==1) ? "PM" : "PF";
+            String rfc = tfRFC.getText().trim().toUpperCase();
+            String regimen = tfRegimenLibre.getText().trim().toUpperCase();
+            String uso = tfUsoLibre.getText().trim().toUpperCase();
+            String correo = tfCorreo.getText().trim();
+
+            // Validaciones mínimas
+            if (persona.equals("PF") && rfc.length()!=13) {
+                JOptionPane.showMessageDialog(this,"El RFC de persona física debe tener 13 caracteres.");
+                return;
+            }
+            if (persona.equals("PM") && rfc.length()!=12) {
+                JOptionPane.showMessageDialog(this,"El RFC de persona moral debe tener 12 caracteres.");
+                return;
+            }
+            if (regimen.length() < 3 || regimen.length() > 4) {
+                JOptionPane.showMessageDialog(this,"Régimen debe ser de 3–4 caracteres (ej. 601).");
+                return;
+            }
+            if (uso.length() < 3 || uso.length() > 4) {
+                JOptionPane.showMessageDialog(this,"Uso de CFDI debe ser de 3–4 caracteres (ej. G03, CP01).");
+                return;
+            }
+            if (!correo.isBlank() && !correo.contains("@")) {
+                JOptionPane.showMessageDialog(this,"Correo inválido.");
+                return;
+            }
+
+            CapturaFactura cf = new CapturaFactura();
+            cf.persona = persona;
+            cf.rfc = rfc;
+            cf.regimen = regimen;
+            cf.usoCfdi = uso;
+            cf.correo = correo.isBlank()? null : correo;
+            result = cf;
+            dispose();
+        });
+
+        btLimpiar.addActionListener(_e -> {
+            limpiado = true;
+            result = null;
+            dispose();
+        });
+
+        btCancelar.addActionListener(_e -> {
+            result = null; dispose();
+        });
+
+        setSize(520, 300);
+        setLocationRelativeTo(owner);
+    }
+
+    DlgFactura.CapturaFactura showDialog() { setVisible(true); return result; }
+
+    // pequeño helper local para grid
+    private static void addCell(JPanel p, GridBagConstraints c, int x, int y, JComponent comp, int span, boolean growX){
+        c.gridx=x; c.gridy=y; c.gridwidth=span; c.weightx = growX?1:0; p.add(comp,c); c.gridwidth=1;
+    }
+}
 
 }

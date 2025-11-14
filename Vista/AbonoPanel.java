@@ -308,19 +308,106 @@ private void guardarAbono() {
 
         if (Math.abs(res.saldoNuevo) <= 0.005) {
             // --- LIQUIDADO ---
+            // 1. Obtenemos el texto de las cláusulas (si el usuario lo editó)
             String memo = obtenerOModificarCondiciones(sel.getNumeroNota(), cn);
             if (memo == null || memo.isBlank()) throw new SQLException("Formato de condiciones cancelado o vacío.");
+            
+            // 2. Obtenemos el MAPA con los datos de la nota (¡NUEVO!)
+            Map<String, String> vars = construirVarsDesdeNota(sel.getNumeroNota());
 
-            Printable prnCondiciones = (g, pf, page) -> {
-                if (page > 0) return Printable.NO_SUCH_PAGE;
+            // 3. Cargamos el texto PURO de las cláusulas (el de la BD)
+            final String clausulasTexto = obtenerCondicionesPredeterminadas();
+            
+            // 4. Definimos los textos estáticos del formulario
+            final String P1_INTRO = "En MIANOVIAS, ¡te damos la bienvenida a vivir esta gran experiencia!";
+            final String P5_ACUERDO = "ESTOY DE ACUERDO:";
+            final String P6_FIRMA = "NOMBRE Y FIRMA DEL CLIENTE";
+
+            // 5. Creamos el NUEVO Printable para las condiciones
+            Printable prnCondiciones = (g, pf, pageIndex) -> {
+                if (pageIndex > 0) return Printable.NO_SUCH_PAGE;
                 Graphics2D g2 = (Graphics2D) g;
-                g2.setFont(new Font("Serif", Font.PLAIN, 11));
-                g2.translate(pf.getImageableX(), pf.getImageableY());
-                int y = 40;
-                for (String line : memo.split("\n")) {
-                    g2.drawString(line, 50, y);
-                    y += 14;
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING,
+                                    java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+                final int M = 70;
+                int x = (int) pf.getImageableX() + M;
+                int y = (int) pf.getImageableY() + M;
+                int w = (int) pf.getImageableWidth() - (M * 2);
+
+                Font bodyFont = new Font("Arial", Font.PLAIN, 11);
+                Font labelFont = new Font("Arial", Font.BOLD, 10);
+                
+                g2.setFont(bodyFont);
+                
+                y = drawWrappedSimple(g2, P1_INTRO, x, y, w);
+                y += 18;
+
+                g2.setFont(labelFont);
+
+                // Extraer datos del mapa 'vars'
+                String vNombre = vars.getOrDefault("cliente_nombre", "");
+                String vCompra = vars.getOrDefault("fecha_compra", "");
+                String vEvento = vars.getOrDefault("fecha_evento", "");
+                String vEntrega = vars.getOrDefault("fecha_en_tienda", "");
+                String vAsesora = vars.getOrDefault("asesora", "");
+                String vBusto = vars.getOrDefault("busto", "");
+                String vCintura = vars.getOrDefault("cintura", "");
+                String vCadera = vars.getOrDefault("cadera", "");
+                
+                // Extraer datos del vestido (ahora SÍ vienen en 'vars')
+                String vModelo = vars.getOrDefault("modelo", "");
+                String vTalla  = vars.getOrDefault("talla", "");
+                String vColor  = vars.getOrDefault("color", "");
+                String vMarca  = vars.getOrDefault("marca", "");
+                String vCodigo = vars.getOrDefault("codigo", "");
+                String vPrecio = vars.getOrDefault("precio", "0.00");
+                String vDesc = vars.getOrDefault("descuento_pct", "0.00");
+                String vPagar = vars.getOrDefault("precio_pagar", "0.00");
+
+                // Dibujar los campos
+                y = drawFieldLine(g2, x, y, w, "NOMBRE DE LA NOVIA:", vNombre);
+                y = drawTwoColsLine(g2, x, y, w, "FECHA DE COMPRA:", vCompra, "FECHA DE EVENTO:", vEvento);
+
+                y = drawThreeColsLine(g2, x, y, w, 
+                    "MODELO SELECCIONADO:", vModelo, 
+                    "TALLA:", vTalla, 
+                    "COLOR:", vColor);
+                y = drawFieldLine(g2, x, y, w, "DE LA MARCA:", vMarca);
+                y = drawFieldLine(g2, x, y, w, "TU ASESORA:", vAsesora);
+                y = drawTwoColsLine(g2, x, y, w, "CÓDIGO:", vCodigo, "TU VESTIDO ESTARÁ EN TIENDA EL DIA:", vEntrega);
+                y = drawFieldLine(g2, x, y, w, "PRECIO:", "$" + vPrecio);
+                y = drawFieldLine(g2,x,y,w,"APLICANDO UN DESCUENTO DEL:", vDesc + "%");
+                y = drawFieldLine(g2,x,y,w,"PRECIO A PAGAR:", "$" + vPagar);
+                
+                y += 6;
+                g2.drawString("MEDIDAS CORPORALES AL DIA DE HOY:", x, y + g2.getFontMetrics().getAscent());
+                y += 18;
+                y = drawThreeColsLine(g2, x, y, w, "C.BUSTO:", vBusto, "C.CINTURA:", vCintura, "C.CADERA:", vCadera);
+                y += 18;
+
+                g2.setFont(bodyFont);
+                final String clausulasRenderizadas = renderMemo(clausulasTexto, vars);
+                String[] parrafos = clausulasRenderizadas.split("\n");
+                for (String paragraph : parrafos) {
+                    if (paragraph.trim().isEmpty()) continue;
+                    y = drawWrappedSimple(g2, paragraph.trim(), x, y, w);
+                    y += 6;
                 }
+                y += 36;
+
+                // === 4. Firma ===
+                g2.setFont(labelFont);
+                
+                // Dibuja "ESTOY DE ACUERDO" SIN línea
+                g2.drawString(P5_ACUERDO, x, y + g2.getFontMetrics().getAscent());
+                y += 18; // Avanza una línea
+                
+                y += 36; // Espacio grande antes de la firma
+                
+                // Dibuja "NOMBRE Y FIRMA" CON línea
+                y = drawFieldLine(g2, x, y, w, P6_FIRMA, "");   // NOMBRE Y FIRMA
+                        
                 return Printable.PAGE_EXISTS;
             };
 
@@ -333,9 +420,9 @@ private void guardarAbono() {
                     "Abono registrado pero impresión no confirmada.")
             );
             // Notificar a Corte de Caja que hubo una operación completada
-try {
-    Utilidades.EventBus.notificarOperacionFinalizada();
-} catch (Exception ignore) {}
+            try {
+                Utilidades.EventBus.notificarOperacionFinalizada();
+            } catch (Exception ignore) {}
 
 
              
@@ -346,9 +433,9 @@ try {
                     () -> JOptionPane.showMessageDialog(this, "Abono registrado pero impresión no confirmada.")
             );
             // Notificar a Corte de Caja que hubo una operación completada
-try {
-    Utilidades.EventBus.notificarOperacionFinalizada();
-} catch (Exception ignore) {}
+            try {
+                Utilidades.EventBus.notificarOperacionFinalizada();
+            } catch (Exception ignore) {}
 
         }
 
@@ -366,7 +453,6 @@ try {
         limpiar();
     }
 }
-
     // ---------- Helpers UI / numéricos ----------
 
     // Helper null-safe como en tus otros paneles
@@ -505,6 +591,7 @@ private String obtenerCondicionesPredeterminadas() {
 
 private Map<String, String> construirVarsDesdeNota(int numeroNota) throws SQLException {
     Map<String, String> map = new HashMap<>();
+    final DateTimeFormatter MX = DateTimeFormatter.ofPattern("dd-MM-yyyy"); // Helper format
 
     try (Connection cn = Conexion.Conecta.getConnection();
          PreparedStatement ps = cn.prepareStatement("""
@@ -532,23 +619,265 @@ private Map<String, String> construirVarsDesdeNota(int numeroNota) throws SQLExc
             if (rs.next()) {
                 map.put("folio", rs.getString("folio"));
                 map.put("cliente_nombre", rs.getString("cliente_nombre"));
-                map.put("fecha_compra", safeDate(rs.getDate("fecha_registro")));
-                map.put("fecha_evento", safeDate(rs.getDate("fecha_evento")));
-                map.put("fecha_en_tienda", safeDate(rs.getDate("fecha_entrega")));
+                map.put("fecha_compra", safeDate(rs.getDate("fecha_registro"), MX));
+                map.put("fecha_evento", safeDate(rs.getDate("fecha_evento"), MX));
+                map.put("fecha_en_tienda", safeDate(rs.getDate("fecha_entrega"), MX));
                 map.put("asesora", rs.getString("asesora"));
                 map.put("busto", safeNum(rs.getString("busto")));
                 map.put("cintura", safeNum(rs.getString("cintura")));
                 map.put("cadera", safeNum(rs.getString("cadera")));
+                
+                // --- INICIO: NUEVO BLOQUE PARA DETALLE DE ARTÍCULO ---
+                try (PreparedStatement psDetalle = cn.prepareStatement(
+                        "SELECT * FROM nota_detalle WHERE numero_nota = ? ORDER BY id LIMIT 1")) {
+                    
+                    psDetalle.setInt(1, numeroNota);
+                    try (ResultSet rsDetalle = psDetalle.executeQuery()) {
+                        if (rsDetalle.next()) {
+                            map.put("modelo", safeNum(rsDetalle.getString("modelo")));
+                            map.put("marca", safeNum(rsDetalle.getString("marca")));
+                            map.put("color", safeNum(rsDetalle.getString("color")));
+                            map.put("talla", safeNum(rsDetalle.getString("talla")));
+                            map.put("codigo", safeNum(rsDetalle.getString("codigo_articulo")));
+                            
+                            double precio = rsDetalle.getDouble("precio");
+                            double desc = rsDetalle.getDouble("descuento");
+                            double pagar = rsDetalle.getDouble("subtotal");
+                            
+                            map.put("precio", String.format("%.2f", precio));
+                            map.put("descuento_pct", String.format("%.2f", desc));
+                            map.put("precio_pagar", String.format("%.2f", pagar));
+                        }
+                    }
+                }
+                // --- FIN: NUEVO BLOQUE ---
             }
         }
     }
+    
+    // También agregar whatsapp
+    try {
+        EmpresaInfo emp = cargarEmpresaInfo();
+        map.put("whatsapp", n(emp.whatsapp));
+    } catch (Exception ignore) {}
+
     return map;
+}
+// REEMPLAZA tu método safeDate(java.sql.Date d) con ESTOS DOS:
+private String safeDate(java.sql.Date d, DateTimeFormatter formatter) {
+    if (d == null) return "";
+    return d.toLocalDate().format(formatter);
 }
 
 private String safeDate(java.sql.Date d) {
     if (d == null) return "";
     return d.toLocalDate().format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
 }
+
+
+// AGREGA TODOS ESTOS MÉTODOS DE AYUDA (helpers)
+private static void centerText(Graphics2D g2, String text, int x, int w, int y) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    int cx = x + (w - fm.stringWidth(text)) / 2;
+    g2.drawString(text, cx, y);
+}
+
+private static int drawWrappedSimple(Graphics2D g2, String text, int x, int y, int maxWidth) {
+    if (text == null || text.trim().isEmpty()) return y;
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    String[] words = text.split("\\s+");
+    StringBuilder line = new StringBuilder();
+    
+    for (String word : words) {
+        String tryLine = (line.length() == 0 ? word : line + " " + word);
+        if (fm.stringWidth(tryLine) <= maxWidth) {
+            line.setLength(0);
+            line.append(tryLine);
+        } else {
+            g2.drawString(line.toString(), x, y);
+            y += fm.getHeight(); // Usa el alto de la fuente
+            line.setLength(0);
+            line.append(word);
+        }
+    }
+    
+    if (line.length() > 0) {
+        g2.drawString(line.toString(), x, y);
+    }
+
+    return y + fm.getHeight(); // Avanza a la siguiente línea
+}
+
+// ----- INICIA BLOQUE DE NUEVOS HELPERS (REEMPLAZA LOS 4 ANTERIORES) -----
+
+/** Dibuja: LABEL: [Valor encima de la línea]. Devuelve el nuevo y. */
+private static int drawFieldLine(Graphics2D g2, int x, int y, int w, String label, String value) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    int yy = y + fm.getAscent();
+    int lw = fm.stringWidth(label) + 6;
+    g2.drawString(label, x, yy);
+    
+    int valueX = x + lw + 3;
+    int x_end = x + w;
+
+    // 1. Dibuja la LÍNEA PRIMERO (continua)
+    g2.drawLine(valueX, yy + 3, x_end, yy + 3);
+
+    // 2. Dibuja el VALOR ENCIMA de la línea
+    if (value != null && !value.isBlank()) {
+        g2.drawString(value, valueX, yy);
+    }
+    return y + 18;
+}
+
+private static int drawTwoColsLine2575(Graphics2D g2, int x, int y, int w,
+                                       String leftLabel, String leftVal,
+                                       String rightLabel, String rightVal) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    // ----- ESTE ES EL CAMBIO: 25% para la columna 1 -----
+    int col1_width = (int)((w - 20) * 0.15); // Más pequeño para CODIGO
+    int x1_end = x + col1_width;
+    // ---------------------------------------------------
+    int xr = x1_end + 20;
+    int x2_end = x + w;
+    int yy = y + fm.getAscent();
+
+    // Col 1 (25%)
+    int lw = fm.stringWidth(leftLabel) + 6;
+    g2.drawString(leftLabel, x, yy);
+    int value1X = x + lw + 3;
+    g2.drawLine(value1X, yy + 3, x1_end, yy + 3); // Dibuja línea
+    if (leftVal != null && !leftVal.isBlank()) {
+        g2.drawString(leftVal, value1X, yy); // Dibuja valor encima
+    }
+
+    // Col 2 (75%)
+    int rw = fm.stringWidth(rightLabel) + 6;
+    g2.drawString(rightLabel, xr, yy);
+    int value2X = xr + rw + 3;
+    g2.drawLine(value2X, yy + 3, x2_end, yy + 3); // Dibuja línea
+    if (rightVal != null && !rightVal.isBlank()) {
+        g2.drawString(rightVal, value2X, yy); // Dibuja valor encima
+    }
+
+    return y + 18;
+}
+
+/** Dibuja 2 columnas (35/65) [Valor encima de la línea]. (Para CODIGO y VESTIDO) */
+private static int drawTwoColsLine(Graphics2D g2, int x, int y, int w,
+                                       String leftLabel, String leftVal,
+                                       String rightLabel, String rightVal) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    // ----- ESTE ES EL CAMBIO: 35% para la columna 1 -----
+    int col1_width = (int)((w - 20) * 0.35);
+    int x1_end = x + col1_width;
+    // ---------------------------------------------------
+    int xr = x1_end + 20;
+    int x2_end = x + w;
+    int yy = y + fm.getAscent();
+
+    // Col 1 (35%)
+    int lw = fm.stringWidth(leftLabel) + 6;
+    g2.drawString(leftLabel, x, yy);
+    int value1X = x + lw + 3;
+    g2.drawLine(value1X, yy + 3, x1_end, yy + 3); // Dibuja línea
+    if (leftVal != null && !leftVal.isBlank()) {
+        g2.drawString(leftVal, value1X, yy); // Dibuja valor encima
+    }
+
+    // Col 2 (65%)
+    int rw = fm.stringWidth(rightLabel) + 6;
+    g2.drawString(rightLabel, xr, yy);
+    int value2X = xr + rw + 3;
+    g2.drawLine(value2X, yy + 3, x2_end, yy + 3); // Dibuja línea
+    if (rightVal != null && !rightVal.isBlank()) {
+        g2.drawString(rightVal, value2X, yy); // Dibuja valor encima
+    }
+
+    return y + 18;
+}
+
+/** Dibuja 2 columnas (70/30) [Valor encima de la línea]. (Para DESCUENTO y PAGAR) */
+private static int drawTwoColsLine7030(Graphics2D g2, int x, int y, int w,
+                                       String leftLabel, String leftVal,
+                                       String rightLabel, String rightVal) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    // ----- ESTE ES EL CAMBIO: 70% para la columna 1 -----
+    int col1_width = (int)((w - 20) * 0.70);
+    int x1_end = x + col1_width;
+    // ---------------------------------------------------
+    int xr = x1_end + 20;
+    int x2_end = x + w;
+    int yy = y + fm.getAscent();
+
+    // Col 1 (70%)
+    int lw = fm.stringWidth(leftLabel) + 6;
+    g2.drawString(leftLabel, x, yy);
+    int value1X = x + lw + 3;
+    g2.drawLine(value1X, yy + 3, x1_end, yy + 3); // Dibuja línea
+    if (leftVal != null && !leftVal.isBlank()) {
+        g2.drawString(leftVal, value1X, yy); // Dibuja valor encima
+    }
+
+    // Col 2 (30%)
+    int rw = fm.stringWidth(rightLabel) + 6;
+    g2.drawString(rightLabel, xr, yy);
+    int value2X = xr + rw + 3;
+    g2.drawLine(value2X, yy + 3, x2_end, yy + 3); // Dibuja línea
+    if (rightVal != null && !rightVal.isBlank()) {
+        g2.drawString(rightVal, value2X, yy); // Dibuja valor encima
+    }
+
+    return y + 18;
+}
+
+
+/** Dibuja 3 columnas (33/33/33) [Valor encima de la línea]. */
+private static int drawThreeColsLine(Graphics2D g2, int x, int y, int w,
+                                     String leftLabel, String leftVal,
+                                     String midLabel, String midVal,
+                                     String rightLabel, String rightVal) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    int third = (w - 40) / 3;
+    int yy = y + fm.getAscent();
+
+    int x1_end = x + third;
+    int xm = x1_end + 20;
+    int x2_end = xm + third;
+    int xr = x2_end + 20;
+    int x3_end = x + w;
+
+    // Col 1
+    int lw = fm.stringWidth(leftLabel) + 6;
+    g2.drawString(leftLabel, x, yy);
+    int value1X = x + lw + 3;
+    g2.drawLine(value1X, yy + 3, x1_end, yy + 3); // Dibuja línea
+    if (leftVal != null && !leftVal.isBlank()) {
+        g2.drawString(leftVal, value1X, yy); // Dibuja valor encima
+    }
+
+    // Col 2
+    int mw = fm.stringWidth(midLabel) + 6;
+    g2.drawString(midLabel, xm, yy);
+    int value2X = xm + mw + 3;
+    g2.drawLine(value2X, yy + 3, x2_end, yy + 3); // Dibuja línea
+    if (midVal != null && !midVal.isBlank()) {
+        g2.drawString(midVal, value2X, yy); // Dibuja valor encima
+    }
+
+    // Col 3
+    int rw = fm.stringWidth(rightLabel) + 6;
+    g2.drawString(rightLabel, xr, yy);
+    int value3X = xr + rw + 3;
+    g2.drawLine(value3X, yy + 3, x3_end, yy + 3); // Dibuja línea
+    if (rightVal != null && !rightVal.isBlank()) {
+        g2.drawString(rightVal, value3X, yy); // Dibuja valor encima
+    }
+
+    return y + 18;
+}
+
+// ----- TERMINA BLOQUE DE NUEVOS HELPERS -----
 
 private String safeNum(String s) {
     return (s == null || s.isBlank()) ? "—" : s;
@@ -606,6 +935,8 @@ private void imprimirFormatoCondiciones(int numeroNota, String memo, Map<String,
 
         // Limpiar folios de devolución
         cbDV.removeAllItems();
+        txtMontoDV.setEnabled(false);
+        
 
         // Limpiar datos del cliente
         txtTelefono.setText("");

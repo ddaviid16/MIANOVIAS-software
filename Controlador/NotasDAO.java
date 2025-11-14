@@ -4,7 +4,7 @@ import Conexion.Conecta;
 import Modelo.Nota;
 
 import java.sql.*;
-import java.sql.Date;
+import java.sql.Date;   
 import java.time.LocalDate;
 import java.util.*;
 
@@ -349,6 +349,9 @@ public FechasRenglon leerFechasDeRenglon(int detalleId) throws SQLException {
         public Double total;
         public Double saldo;
         public String status;
+
+        public String uuidFactura;      // null si no hay
+        public String estatusFactura;   // TIMBRADA/BORRADOR/CANCELADA o null
     }
 
     /** Notas de un cliente por teléfono (todas, orden más reciente primero). */
@@ -375,6 +378,8 @@ public FechasRenglon leerFechasDeRenglon(int detalleId) throws SQLException {
                     try { r.saldo = (rs.getBigDecimal("saldo")==null? null : rs.getBigDecimal("saldo").doubleValue()); }
                     catch(Throwable t){ r.saldo = rs.getDouble("saldo"); }
                     r.status = rs.getString("status");
+                    r.uuidFactura    = rs.getString("uuid_fact");
+                    r.estatusFactura = rs.getString("est_fact");
                     out.add(r);
                 }
                 return out;
