@@ -689,7 +689,6 @@ private Printable construirPrintableCondiciones(
         int w = (int) pf.getImageableWidth() - (M * 2);
 
         // === Fuentes ===
-        Font titleFont = new Font("Arial", Font.BOLD, 13);
         Font bodyFont = new Font("Arial", Font.PLAIN, 11);
         Font labelFont = new Font("Arial", Font.BOLD, 10);
         
@@ -1787,7 +1786,6 @@ try {
 // Render final con datos reales
 Map<String,String> varsFinal = buildMemoVars(
         emp, n, dets, entregaMostrar, eventoMostrar, sel.getNombreCompleto());
-String memoRender = renderMemo(memoCrudoAGuardar, varsFinal);
 
 // Pasamos 'varsFinal' (el mapa con los datos) en lugar de 'memoRender' (el texto renderizado)
 Printable condiciones = construirPrintableCondiciones(

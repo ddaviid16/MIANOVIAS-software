@@ -67,16 +67,84 @@ public static void cambiarClaveConDialogo(java.awt.Component parent) {
             configurarClaveInicial(parent, dao);
             return;
         }
-        
 
-        // ... resto del método como ya lo tienes (pedir actual + nueva + confirmación)
-        }catch (Exception ex) {
+        // Sí hay clave: pedir ACTUAL + NUEVA + CONFIRMACIÓN
+        JPasswordField pfActual = new JPasswordField();
+        JPasswordField pfNueva1 = new JPasswordField();
+        JPasswordField pfNueva2 = new JPasswordField();
+
+        Object[] msg = {
+                "Clave actual:", pfActual,
+                "Nueva clave:", pfNueva1,
+                "Confirmar nueva clave:", pfNueva2
+        };
+
+        int r = JOptionPane.showConfirmDialog(parent, msg,
+                "Cambiar clave de acceso",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+
+        if (r != JOptionPane.OK_OPTION) {
+            // usuario canceló
+            Arrays.fill(pfActual.getPassword(), '\0');
+            Arrays.fill(pfNueva1.getPassword(), '\0');
+            Arrays.fill(pfNueva2.getPassword(), '\0');
+            return;
+        }
+
+        char[] actual = pfActual.getPassword();
+        char[] n1     = pfNueva1.getPassword();
+        char[] n2     = pfNueva2.getPassword();
+
+        // 1) validar que la nueva no esté vacía
+        if (n1.length == 0) {
+            JOptionPane.showMessageDialog(parent,
+                    "La nueva clave no puede estar vacía.",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            Arrays.fill(actual, '\0');
+            Arrays.fill(n1, '\0');
+            Arrays.fill(n2, '\0');
+            return;
+        }
+
+        // 2) validar confirmación
+        if (!Arrays.equals(n1, n2)) {
+            JOptionPane.showMessageDialog(parent,
+                    "La nueva clave y su confirmación no coinciden.",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            Arrays.fill(actual, '\0');
+            Arrays.fill(n1, '\0');
+            Arrays.fill(n2, '\0');
+            return;
+        }
+
+        // 3) validar clave ACTUAL
+        if (!dao.validarPassword(actual)) {
+            JOptionPane.showMessageDialog(parent,
+                    "La clave actual es incorrecta.",
+                    "Acceso denegado", JOptionPane.ERROR_MESSAGE);
+            Arrays.fill(actual, '\0');
+            Arrays.fill(n1, '\0');
+            Arrays.fill(n2, '\0');
+            return;
+        }
+
+        // 4) guardar nueva clave
+        dao.establecerNuevaPassword(n1);
+        Arrays.fill(actual, '\0');
+        Arrays.fill(n1, '\0');
+        Arrays.fill(n2, '\0');
+
+        JOptionPane.showMessageDialog(parent,
+                "Clave actualizada correctamente.",
+                "Listo", JOptionPane.INFORMATION_MESSAGE);
+
+    } catch (Exception ex) {
         JOptionPane.showMessageDialog(parent,
                 "Error al cambiar la clave: " + ex.getMessage(),
                 "Error", JOptionPane.ERROR_MESSAGE);
     }
 }
-
 
 
 

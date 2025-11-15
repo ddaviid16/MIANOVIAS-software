@@ -407,9 +407,7 @@ public class HojaEntregaPanel extends JPanel {
     private Printable crearPrintable() {
         // Copia local de los datos para congelarlos al momento de imprimir
         final Empresa emp = empresaActual;
-        final Nota nota = notaActual;
 
-        final String folio = txtFolio.getText();
         final String numeroNota = txtNumeroNota.getText();
         final String cliente = txtCliente.getText();
         final String modelo = txtModelo.getText();
