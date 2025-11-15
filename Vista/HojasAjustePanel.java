@@ -47,7 +47,7 @@ public class HojasAjustePanel extends JPanel {
     private final JTextField txtNombre = ro();
 
     private final DefaultTableModel modelNotas = new DefaultTableModel(
-            new Object[]{"Nota","Tipo","Folio","Fecha"}, 0){
+        new Object[]{"Nota","Cliente","Tipo","Folio","Fecha"}, 0){
         @Override public boolean isCellEditable(int r, int c){ return false; }
     };
     private final JTable tbNotas = new JTable(modelNotas);
@@ -100,6 +100,9 @@ public class HojasAjustePanel extends JPanel {
         tbNotas.getSelectionModel().addListSelectionListener(_e -> {
             if (!_e.getValueIsAdjusting()) cargarArticulosYCliente();
         });
+        // Ocultar la columna "Nota" (modelo col 0) en la VISTA
+        tbNotas.getColumnModel().removeColumn(tbNotas.getColumnModel().getColumn(0));
+
         split.setTopComponent(new JScrollPane(tbNotas));
 
         tbArt.setRowHeight(24);
@@ -111,7 +114,7 @@ public class HojasAjustePanel extends JPanel {
 
         // Rango inicial (últimos 90 días) y primera carga
         dfHasta.set(LocalDate.now());
-        dfDesde.set(LocalDate.now());
+        dfDesde.set(LocalDate.now().minusDays(90));
         cargarNotasPorRango();
     }
 
@@ -145,7 +148,7 @@ public class HojasAjustePanel extends JPanel {
         Map<String, ClienteResumen> cache = new HashMap<>();
 
         // 3) Acumulamos filas ya filtradas por fecha_prueba1 y luego ordenamos por esa fecha desc
-        class Row { int numero; String tipo; String folio; LocalDate fecha; }
+        class Row { int numero; String cliente; String tipo; String folio; LocalDate fecha; }
         List<Row> rows = new ArrayList<>();
 
         try (Connection cn = Conexion.Conecta.getConnection();
@@ -174,7 +177,12 @@ public class HojasAjustePanel extends JPanel {
                     Row r = new Row();
                     r.numero = numero; r.tipo = tipo; r.folio = folio; r.fecha = fPrueba1;
                     rows.add(r);
+                    // Nombre del cliente (si no hay, cae al teléfono)
+                    String nom = (cr == null ? "" : safe(cr.getNombreCompleto()));
+                    if (nom.isEmpty()) nom = tel;
+                    r.cliente = nom;
                 }
+                
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this,"Error listando notas: "+ex.getMessage(),
@@ -183,15 +191,35 @@ public class HojasAjustePanel extends JPanel {
         }
 
         // 4) Orden por fecha_prueba1 DESC y luego por número DESC
-        rows.sort(Comparator.<Row,LocalDate>comparing(r -> r.fecha, Comparator.nullsLast(Comparator.naturalOrder()))
-                .reversed().thenComparingInt(r -> r.numero).reversed());
+rows.sort(
+    Comparator.<Row,LocalDate>comparing(r -> r.fecha,
+        Comparator.nullsLast(Comparator.naturalOrder()))
+    .reversed()
+    .thenComparingInt(r -> r.numero).reversed()
+);
 
-        // 5) Poblar la tabla mostrando como "Fecha" la fecha_prueba1
-        for (Row r : rows) {
-            modelNotas.addRow(new Object[]{
-                    r.numero, r.tipo, r.folio, (r.fecha==null? "" : r.fecha.format(MX))
-            });
-        }
+// 5) Si no hay nada, avisar
+if (rows.isEmpty()) {
+    JOptionPane.showMessageDialog(
+        this,
+        "No se encontraron notas en ese rango de fechas (según la fecha de prueba 1 del cliente).",
+        "Sin resultados",
+        JOptionPane.INFORMATION_MESSAGE
+    );
+    return;
+}
+
+// 6) Poblar la tabla
+for (Row r : rows) {
+    modelNotas.addRow(new Object[]{
+        r.numero,
+        r.cliente,
+        r.tipo,
+        r.folio,
+        (r.fecha==null? "" : r.fecha.format(MX))
+    });
+}
+
     }
 
     // Al cambiar de nota: cargar cliente y artículos
