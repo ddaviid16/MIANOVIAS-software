@@ -1,38 +1,58 @@
 // Vista/HojasAjustePanel.java
 package Vista;
 
-import Controlador.NotasDAO;
-import Controlador.clienteDAO;
-import Modelo.ClienteResumen;
-import Modelo.NotaDetalle;
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
+import java.awt.Insets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+// Calendario tipo grid (igual estilo al de VentasPorVendedorPanel)
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
+// Utilidades para filtrar/ordenar
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
-import javax.swing.*;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultCellEditor;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.DocumentFilter;
-import java.awt.*;
-import java.sql.SQLException;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.function.IntConsumer;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 
-// Calendario tipo grid (igual estilo al de VentasPorVendedorPanel)
-import java.time.DayOfWeek;
-import java.time.YearMonth;
-import java.time.format.TextStyle;
-import java.util.Locale;
-import java.util.function.Consumer;
-
-// Utilidades para filtrar/ordenar
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Comparator;
+import Controlador.NotasDAO;
+import Controlador.clienteDAO;
+import Modelo.ClienteResumen;
+import Modelo.NotaDetalle;
 
 public class HojasAjustePanel extends JPanel {
 
@@ -198,16 +218,6 @@ rows.sort(
     .thenComparingInt(r -> r.numero).reversed()
 );
 
-// 5) Si no hay nada, avisar
-if (rows.isEmpty()) {
-    JOptionPane.showMessageDialog(
-        this,
-        "No se encontraron notas en ese rango de fechas (según la fecha de prueba 1 del cliente).",
-        "Sin resultados",
-        JOptionPane.INFORMATION_MESSAGE
-    );
-    return;
-}
 
 // 6) Poblar la tabla
 for (Row r : rows) {
