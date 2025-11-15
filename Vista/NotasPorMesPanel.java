@@ -32,7 +32,7 @@ public class NotasPorMesPanel extends JPanel {
 
     // -------- Notas (arriba)
     private final DefaultTableModel modelNotas = new DefaultTableModel(
-            new String[]{"# Nota","Tipo","Folio","Fecha","Total","Saldo","Status", "Factura"}, 0) {
+            new String[]{"# Nota","Tipo","Folio","Fecha","Total","Saldo","Status"}, 0) {
         @Override public boolean isCellEditable(int r, int c) { return false; }
         @Override public Class<?> getColumnClass(int c) {
             return switch (c) {
@@ -108,7 +108,12 @@ private final JTable tbFactura = new JTable(modelFactura);
         btCargar.addActionListener(_e -> cargar());
         north.add(btCargar);
 
-        btExportar.addActionListener(_e -> exportarCSV());
+        btExportar.addActionListener(_e -> {
+        if (Utilidades.SeguridadUI.pedirYValidarClave(this)) {
+            exportarCSV();
+        }
+    });
+
         north.add(btExportar);
 
         add(north, BorderLayout.NORTH);

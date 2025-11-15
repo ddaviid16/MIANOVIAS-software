@@ -119,8 +119,12 @@ btExportar.addActionListener(_e -> {
             JOptionPane.showMessageDialog(this, "No hay retiros registrados para hoy.");
             return;
         }
+    if (Utilidades.SeguridadUI.pedirYValidarClave(this)) {
         ExportadorCSV.guardarListaCSV(retiros, "pagos_gastos",
                 "ts","efectivoDia","monto","motivo");
+    };
+
+        
     } catch (Exception ex) {
         JOptionPane.showMessageDialog(this, "Error exportando: " + ex.getMessage(),
                 "Error", JOptionPane.ERROR_MESSAGE);

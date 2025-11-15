@@ -17,11 +17,10 @@ import java.io.File;
 import java.nio.file.Files;
 import java.sql.SQLException;
 import java.util.regex.Pattern;
+import Utilidades.SeguridadUI;
+
 
 public class EmpresaPanel extends JPanel {
-
-    // ===== Configuración de seguridad
-    private static final String ACCESS_KEY = "050607"; // clave para editar
 
     // ===== Campos =====
     private JTextField txtNumEmpresa, txtRazonSocial, txtNombreFiscal, txtRFC;
@@ -37,7 +36,7 @@ public class EmpresaPanel extends JPanel {
     private static final int LOGO_W = 250, LOGO_H = 250;
 
     // Botones de acción
-    private JButton btnCargar, btnGuardar, btnLimpiar, btnModificar, btnCancelarEdicion;
+    private JButton btnCargar, btnGuardar, btnLimpiar, btnModificar, btnCancelarEdicion, btnCambiarClave;
 
     // Estado
     private boolean editMode = false;
@@ -114,18 +113,21 @@ public class EmpresaPanel extends JPanel {
 
         // ===== Acciones =====
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnCambiarClave     = new JButton("Cambiar clave de acceso");
         btnCargar          = new JButton("Cargar");
         btnModificar       = new JButton("Modificar");
         btnGuardar         = new JButton("Guardar");
         btnCancelarEdicion = new JButton("Cancelar edición");
         btnLimpiar         = new JButton("Limpiar");
 
+        btnCambiarClave.addActionListener(_e -> SeguridadUI.cambiarClaveConDialogo(this));
         btnCargar.addActionListener(_e -> cargar());
         btnModificar.addActionListener(_e -> intentarEntrarEnEdicion());
         btnGuardar.addActionListener(_e -> guardar());
         btnCancelarEdicion.addActionListener(_e -> cancelarEdicion());
         btnLimpiar.addActionListener(_e -> confirmarLimpiar());
 
+        actions.add(btnCambiarClave);
         actions.add(btnCargar);
         actions.add(btnModificar);
         actions.add(btnGuardar);
@@ -198,23 +200,13 @@ public class EmpresaPanel extends JPanel {
         if (fg != null) t.setForeground(fg);
     }
 
-    private void intentarEntrarEnEdicion() {
-        JPasswordField pf = new JPasswordField();
-        Object[] msg = {"Ingresa la clave de acceso:", pf};
-        Object[] ops = {"Aceptar", "Cancelar"};
-        int r = JOptionPane.showOptionDialog(this, msg, "Autorización",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE,
-                null, ops, ops[0]);
-        if (r == JOptionPane.OK_OPTION) {
-            String typed = new String(pf.getPassword());
-            if (ACCESS_KEY.equals(typed)) {
-                setEditMode(true);
-                txtRazonSocial.requestFocus();
-            } else {
-                JOptionPane.showMessageDialog(this, "Clave incorrecta", "Acceso denegado", JOptionPane.ERROR_MESSAGE);
-            }
-        }
+private void intentarEntrarEnEdicion() {
+    if (SeguridadUI.pedirYValidarClave(this)) {
+        setEditMode(true);
+        txtRazonSocial.requestFocus();
     }
+}
+
 
     private void cancelarEdicion() {
         cargar();

@@ -157,7 +157,11 @@ private void actualizarTextoFecha() {
 
         // Export CSV button
         JButton btExportar = new JButton("Exportar CSV");
-        btExportar.addActionListener(_e -> exportarCSV());
+        btExportar.addActionListener(_e -> {
+    if (Utilidades.SeguridadUI.pedirYValidarClave(this)) {
+        exportarCSV();
+    }
+});
         south.add(btExportar);
         add(south, BorderLayout.SOUTH);
 

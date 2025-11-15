@@ -15,6 +15,7 @@ public class OperacionesPanel extends JPanel {
     private static final String CARD_DEVOLUCION      = "Devoluciones";
     private static final String CARD_CANCELACION     = "Cancelación de notas";
     private static final String CARD_CAMBIO_FECHA    = "Cambio de fecha de evento";
+    private static final String CARD_HOJA_ENTREGA    = "Hoja de entrega";
     
 
     public OperacionesPanel(Consumer<String> navigate) {
@@ -31,6 +32,7 @@ public class OperacionesPanel extends JPanel {
         JButton btDevolucion  = botonGrande("Devoluciones");
         JButton btCancelacion = botonGrande("Cancelación de Notas");
         JButton btCambioFecha = botonGrande("Cambio de Fecha de Evento");
+        JButton btHojaEntrega = botonGrande("Hoja de entrega");
 
         // Navegación (cambia por tus constantes si son distintas)
         btContado.addActionListener(_e    -> navigate.accept(CARD_VENTA_CONTADO));
@@ -39,6 +41,7 @@ public class OperacionesPanel extends JPanel {
         btDevolucion.addActionListener(_e -> navigate.accept(CARD_DEVOLUCION));
         btCancelacion.addActionListener(_e-> navigate.accept(CARD_CANCELACION));
         btCambioFecha.addActionListener(_e-> navigate.accept(CARD_CAMBIO_FECHA));
+        btHojaEntrega.addActionListener(_e-> navigate.accept(CARD_HOJA_ENTREGA));
 
 
         center.add(btContado);
@@ -47,7 +50,7 @@ public class OperacionesPanel extends JPanel {
         center.add(btDevolucion);
         center.add(btCancelacion);
         center.add(btCambioFecha);
-        center.add(new JLabel()); // hueco
+        center.add(btHojaEntrega);
 
         add(center, BorderLayout.CENTER);
     }

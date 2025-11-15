@@ -80,7 +80,12 @@ public class ReporteObsequiosPanel extends JPanel {
 
     // Botón para exportar CSV
     JButton btExportar = new JButton("Exportar CSV");
-    btExportar.addActionListener(_e -> exportarCSV());
+    btExportar.addActionListener(_e -> {
+    if (Utilidades.SeguridadUI.pedirYValidarClave(this)) {
+        exportarCSV();
+    }
+});
+
     panelBotones.add(btExportar);
 
     add(panelBotones, BorderLayout.NORTH);

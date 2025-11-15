@@ -1,14 +1,17 @@
 package Controlador;
 
-import Conexion.Conecta;
-import Modelo.Inventario;
-
-
 import java.math.BigDecimal;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+
+import Conexion.Conecta;
+import Modelo.Inventario;
 
 /** Persistencia de artículos PEDIDOS asociados a una nota. */
 public class PedidosDAO {
@@ -221,7 +224,7 @@ public void actualizarCodigoArticulo(int numeroNota, Integer codigoNuevo) throws
                     inv.setColor(nz(p.color));
                     inv.setPrecio(p.precio == null ? 0.0 : p.precio.doubleValue());
                     inv.setDescuento(p.descuento == null ? null : p.descuento.doubleValue());
-                    inv.setExistencia(1);          // <- pieza que llegó a tienda
+                    inv.setExistencia(0);          // <- pieza que llegó a tienda
                     inv.setStatus("A");
                     invDao.insertar(inv);          // fecha_registro la pone el INSERT (CURDATE)
                 }

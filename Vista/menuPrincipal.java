@@ -82,6 +82,7 @@ public class menuPrincipal extends JFrame {
         mainPanel.add(new DevolucionPanel(),          "Devoluciones");
         mainPanel.add(new CancelarNotaPanel(),        "Cancelación de notas");
         mainPanel.add(new CambioFechaEventoPanel(),   "Cambio de fecha de evento");
+        mainPanel.add(new HojaEntregaPanel(),         "Hoja de entrega");
 
         // Submenú Empresa (mismo patrón que Operaciones)
         mainPanel.add(new EmpresaSubmenuPanel(card -> showCard(card, tituloDe(card))), CARD_EMPRESA);
@@ -103,6 +104,8 @@ public class menuPrincipal extends JFrame {
         mainPanel.add(new ReporteObsequiosPanel(),    ReportesPanel.CARD_REP_OBSEQ);
         mainPanel.add(new VentasPorVendedorPanel(),   ReportesPanel.CARD_REP_VENTVEND);
         mainPanel.add(new NotasPorMesPanel(), ReportesPanel.CARD_REP_NOTAS_MES);
+        mainPanel.add(new ReporteVentasPanel(),       ReportesPanel.CARD_REP_VENTAS);
+
 
         // Mostrar
         pack();
@@ -216,6 +219,7 @@ public class menuPrincipal extends JFrame {
             case ReportesPanel.CARD_REP_OBSEQ:    return "Reporte de obsequios";
             case ReportesPanel.CARD_REP_VENTVEND: return "Ventas por vendedor";
             case ReportesPanel.CARD_REP_NOTAS_MES: return "Notas por mes";
+            case ReportesPanel.CARD_REP_VENTAS:    return "Reporte de ventas";
             // Los siguientes ya son “humanos”; devuélvelos tal cual:
             case "Venta de contado":
             case "Venta a crédito":
@@ -226,7 +230,8 @@ public class menuPrincipal extends JFrame {
             case "Información de la empresa":
             case "Asignación de Folios":
             case "Asesores":
-
+            case "Hoja de entrega":
+            
                 return card;
         }
         return card;
@@ -248,6 +253,5 @@ public class menuPrincipal extends JFrame {
         } catch (Exception ignore) {}
         SwingUtilities.invokeLater(menuPrincipal::new);
         Conexion.BootstrapDB.ensure();   // crea DB/tablas si no existen
-    javax.swing.SwingUtilities.invokeLater(() -> new menuPrincipal().setVisible(true));
     }
 }

@@ -127,7 +127,9 @@ public class DetalleClienteReportePanel extends JPanel {
 
         // Eventos
         btBuscar.addActionListener(_e -> buscar());
-        btExportar.addActionListener(_e -> exportarCSVCliente());
+        btExportar.addActionListener(_e -> {if (Utilidades.SeguridadUI.pedirYValidarClave(this)) exportarCSVCliente();});
+
+
         txtTel.addActionListener(_e -> buscar());
         tbNotas.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) cargarDetalleYFechasDeNotaSeleccionada();

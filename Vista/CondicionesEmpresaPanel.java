@@ -4,10 +4,11 @@ import Conexion.Conecta;
 import javax.swing.*;
 import java.awt.*;
 import java.sql.*;
+import Utilidades.SeguridadUI;
+
 
 public class CondicionesEmpresaPanel extends JPanel {
 
-    private static final String ACCESS_KEY = "050607"; // misma clave de seguridad
     private JTextArea txtCondiciones;
     private JButton btnGuardar, btnEditar, btnCancelar;
     private boolean editMode = false;
@@ -63,20 +64,12 @@ public class CondicionesEmpresaPanel extends JPanel {
     }
 
     private void intentarEntrarEnEdicion() {
-        JPasswordField pf = new JPasswordField();
-        Object[] msg = {"Ingresa la clave de acceso:", pf};
-        int r = JOptionPane.showConfirmDialog(this, msg, "Autorización",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
-        if (r == JOptionPane.OK_OPTION) {
-            String typed = new String(pf.getPassword());
-            if (ACCESS_KEY.equals(typed)) {
-                setEditMode(true);
-                txtCondiciones.requestFocus();
-            } else {
-                JOptionPane.showMessageDialog(this, "Clave incorrecta", "Acceso denegado", JOptionPane.ERROR_MESSAGE);
-            }
-        }
+    if (SeguridadUI.pedirYValidarClave(this)) {
+        setEditMode(true);
+        txtCondiciones.requestFocus();
     }
+}
+
 
     private void guardarCondiciones() {
         String texto = txtCondiciones.getText().trim();

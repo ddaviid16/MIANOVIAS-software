@@ -20,6 +20,7 @@ public class ReportesPanel extends JPanel {
     public static final String CARD_REP_OBSEQ      = "Reporte de obsequios";
     public static final String CARD_REP_VENTVEND   = "Ventas por vendedor";
     public static final String CARD_REP_NOTAS_MES = "Notas por mes";
+    public static final String CARD_REP_VENTAS     = "Reporte de ventas";
 
     public ReportesPanel(Consumer<String> navigate) {
         this.navigate = navigate;
@@ -38,6 +39,7 @@ public class ReportesPanel extends JPanel {
         center.add(tile("Reporte de obsequios", CARD_REP_OBSEQ));
         center.add(tile("Ventas por vendedor",  CARD_REP_VENTVEND));
         center.add(tile("Notas por mes",       CARD_REP_NOTAS_MES));
+        center.add(tile("Reporte de ventas", CARD_REP_VENTAS));
         add(center, BorderLayout.CENTER);
     }
 

@@ -111,7 +111,7 @@ public class HojasAjustePanel extends JPanel {
 
         // Rango inicial (últimos 90 días) y primera carga
         dfHasta.set(LocalDate.now());
-        dfDesde.set(LocalDate.now().minusDays(90));
+        dfDesde.set(LocalDate.now());
         cargarNotasPorRango();
     }
 

@@ -51,7 +51,12 @@ public class ArticulosAPedirPanel extends JPanel {
         JButton btExportar = new JButton("Exportar CSV");
         btCargar.addActionListener(_e -> cargar());
         btGuardar.addActionListener(_e -> guardarCambios());
-        btExportar.addActionListener(_e -> exportarCsv());
+        btExportar.addActionListener(_e -> {
+    if (Utilidades.SeguridadUI.pedirYValidarClave(this)) {
+        exportarCsv();
+    }
+});
+
 
         JPanel north = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
         north.add(btCargar); north.add(btGuardar); north.add(btExportar);

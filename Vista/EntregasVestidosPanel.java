@@ -66,7 +66,12 @@ public class EntregasVestidosPanel extends JPanel {
 
         // Agregar botón de Exportar CSV
         JButton btExportar = new JButton("Exportar CSV");
-        btExportar.addActionListener(_e -> exportarCSV());
+        btExportar.addActionListener(_e -> {
+    if (Utilidades.SeguridadUI.pedirYValidarClave(this)) {
+        exportarCSV();
+    }
+});
+
         north.add(btExportar);
 
         add(north, BorderLayout.NORTH);
