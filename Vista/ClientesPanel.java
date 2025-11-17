@@ -433,37 +433,28 @@ private static String toSql(LocalDate d) {
 private static String validarFechas(LocalDate evento, LocalDate p1, LocalDate p2, LocalDate entrega) {
     LocalDate hoy = LocalDate.now();
     if (evento == null) return "La fecha de evento es obligatoria.";
-    if (p1 == null) return "La fecha de prueba 1 es obligatoria.";
-    if (p2 == null) return "La fecha de prueba 2 es obligatoria.";
-    if (entrega == null) return "La fecha de entrega es obligatoria.";
 
     // evento > hoy (solo si se capturó)
     if (evento != null && !evento.isAfter(hoy))
         return "La fecha de evento debe ser mayor a la fecha actual.";
 
     // p1 > hoy && p1 < evento
-    if (p1 != null) {
         if (!p1.isAfter(hoy))
             return "La fecha de prueba 1 debe ser mayor a la fecha actual.";
         if (!p1.isBefore(evento))
             return "La fecha de prueba 1 debe ser menor a la fecha de evento.";
-    }
 
     // p2 > p1 && p2 < evento
-    if (p2 != null) {
         if (!p2.isAfter(p1))
             return "La fecha de prueba 2 debe ser mayor a la fecha de prueba 1.";
         if (!p2.isBefore(evento))
             return "La fecha de prueba 2 debe ser menor a la fecha de evento.";
-    }
 
     // entrega > p2 && entrega < evento
-    if (entrega != null) {
         if (!entrega.isAfter(p2))
             return "La fecha de entrega debe ser mayor a la fecha de prueba 2.";
         if (!entrega.isBefore(evento))
             return "La fecha de entrega debe ser menor a la fecha de evento.";
-    }
 
     return null; // OK
 }
