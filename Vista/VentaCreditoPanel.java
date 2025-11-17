@@ -65,6 +65,7 @@ import javax.swing.table.TableColumnModel;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.DocumentFilter;
 
+
 import Controlador.AsesorDAO;
 import Controlador.EmpresaDAO;
 import Controlador.InventarioDAO;
@@ -80,6 +81,7 @@ import Modelo.Inventario;
 import Modelo.Nota;
 import Modelo.NotaDetalle;
 import Modelo.PagoFormas;
+import Utilidades.TelefonosUI;
 import Controlador.FacturaDatosDAO;
 
 public class VentaCreditoPanel extends JPanel {
@@ -128,25 +130,33 @@ public class VentaCreditoPanel extends JPanel {
     private java.util.List<Modelo.PagoDV> dvAplicadas = new java.util.ArrayList<>();
 
     public VentaCreditoPanel() {
-        setLayout(new BorderLayout());
+    setLayout(new BorderLayout());
 
-        JPanel top = new JPanel(new GridBagLayout());
-        top.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
-        GridBagConstraints c = new GridBagConstraints();
-        c.insets = new Insets(6,6,6,6);
-        c.fill = GridBagConstraints.HORIZONTAL;
-        c.weightx = 1;
+    // 1) Crear los campos de teléfono
+    txtTelefono  = new JTextField();
+    txtTelefono2 = new JTextField();
 
-        int y=0;
+    // 2) Instalar la lógica de formato de teléfono
+    TelefonosUI.instalar(txtTelefono, 10);
+    TelefonosUI.instalar(txtTelefono2, 10);
 
-        // Teléfonos
-        txtTelefono = new JTextField();
-        txtTelefono2 = readOnlyField();
-        addCell(top,c,0,y,new JLabel("Teléfono cliente:"),1,false);
-        addCell(top,c,1,y,txtTelefono,1,true);
-        addCell(top,c,2,y,new JLabel("Teléfono 2:"),1,false);
-        addCell(top,c,3,y,txtTelefono2,1,true);
-        y++;
+    // 3) Ya después armas el layout
+    JPanel top = new JPanel(new GridBagLayout());
+    top.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
+    GridBagConstraints c = new GridBagConstraints();
+    c.insets = new Insets(6,6,6,6);
+    c.fill = GridBagConstraints.HORIZONTAL;
+    c.weightx = 1;
+
+    int y = 0;
+
+    // Teléfonos
+    addCell(top,c,0,y,new JLabel("Teléfono cliente:"),1,false);
+    addCell(top,c,1,y,txtTelefono,1,true);
+    addCell(top,c,2,y,new JLabel("Teléfono 2:"),1,false);
+    addCell(top,c,3,y,txtTelefono2,1,true);
+    y++;
+
         txtTelefono.addActionListener(_e -> cargarCliente());
         ((AbstractDocument) txtTelefono.getDocument()).addDocumentListener((SimpleDocListener) () -> {
             String t = txtTelefono.getText().trim();
@@ -406,7 +416,7 @@ public class VentaCreditoPanel extends JPanel {
         }
     }
     private void cargarCliente() {
-        String tel = txtTelefono.getText().trim();
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
         if (tel.isEmpty()) { limpiarInfoCliente(); return; }
         if (tel.equals(lastTelefonoConsultado)) return;
 
@@ -492,8 +502,8 @@ try (Connection cn = Conexion.Conecta.getConnection();
     }
 
     private void abrirFormularioCliente() {
-        String tel = txtTelefono.getText().trim();
-        if (tel.isEmpty()) {
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+        if (tel == null || tel.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Ingresa primero el teléfono del cliente.", "Atención",
                     JOptionPane.WARNING_MESSAGE);
             return;
@@ -733,8 +743,8 @@ try (Connection cn = Conexion.Conecta.getConnection();
 
 
     private boolean validarClienteObligatorio() {
-        String tel = txtTelefono.getText().trim();
-        if (tel.isEmpty()) {
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+        if (tel == null || tel.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                 "Captura el teléfono del cliente y regístralo antes de continuar.");
             txtTelefono.requestFocus();
@@ -838,8 +848,8 @@ try (Connection cn = Conexion.Conecta.getConnection();
             }
 
             Nota n = new Nota();
-            String tel = txtTelefono.getText().trim();
-            n.setTelefono(tel.isEmpty()?null:tel);
+            String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+            n.setTelefono(tel == null || tel.isEmpty() ? null : tel);
             Modelo.Asesor sel = (Modelo.Asesor) cbAsesor.getSelectedItem();
             n.setAsesor(sel.getNumeroEmpleado());
             n.setTipo("CR");
@@ -971,7 +981,7 @@ if (dvAplicadas != null && !dvAplicadas.isEmpty()) {
         // ======= IMPRIMIR =======
         EmpresaInfo emp = cargarEmpresaInfo();
         String clienteNombre = txtNombreCompleto.getText().trim();
-        String tel2 = txtTelefono2.getText().trim();
+        String tel2 = Utilidades.TelefonosUI.soloDigitos(txtTelefono2.getText());
         String folioImpresion = (n.getFolio()==null || n.getFolio().isBlank()) ? "—" : n.getFolio();
 
         Printable prn = construirPrintableEmpresarial(
@@ -1134,10 +1144,10 @@ txtTelefono.requestFocus();
         try {
             List<PedidosDAO.PedidoDraft> drafts = extraerPedidosDelCarrito();
             if (drafts.isEmpty()) return;
-            String tel = txtTelefono.getText().trim();
+            String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
             new PedidosDAO().insertarPedidos(
                     numeroNota,
-                    tel.isEmpty() ? null : tel,
+                    tel == null || tel.isEmpty() ? null : tel,
                     fechaEventoParaDetalle,
                     drafts
             );
@@ -2002,8 +2012,8 @@ y += 6; g2.drawLine(x, y, x + w, y); y += 16;
 }
 // === DIÁLOGO: aplicar Notas de Devolución (DV) ===
     private void abrirDialogoAplicarDV() {
-        String tel = txtTelefono.getText().trim();
-        if (tel.isEmpty()) {
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+        if (tel == null || tel.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Captura primero el teléfono del cliente.", "Atención", JOptionPane.WARNING_MESSAGE);
             txtTelefono.requestFocus();
             return;

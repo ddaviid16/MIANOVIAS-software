@@ -98,7 +98,8 @@ public class CambioFechaEventoPorNotaPanel extends JPanel {
     }
 
     private void cargarClienteYNotas() {
-        String tel = txtTelefono.getText().trim();
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+        
         if (tel.isEmpty() || tel.equals(telCargado)) return;
 
         try {

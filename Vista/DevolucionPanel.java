@@ -6,6 +6,8 @@ import Controlador.DevolucionService;
 import Controlador.clienteDAO;
 import Controlador.EmpresaDAO;
 
+import Utilidades.TelefonosUI;
+
 import Modelo.ClienteResumen;
 import Modelo.Empresa;
 import Modelo.Nota;
@@ -15,6 +17,8 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.text.AbstractDocument;
+
+
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.sql.SQLException;
@@ -49,6 +53,7 @@ public class DevolucionPanel extends JPanel {
     public DevolucionPanel() {
         setLayout(new BorderLayout(10,10));
 
+        TelefonosUI.instalar(txtTelefono, 10);
         // === TOP: cliente + notas ===
         JPanel top = new JPanel(new GridBagLayout());
         top.setBorder(BorderFactory.createEmptyBorder(10,10,0,10));
@@ -154,7 +159,7 @@ public class DevolucionPanel extends JPanel {
     }
 
     private void cargarClienteYNotas() {
-        String tel = txtTelefono.getText().trim();
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
         if (tel.isEmpty()) { limpiar(); return; }
         if (tel.equals(lastTel)) return;
 

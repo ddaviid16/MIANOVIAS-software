@@ -63,6 +63,7 @@ import javax.swing.table.TableColumnModel;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.DocumentFilter;
 
+
 // ===== IMPRESIÓN =====
 import java.awt.Font;
 import java.awt.Graphics;
@@ -88,6 +89,7 @@ import Modelo.Inventario;
 import Modelo.Nota;
 import Modelo.NotaDetalle;
 import Modelo.PagoFormas;
+import Utilidades.TelefonosUI;
 import Modelo.Empresa;
 
 public class VentaContadoPanel extends JPanel {
@@ -159,7 +161,13 @@ public class VentaContadoPanel extends JPanel {
     private void buildUI() {
         setLayout(new BorderLayout());
 
-        // ====== Encabezado (cliente / asesor / info)
+        // 1) Crear el campo
+        txtTelefono = new JTextField();
+
+        // 2) Aplicar formato de teléfono (guiones, filtro, etc.)
+        TelefonosUI.instalar(txtTelefono, 10);
+
+        // 3) Ya después construyes el panel
         JPanel top = new JPanel(new GridBagLayout());
         top.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
         GridBagConstraints c = new GridBagConstraints();
@@ -167,10 +175,10 @@ public class VentaContadoPanel extends JPanel {
         c.fill = GridBagConstraints.HORIZONTAL;
         c.weightx = 1;
 
-        int y=0;
+        int y = 0;
 
         // Fila 0: Teléfono1 y Teléfono2
-        txtTelefono = new JTextField();
+        // 🚫 YA NO VUELVAS A HACER new JTextField() AQUÍ
         txtTelefono2 = readOnlyField();
         addCell(top,c,0,y,new JLabel("Teléfono cliente:"),1,false);
         addCell(top,c,1,y,txtTelefono,1,true);
@@ -1040,8 +1048,8 @@ private static class DVOption {
 
     // ======= Carga de cliente/nota =======
     private void cargarCliente() {
-        String tel = txtTelefono.getText().trim();
-        if (tel.isEmpty()) { limpiarInfoCliente(); return; }
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+        if (tel == null || tel.isEmpty()) { limpiarInfoCliente(); return; }
         if (tel.equals(lastTelefonoConsultado)) return;
 
         try {
@@ -1213,8 +1221,8 @@ private void aplicarDevolucion() {
 
 
     private void abrirFormularioCliente() {
-        String tel = txtTelefono.getText().trim();
-        if (tel.isEmpty()) {
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+        if (tel == null || tel.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Ingresa primero el teléfono del cliente.", "Atención",
                     JOptionPane.WARNING_MESSAGE);
             return;
@@ -1477,8 +1485,8 @@ private void aplicarDevolucion() {
     }
 
     private boolean validarClienteObligatorio() {
-        String tel = txtTelefono.getText().trim();
-        if (tel.isEmpty()) {
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+        if (tel == null || tel.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                 "Captura el teléfono del cliente y regístralo antes de continuar.");
             txtTelefono.requestFocus();
@@ -1592,8 +1600,8 @@ if (selItem != null) {
 
 
             Nota n = new Nota();
-            String tel = txtTelefono.getText().trim();
-            n.setTelefono(tel.isEmpty()?null:tel);
+            String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+            n.setTelefono(tel == null || tel.isEmpty() ? null : tel);
             Modelo.Asesor sel = (Modelo.Asesor) cbAsesor.getSelectedItem();
             if (sel == null) {
                 JOptionPane.showMessageDialog(this, "Selecciona un asesor");
@@ -1746,7 +1754,7 @@ if (p.getDevolucion() != null && p.getDevolucion() > 0 &&
 EmpresaInfo emp = cargarEmpresaInfo();
 
 String clienteNombre = txtNombreCompleto.getText().trim();
-String tel2 = txtTelefono2.getText().trim();
+String tel2 = Utilidades.TelefonosUI.soloDigitos(txtTelefono2.getText());
 
 Printable prn = construirPrintableEmpresarial(
         emp, n, dets, p,
@@ -1937,10 +1945,10 @@ txtTelefono.requestFocus();
         try {
             List<PedidosDAO.PedidoDraft> drafts = extraerPedidosDelCarrito();
             if (drafts.isEmpty()) return;
-            String tel = txtTelefono.getText().trim();
+            String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
             new PedidosDAO().insertarPedidos(
                     numeroNota,
-                    tel.isEmpty() ? null : tel,
+                    tel == null || tel.isEmpty() ? null : tel,
                     fechaEventoParaDetalle,
                     drafts
             );

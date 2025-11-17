@@ -7,6 +7,7 @@ import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
+
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.awt.print.PageFormat;
@@ -25,6 +26,7 @@ import Controlador.EmpresaDAO;
 import Modelo.Empresa;
 import Modelo.Nota;
 import Modelo.PagoFormas;
+import Utilidades.TelefonosUI;
 
 /**
  * Re-imprimir nota:
@@ -91,7 +93,7 @@ public class ReimprimirNotaPanel extends JPanel {
     private void buildUI() {
         setLayout(new BorderLayout(8, 8));
         setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
+        TelefonosUI.instalar(txtTelefono, 10);
         // Filtro superior
         JPanel filtro = new JPanel(new GridBagLayout());
         GridBagConstraints c = new GridBagConstraints();
@@ -161,8 +163,8 @@ public class ReimprimirNotaPanel extends JPanel {
         modelNotas.setRowCount(0);
         modelDet.setRowCount(0);
 
-        String tel = txtTelefono.getText().trim();
-        if (tel.isBlank()) return;
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+        if (tel == null || tel.isEmpty()) return;
 
         try {
             List<NotasDAO.NotaResumen> lista = new NotasDAO().listarNotasPorTelefonoResumen(tel);

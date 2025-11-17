@@ -4,6 +4,7 @@ import Controlador.CambioFechaEventoService;
 import Controlador.NotasDAO;
 import Controlador.clienteDAO;
 import Modelo.ClienteResumen;
+import Utilidades.TelefonosUI;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -51,9 +52,13 @@ public class CambioFechaEventoPanel extends JPanel {
         // Antes: BorderLayout + título + tabs
         // Ahora: el contenido directo, sin título interno ni tabs.
         setLayout(new BorderLayout());
+
+        // === Formato de teléfonos (123-456-7890) ===
+        TelefonosUI.instalar(txtTelCli, 10);
+        TelefonosUI.instalar(txtTelNota, 10);
+
         add(buildTabCliente(), BorderLayout.CENTER);
     }
-
     // ============================ “Cliente (global)” (sin tab) ============================
     private JPanel buildTabCliente() {
         JPanel p = new JPanel(new GridBagLayout());
@@ -124,7 +129,8 @@ public class CambioFechaEventoPanel extends JPanel {
     }
 
     private void cargarCliente() {
-        String tel = txtTelCli.getText().trim();
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelCli.getText());
+        
         if (tel.isEmpty()) { limpiarCliente(); return; }
         try {
             clienteDAO cdao = new clienteDAO();
@@ -151,7 +157,8 @@ public class CambioFechaEventoPanel extends JPanel {
 
     private void cargarNotasDiferentes() {
         modelNotas.setRowCount(0);
-        String tel = txtTelCli.getText().trim();
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelCli.getText());
+        
         LocalDate fCliente = parse(txtFechaActual.getText().trim());
         if (tel.isEmpty() || fCliente == null) return;
 
@@ -176,7 +183,8 @@ public class CambioFechaEventoPanel extends JPanel {
     }
 
     private void aplicarCambioGlobal() {
-    String tel = txtTelCli.getText().trim();
+    String tel = Utilidades.TelefonosUI.soloDigitos(txtTelCli.getText());
+    
     if (tel.isEmpty()) { JOptionPane.showMessageDialog(this,"Captura el teléfono del cliente."); return; }
 
     LocalDate nuevaGlobEvento  = parse(txtNuevaFecha.getText().trim());   // puede ser null
@@ -270,7 +278,7 @@ public class CambioFechaEventoPanel extends JPanel {
     }
 
     private void actualizarSoloNota() {
-        String tel = txtTelNota.getText().trim();
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelNota.getText());
         String sn = txtNumNota.getText().trim();
         LocalDate f = parse(txtNuevaFechaNota.getText().trim());
         if (tel.isEmpty() || sn.isEmpty() || f == null) {

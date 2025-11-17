@@ -5,11 +5,13 @@ import Controlador.clienteDAO;
 import Controlador.EmpresaDAO;
 import Modelo.Nota;
 import Modelo.NotaDetalle;
+import Utilidades.TelefonosUI;
 import Modelo.Empresa;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
+
 import java.awt.*;
 import java.awt.print.Printable;
 import java.awt.print.PrinterException;
@@ -67,6 +69,7 @@ public class HojaEntregaPanel extends JPanel {
         setLayout(new BorderLayout(10,10));
         setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
 
+        TelefonosUI.instalar(txtTelefono, 10);
         // Empresa para encabezado; si falla, se usa texto genérico
         try {
             empresaActual = empresaDAO.buscarPorNumero(1);
@@ -215,7 +218,7 @@ public class HojaEntregaPanel extends JPanel {
 
     /** Carga en el combo todos los folios liquidados del teléfono indicado. */
     private void cargarFoliosPorTelefono() {
-        String tel = txtTelefono.getText();
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
         if (tel == null || tel.trim().isEmpty()) {
             JOptionPane.showMessageDialog(this, "Capture el teléfono del cliente.",
                     "Validación", JOptionPane.WARNING_MESSAGE);

@@ -5,6 +5,8 @@ import Controlador.AbonoService;
 import Controlador.EmpresaDAO;
 import Controlador.clienteDAO;
 
+import Utilidades.TelefonosUI;
+
 
 import Modelo.ClienteResumen;
 import Modelo.Empresa;
@@ -52,20 +54,23 @@ public class AbonoPanel extends JPanel {
 
 
     public AbonoPanel() {
-        setLayout(new BorderLayout());
+    setLayout(new BorderLayout());
 
-        JPanel top = new JPanel(new GridBagLayout());
-        top.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
-        GridBagConstraints c = new GridBagConstraints();
-        c.insets = new Insets(6,6,6,6);
-        c.fill = GridBagConstraints.HORIZONTAL;
-        c.weightx = 1;
+    JPanel top = new JPanel(new GridBagLayout());
+    top.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
+    GridBagConstraints c = new GridBagConstraints();
+    c.insets = new Insets(6,6,6,6);
+    c.fill = GridBagConstraints.HORIZONTAL;
+    c.weightx = 1;
 
-        int y=0;
+    int y=0;
 
-        // Teléfono + Nombre
-        txtTelefono = new JTextField();
-        txtNombre   = readOnly();
+    // Teléfono + Nombre
+    txtTelefono = new JTextField();
+    // <<< AQUÍ SE INSTALA EL FORMATEADOR DE TELÉFONO >>>
+    TelefonosUI.instalar(txtTelefono, 10);
+
+    txtNombre   = readOnly();
         addCell(top,c,0,y,new JLabel("Teléfono de cliente:"),1,false);
         addCell(top,c,1,y,txtTelefono,1,true);
         addCell(top,c,2,y,new JLabel("Nombre:"),1,false);
@@ -188,7 +193,8 @@ public class AbonoPanel extends JPanel {
     }
 
     private void cargarClienteYNotas() {
-        String tel = txtTelefono.getText().trim();
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+        
         if (tel.isEmpty()) { limpiar(); return; }
         if (tel.equals(lastTel)) return;
 
@@ -308,15 +314,18 @@ private void guardarAbono() {
 
         if (Math.abs(res.saldoNuevo) <= 0.005) {
             // --- LIQUIDADO ---
-            // 1. Obtenemos el texto de las cláusulas (si el usuario lo editó)
+            // 1. Obtenemos el texto FINAL de las cláusulas (ya personalizado para esta nota)
             String memo = obtenerOModificarCondiciones(sel.getNumeroNota(), cn);
-            if (memo == null || memo.isBlank()) throw new SQLException("Formato de condiciones cancelado o vacío.");
-            
-            // 2. Obtenemos el MAPA con los datos de la nota (¡NUEVO!)
+            if (memo == null || memo.isBlank()) {
+                throw new SQLException("Formato de condiciones cancelado o vacío.");
+            }
+
+            // 2. Obtenemos el MAPA con los datos de la nota (para tokens que hayan quedado)
             Map<String, String> vars = construirVarsDesdeNota(sel.getNumeroNota());
 
-            // 3. Cargamos el texto PURO de las cláusulas (el de la BD)
-            final String clausulasTexto = obtenerCondicionesPredeterminadas();
+            // 3. Usamos el memo final como base para impresión
+            final String clausulasTexto = memo;
+
             
             // 4. Definimos los textos estáticos del formulario
             final String P1_INTRO = "En MIANOVIAS, ¡te damos la bienvenida a vivir esta gran experiencia!";

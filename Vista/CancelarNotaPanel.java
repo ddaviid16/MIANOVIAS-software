@@ -7,6 +7,9 @@ import Modelo.ClienteResumen;
 import Modelo.Nota;
 import Modelo.NotaDetalle;
 
+import Utilidades.TelefonosUI;
+
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
@@ -29,6 +32,9 @@ public class CancelarNotaPanel extends JPanel {
 
     public CancelarNotaPanel() {
         setLayout(new BorderLayout(10,10));
+
+        // Aplica máscara / formato al teléfono (123-456-7890)
+        TelefonosUI.instalar(txtTel, 10);
 
         // ===== top
         JPanel top = new JPanel(new GridBagLayout());
@@ -100,7 +106,8 @@ public class CancelarNotaPanel extends JPanel {
     // ===== UI actions
 
     private void cargarClienteYNotas() {
-        String tel = txtTel.getText().trim();
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTel.getText());
+        
         if (tel.isEmpty()) { limpiar(); return; }
         try {
             // cliente

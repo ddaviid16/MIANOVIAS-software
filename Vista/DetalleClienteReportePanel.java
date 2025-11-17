@@ -2,9 +2,9 @@ package Vista;
 
 import Controlador.NotasDAO;
 import Controlador.clienteDAO;
+import Utilidades.TelefonosUI;
 import Controlador.FormasPagoDAO;
 import Controlador.ExportadorCSV;
-
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -82,6 +82,7 @@ public class DetalleClienteReportePanel extends JPanel {
     public DetalleClienteReportePanel() {
         setLayout(new BorderLayout());
 
+        TelefonosUI.instalar(txtTel, 10);
         // --------- Encabezado ----------
         JPanel north = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
         txtTel.setColumns(22);
@@ -144,7 +145,7 @@ public class DetalleClienteReportePanel extends JPanel {
     }
 
     private void buscar() {
-        String tel = txtTel.getText().trim();
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTel.getText());
         if (tel.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Captura el teléfono del cliente.", "Atención",
                     JOptionPane.WARNING_MESSAGE);
@@ -350,7 +351,8 @@ private void cargarDetalleYFechasDeNotaSeleccionada() {
  *      con pagos, DV, "abona a", fechas (uniforme/mixta) y banderas de diferencia con cliente.
  */
 private void exportarCSVCliente() {
-    String tel = txtTel.getText().trim();
+    String tel = Utilidades.TelefonosUI.soloDigitos(txtTel.getText());
+    
     if (tel.isEmpty()) {
         JOptionPane.showMessageDialog(this, "Captura el teléfono y da Buscar antes de exportar.", "Atención",
                 JOptionPane.WARNING_MESSAGE);

@@ -502,4 +502,107 @@
                 }
             }
         }
+            /** 
+     * Crea o actualiza la nota de CR de "migración" para un cliente.
+     * Usa folio 'MIG-<telefono>' para identificarla.
+     * - Si saldo es null o <= 0: marca la nota existente como cancelada (status='C', saldo=0).
+     * - Si saldo > 0: inserta o actualiza la nota con ese saldo.
+     */
+/** Quita todo lo que no sea dígito. */
+private static String normalizarTelefono(String tel) {
+    if (tel == null) return null;
+    return tel.replaceAll("\\D+", "");  // fuera guiones, espacios, etc.
+}
+
+/**
+ * Crea o actualiza la nota de CR de "migración" para un cliente.
+ * Usa folio 'MIG-<telefono>' para identificarla.
+ * - Si saldo es null o <= 0: marca la nota existente como cancelada (status='C', saldo=0).
+ * - Si saldo > 0: inserta o actualiza la nota con ese saldo.
+ */
+// Genera un folio de migración que siempre cabe en varchar(12)
+private String folioMigracion(String telefono) {
+    if (telefono == null) return "MIG";
+    // Solo dígitos
+    String digits = telefono.replaceAll("\\D", "");
+    if (digits.isEmpty()) return "MIG";
+
+    // Usar solo los últimos 8 dígitos si se pasa
+    if (digits.length() > 8) {
+        digits = digits.substring(digits.length() - 8);
+    }
+    // "MIG-" (4) + 8 dígitos = 12 caracteres máximo
+    return "MIG-" + digits;
+}
+
+public void registrarNotaMigracion(String telefono, java.time.LocalDate fechaSaldo, Double saldo)
+        throws java.sql.SQLException {
+
+    if (telefono == null || telefono.isBlank()) return;
+
+    // Normalizar a solo dígitos para todo lo que vaya a Notas
+    String telRaw = telefono.replaceAll("\\D", "");
+    if (telRaw.isEmpty()) return;
+
+    try (java.sql.Connection cn = Conexion.Conecta.getConnection()) {
+
+        Integer numeroExistente = null;
+        try (java.sql.PreparedStatement ps = cn.prepareStatement(
+                "SELECT numero_nota " +
+                "FROM Notas " +
+                "WHERE telefono = ? AND tipo='CR' AND folio LIKE 'MIG-%' " +
+                "ORDER BY numero_nota DESC LIMIT 1")) {
+            ps.setString(1, telRaw);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    numeroExistente = rs.getInt("numero_nota");
+                }
+            }
+        }
+
+        // Si no hay saldo, cancelar la nota de migración (si existe) y salir
+        if (saldo == null || saldo <= 0.0) {
+            if (numeroExistente != null) {
+                try (java.sql.PreparedStatement ps = cn.prepareStatement(
+                        "UPDATE Notas SET total=0, saldo=0, status='C' WHERE numero_nota=?")) {
+                    ps.setInt(1, numeroExistente);
+                    ps.executeUpdate();
+                }
+            }
+            return;
+        }
+
+        java.time.LocalDateTime ldt =
+                (fechaSaldo == null ? java.time.LocalDateTime.now() : fechaSaldo.atStartOfDay());
+        java.sql.Timestamp ts = java.sql.Timestamp.valueOf(ldt);
+
+        if (numeroExistente == null) {
+            // INSERT
+            String folio = folioMigracion(telRaw);
+            try (java.sql.PreparedStatement ps = cn.prepareStatement(
+                    "INSERT INTO Notas(fecha_registro, telefono, asesor, tipo, total, saldo, status, folio) " +
+                    "VALUES (?, ?, NULL, 'CR', ?, ?, 'A', ?)")) {
+                ps.setTimestamp(1, ts);
+                ps.setString(2, telRaw);
+                ps.setBigDecimal(3, new java.math.BigDecimal(saldo));
+                ps.setBigDecimal(4, new java.math.BigDecimal(saldo));
+                ps.setString(5, folio);
+                ps.executeUpdate();
+            }
+        } else {
+            // UPDATE (no tocamos folio)
+            try (java.sql.PreparedStatement ps = cn.prepareStatement(
+                    "UPDATE Notas " +
+                    "SET fecha_registro=?, total=?, saldo=?, status='A' " +
+                    "WHERE numero_nota=?")) {
+                ps.setTimestamp(1, ts);
+                ps.setBigDecimal(2, new java.math.BigDecimal(saldo));
+                ps.setBigDecimal(3, new java.math.BigDecimal(saldo));
+                ps.setInt(4, numeroExistente);
+                ps.executeUpdate();
+            }
+        }
+    }
+}
+
     }

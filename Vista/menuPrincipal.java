@@ -71,8 +71,14 @@ public class menuPrincipal extends JFrame {
         mainPanel.add(new InventarioPanel(),   CARD_INV_ART); // "inventario_articulos"
         mainPanel.add(new ObsequiosInvPanel(), CARD_INV_OBS); // "inventario_obsequios"
 
-        // Registro de clientes
-        mainPanel.add(new ClientesPanel(), CARD_CLIENTES);
+        // Submenú de clientes
+        mainPanel.add(new ClientesSubmenuPanel(card -> showCard(card, tituloDe(card))), CARD_CLIENTES);
+        mainPanel.add(new ClientesPanel(), ClientesSubmenuPanel.CARD_CLIENTES_REGISTRO);
+        
+        mainPanel.add(new EditarClientePanel(),   ClientesSubmenuPanel.CARD_CLIENTES_EDITAR);
+        mainPanel.add(new RegistroCitasPanel(),   ClientesSubmenuPanel.CARD_CLIENTES_CITAS);
+        mainPanel.add(new HistorialClientePanel(),ClientesSubmenuPanel.CARD_CLIENTES_HIST);
+
 
         // Submenú Operaciones (usa IDs de texto EXACTOS que emite OperacionesPanel)
         mainPanel.add(new OperacionesPanel(card -> showCard(card, tituloDe(card))), CARD_OPER);
@@ -121,12 +127,12 @@ public class menuPrincipal extends JFrame {
         JButton btReportes   = botonGrande("Reportes");
 
         JButton btEmpresa     = botonGrande("Empresa");
-        JButton btClientes    = botonGrande("Registro de Clientes");
+        JButton btClientes    = botonGrande("Clientes");
         JButton btInventario  = botonGrande("Inventario");
         JButton btOperaciones = botonGrande("Operaciones");
 
         btEmpresa.addActionListener(_e   -> showCard(CARD_EMPRESA,   "Empresa"));
-        btClientes.addActionListener(_e  -> showCard(CARD_CLIENTES,  "Registro de Clientes"));
+        btClientes.addActionListener(_e  -> showCard(CARD_CLIENTES,  "Clientes"));
         btInventario.addActionListener(_e-> showCard(CARD_INV_MENU,  "Inventario"));
         btOperaciones.addActionListener(_e-> showCard(CARD_OPER,     "Operaciones"));
         btReportes.addActionListener(_e -> showCard(CARD_REPORTES, "Reportes"));
@@ -141,6 +147,33 @@ public class menuPrincipal extends JFrame {
         JPanel home = new JPanel(new BorderLayout());
         home.add(center, BorderLayout.CENTER);
         return home;
+    }
+
+    private JPanel buildClientesMenu() {
+        JPanel wrap = new JPanel(new BorderLayout());
+        wrap.setBorder(BorderFactory.createEmptyBorder(24, 24, 24, 24));
+
+        JPanel center = new JPanel(new FlowLayout(FlowLayout.CENTER, 24, 24));
+
+        JButton btReg = tileButton("Registro de clientes");
+        btReg.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_REGISTRO, "Registro de clientes"));
+
+        JButton btEdit = tileButton("Editar información de cliente");
+        btEdit.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_EDITAR, "Editar información de cliente"));
+
+        JButton btCitas = tileButton("Registro de citas");
+        btCitas.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_CITAS, "Registro de citas"));
+
+        JButton btHist = tileButton("Registrar historial de cliente");
+        btHist.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_HIST, "Registrar historial de cliente"));
+
+        center.add(btReg);
+        center.add(btEdit);
+        center.add(btCitas);
+        center.add(btHist);
+
+        wrap.add(center, BorderLayout.CENTER);
+        return wrap;
     }
 
     // Submenú Inventario (tiles compactos)
@@ -203,7 +236,11 @@ public class menuPrincipal extends JFrame {
         switch (card) {
             case CARD_HOME:        return "Menú principal";
             case CARD_EMPRESA:     return "Empresa";
-            case CARD_CLIENTES:    return "Registro de Clientes";
+            case CARD_CLIENTES:    return "Clientes";
+            case ClientesSubmenuPanel.CARD_CLIENTES_REGISTRO: return "Registro de clientes";
+            case ClientesSubmenuPanel.CARD_CLIENTES_EDITAR:   return "Editar información de cliente";
+            case ClientesSubmenuPanel.CARD_CLIENTES_CITAS:    return "Registro de citas";
+            case ClientesSubmenuPanel.CARD_CLIENTES_HIST:     return "Registrar historial de cliente";
             case CARD_INV_MENU:    return "Inventario";
             case CARD_INV_ART:     return "Inventario de artículos";
             case CARD_INV_OBS:     return "Inventario de obsequios";
