@@ -19,7 +19,6 @@ import java.sql.SQLException;
 import java.util.regex.Pattern;
 import Utilidades.SeguridadUI;
 
-
 public class EmpresaPanel extends JPanel {
 
     // ===== Campos =====
@@ -64,7 +63,6 @@ public class EmpresaPanel extends JPanel {
         logoPanel.add(logoBtns, BorderLayout.SOUTH);
 
         header.add(logoPanel, BorderLayout.WEST);
-        add(header, BorderLayout.NORTH);
 
         btnCargarLogo.addActionListener(_e -> seleccionarLogo());
         btnQuitarLogo.addActionListener(_e -> quitarLogo());
@@ -109,7 +107,20 @@ public class EmpresaPanel extends JPanel {
                 new JLabel("Facebook:"), txtFacebook = new JTextField());
         addRowFull(p, c, y++, new JLabel("TikTok:"), txtTikTok = new JTextField());
 
-        add(p, BorderLayout.CENTER);
+        // ======= CONTENIDO SCROLLABLE (header + formulario) =======
+        JPanel centerContent = new JPanel(new BorderLayout());
+        centerContent.add(header, BorderLayout.NORTH);
+        centerContent.add(p, BorderLayout.CENTER);
+
+        JScrollPane scroll = new JScrollPane(
+                centerContent,
+                ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED
+        );
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+
+        add(scroll, BorderLayout.CENTER);
 
         // ===== Acciones =====
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -200,13 +211,12 @@ public class EmpresaPanel extends JPanel {
         if (fg != null) t.setForeground(fg);
     }
 
-private void intentarEntrarEnEdicion() {
-    if (SeguridadUI.pedirYValidarClave(this)) {
-        setEditMode(true);
-        txtRazonSocial.requestFocus();
+    private void intentarEntrarEnEdicion() {
+        if (SeguridadUI.pedirYValidarClave(this)) {
+            setEditMode(true);
+            txtRazonSocial.requestFocus();
+        }
     }
-}
-
 
     private void cancelarEdicion() {
         cargar();
@@ -323,7 +333,6 @@ private void intentarEntrarEnEdicion() {
     }
 
     private void limpiarCamposTexto() {
-        // NO tocamos numero de empresa
         txtRazonSocial.setText("");
         txtNombreFiscal.setText("");
         txtRFC.setText("");

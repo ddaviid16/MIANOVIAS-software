@@ -13,7 +13,7 @@ set "PATH=%JAVA_HOME%\bin;%PATH%"
 rem ================== CONFIG BASICA ==================
 set "APP_NAME=MIANOVIAS"
 set "MAIN_CLASS=Vista.menuPrincipal"
-set "VERSION=1.0.5"
+set "VERSION=1.0.7"
 set "UPGRADE_UUID=B0C1F89B-7E53-4B1E-9B41-AD5F51C2A9A"
 
 set "SRC_DIR=%CD%"

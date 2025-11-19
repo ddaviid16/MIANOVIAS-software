@@ -104,7 +104,7 @@ public RegistroCitasPanel() {
 
         txtFechaCita1 = createDateFieldMX();
         txtHoraCita1  = createTimeField();
-        cbAsesora1    = new JComboBox<>(new String[]{""});
+        cbAsesora1    = new JComboBox<>();
 
         addRow(p, c, y++,
                new JLabel("Fecha 1ª cita:"), txtFechaCita1,
@@ -114,7 +114,7 @@ public RegistroCitasPanel() {
 
         txtFechaCita2 = createDateFieldMX();
         txtHoraCita2  = createTimeField();
-        cbAsesora2    = new JComboBox<>(new String[]{""});
+        cbAsesora2    = new JComboBox<>();
 
         addRow(p, c, y++,
                new JLabel("Fecha 2ª cita:"), txtFechaCita2,
@@ -127,7 +127,7 @@ public RegistroCitasPanel() {
 
         txtFechaPrueba1 = createDateFieldMX();
         txtHoraPrueba1  = createTimeField();
-        cbModista1      = new JComboBox<>(new String[]{""});
+        cbModista1      = new JComboBox<>();
 
         addRow(p, c, y++,
                new JLabel("Fecha prueba 1:"), txtFechaPrueba1,
@@ -137,7 +137,7 @@ public RegistroCitasPanel() {
 
         txtFechaPrueba2 = createDateFieldMX();
         txtHoraPrueba2  = createTimeField();
-        cbModista2      = new JComboBox<>(new String[]{""});
+        cbModista2      = new JComboBox<>();
 
         addRow(p, c, y++,
                new JLabel("Fecha prueba 2:"), txtFechaPrueba2,
@@ -172,8 +172,9 @@ public RegistroCitasPanel() {
         actions.add(btnLimpiar);
         add(actions, BorderLayout.SOUTH);
 
-        // Cargar asesoras desde BD
-        cargarAsesores();
+        // Cargar asesoras y modistas desde BD
+        cargarPersonalCitas();
+
     }
     // ======================================================
     //  LÓGICA
@@ -217,33 +218,29 @@ public RegistroCitasPanel() {
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
-private void cargarAsesores() {
+private void cargarPersonalCitas() {
     try {
         AsesorDAO ad = new AsesorDAO();
-        java.util.List<Modelo.Asesor> lista = ad.listarActivosDetalle();
 
-        cbAsesora1.removeAllItems();
-        cbAsesora2.removeAllItems();
-        cbAsesoraEntrega.removeAllItems();
+        // ASESORAS: tipo A o MA, status A
+        java.util.List<Modelo.Asesor> listaAsesoras = ad.listarActivosDetalle();
 
-        // Opción por defecto
-        cbAsesora1.addItem("Selecciona asesora");
-        cbAsesora2.addItem("Selecciona asesora");
-        cbAsesoraEntrega.addItem("Selecciona asesora");
+        // MODISTAS: tipo M o MA, status A
+        java.util.List<Modelo.Asesor> listaModistas = ad.listarModistasActivas();
 
-        for (Modelo.Asesor a : lista) {
-            String nombre = a.getNombreCompleto();
-            if (nombre != null && !nombre.isBlank()) {
-                cbAsesora1.addItem(nombre);
-                cbAsesora2.addItem(nombre);
-                cbAsesoraEntrega.addItem(nombre);
-            }
-        }
+        // ----- Asesoras -----
+        llenarComboPersonal(cbAsesora1, listaAsesoras, "Selecciona asesora");
+        llenarComboPersonal(cbAsesora2, listaAsesoras, "Selecciona asesora");
+        llenarComboPersonal(cbAsesoraEntrega, listaAsesoras, "Selecciona asesora");
+
+        // ----- Modistas -----
+        llenarComboPersonal(cbModista1, listaModistas, "Selecciona modista");
+        llenarComboPersonal(cbModista2, listaModistas, "Selecciona modista");
 
     } catch (SQLException e) {
         JOptionPane.showMessageDialog(
                 this,
-                "No se pudieron cargar asesores: " + e.getMessage(),
+                "No se pudieron cargar empleados para citas: " + e.getMessage(),
                 "Error",
                 JOptionPane.ERROR_MESSAGE
         );
@@ -382,6 +379,20 @@ private void cargarAsesores() {
         c.gridx = 3;
         p.add(f2, c);
     }
+private void llenarComboPersonal(JComboBox<String> cb,
+                                 java.util.List<Modelo.Asesor> lista,
+                                 String placeholder) {
+    cb.removeAllItems();
+    cb.addItem(placeholder);
+    if (lista == null) return;
+
+    for (Modelo.Asesor a : lista) {
+        String nombre = a.getNombreCompleto();
+        if (nombre != null && !nombre.isBlank()) {
+            cb.addItem(nombre);
+        }
+    }
+}
 
     private void addRowFull(JPanel p, GridBagConstraints c, int y,
                             JComponent l, JComponent f) {
@@ -465,9 +476,11 @@ private void cargarAsesores() {
     Object v = cb.getSelectedItem();
     if (v == null) return null;
     String s = v.toString().trim();
-    if (s.isEmpty() || s.equals("Selecciona asesora")) return null;
+    if (s.isEmpty() || s.startsWith("Selecciona ")) return null;
     return s;
 }
+
+
 
 
     // ===== filtros reutilizables =====
@@ -516,4 +529,13 @@ private void cargarAsesores() {
             setCaretPosition(Math.min(getCaretPosition(), getText().length()));
         }
     }
+    @Override
+public void setVisible(boolean aFlag) {
+    super.setVisible(aFlag);
+    if (aFlag) {
+        // Cada vez que el panel se hace visible, recarga asesoras y modistas
+        cargarPersonalCitas();
+    }
+}
+
 }

@@ -7,6 +7,7 @@ import java.awt.Component;
 import java.awt.Dialog;
 import java.awt.FlowLayout;
 import java.awt.Font;
+
 import java.awt.Frame;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -130,6 +131,7 @@ public class VentaCreditoPanel extends JPanel {
     private java.util.List<Modelo.PagoDV> dvAplicadas = new java.util.ArrayList<>();
 
     public VentaCreditoPanel() {
+        
     setLayout(new BorderLayout());
 
     // 1) Crear los campos de teléfono
@@ -268,61 +270,64 @@ public class VentaCreditoPanel extends JPanel {
             btRegistrarPedido.setVisible(s != null && s.trim().equalsIgnoreCase("PEDIR"));
         });
 
-        add(top, BorderLayout.NORTH);
 
         // ===== Tabla carrito con "Fecha art."
-        String[] cols = {"Código","Artículo","Marca","Modelo","Talla","Color","Fecha art.","Precio","%Desc","Desc. $","Subtotal","Quitar"};
-        model = new DefaultTableModel(cols,0) {
-            @Override public boolean isCellEditable(int r,int c){ return c==8 || c==11 || c==6; } // %Desc, botón, fecha
-        };
-        tb = new JTable(model);
-        tb.setRowHeight(26);
-        tb.setAutoCreateRowSorter(true);
-        tb.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
+String[] cols = {"Código","Artículo","Marca","Modelo","Talla","Color","Fecha art.","Precio","%Desc","Desc. $","Subtotal","Quitar"};
+model = new DefaultTableModel(cols,0) {
+    @Override public boolean isCellEditable(int r,int c){ return c==8 || c==11 || c==6; } // %Desc, botón, fecha
+};
+tb = new JTable(model);
+tb.setRowHeight(26);
+tb.setAutoCreateRowSorter(true);
+tb.putClientProperty("terminateEditOnFocusLost", Boolean.TRUE);
 
-        tb.getColumnModel().getColumn(8).setCellEditor(decimalEditor());
+tb.getColumnModel().getColumn(8).setCellEditor(decimalEditor());
 
-        DefaultTableCellRenderer right = new DefaultTableCellRenderer();
-        right.setHorizontalAlignment(SwingConstants.RIGHT);
-        tb.getColumnModel().getColumn(7).setCellRenderer(right);
-        tb.getColumnModel().getColumn(8).setCellRenderer(right);
-        tb.getColumnModel().getColumn(9).setCellRenderer(right);
-        tb.getColumnModel().getColumn(10).setCellRenderer(right);
+DefaultTableCellRenderer right = new DefaultTableCellRenderer();
+right.setHorizontalAlignment(SwingConstants.RIGHT);
+tb.getColumnModel().getColumn(7).setCellRenderer(right);
+tb.getColumnModel().getColumn(8).setCellRenderer(right);
+tb.getColumnModel().getColumn(9).setCellRenderer(right);
+tb.getColumnModel().getColumn(10).setCellRenderer(right);
 
-        new ButtonColumn(tb, new AbstractAction("Quitar") {
-            @Override public void actionPerformed(ActionEvent e) {
-                int row = Integer.parseInt(e.getActionCommand());
-                int mr = tb.convertRowIndexToModel(row);
-                model.removeRow(mr);
-                recalcularTotales();
-            }
-        }, 11);
+new ButtonColumn(tb, new AbstractAction("Quitar") {
+    @Override public void actionPerformed(ActionEvent e) {
+        int row = Integer.parseInt(e.getActionCommand());
+        int mr = tb.convertRowIndexToModel(row);
+        model.removeRow(mr);
+        recalcularTotales();
+    }
+}, 11);
 
-        model.addTableModelListener(evt -> {
-            if (evt.getType() != javax.swing.event.TableModelEvent.UPDATE) return;
-            if (updatingTable) return;
+model.addTableModelListener(evt -> {
+    if (evt.getType() != javax.swing.event.TableModelEvent.UPDATE) return;
+    if (updatingTable) return;
 
-            int col = evt.getColumn();
-            int row = evt.getFirstRow();
+    int col = evt.getColumn();
+    int row = evt.getFirstRow();
 
-            if (col == 8 && row >= 0) {
-                updatingTable = true;
-                try {
-                    double precio = parseMoney(model.getValueAt(row, 7));
-                    double pdesc  = clamp0a100(parseMoney(model.getValueAt(row, 8)));
-                    model.setValueAt(String.format("%.2f", pdesc), row, 8);
-                    double monto = precio * (pdesc / 100.0);
-                    double sub   = precio - monto;
-                    model.setValueAt(String.format("%.2f", monto), row, 9);
-                    model.setValueAt(String.format("%.2f", sub),   row, 10);
-                } finally {
-                    updatingTable = false;
-                }
-                recalcularTotales();
-            }
-        });
+    if (col == 8 && row >= 0) {
+        updatingTable = true;
+        try {
+            double precio = parseMoney(model.getValueAt(row, 7));
+            double pdesc  = clamp0a100(parseMoney(model.getValueAt(row, 8)));
+            model.setValueAt(String.format("%.2f", pdesc), row, 8);
+            double monto = precio * (pdesc / 100.0);
+            double sub   = precio - monto;
+            model.setValueAt(String.format("%.2f", monto), row, 9);
+            model.setValueAt(String.format("%.2f", sub),   row, 10);
+        } finally {
+            updatingTable = false;
+        }
+        recalcularTotales();
+    }
+});
 
-        add(new JScrollPane(tb), BorderLayout.CENTER);
+        // ==== Panel de tabla, igual que en VentaContado ====
+        JPanel panelTabla = new JPanel(new BorderLayout());
+        panelTabla.add(tb.getTableHeader(), BorderLayout.NORTH);
+        panelTabla.add(tb, BorderLayout.CENTER);
+
 
         // Totales/anticipo
         JPanel bottom = new JPanel(new GridBagLayout());
@@ -400,7 +405,25 @@ public class VentaCreditoPanel extends JPanel {
         btGuardar.addActionListener(_e -> guardarVentaCredito());
         addCell(bottom,d,3,r,btGuardar,1,false);
 
-        add(bottom, BorderLayout.SOUTH);
+        // ====== Panel que contiene todo (igual que VentaContado) ======
+        JPanel contenido = new JPanel(new BorderLayout());
+        contenido.add(top, BorderLayout.NORTH);
+        contenido.add(panelTabla, BorderLayout.CENTER);   // <- SIN JScrollPane interno
+        contenido.add(bottom, BorderLayout.SOUTH);
+
+        // Scroll general del panel (uno solo)
+        JScrollPane scroll = new JScrollPane(
+                contenido,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+        );
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+
+        // Agregamos solo el scroll a este panel
+        add(scroll, BorderLayout.CENTER);
+
+        cargarAsesores();
     }
 
     private void seleccionarObsequios() {
@@ -556,28 +579,41 @@ try (Connection cn = Conexion.Conecta.getConnection();
         return new DefaultCellEditor(tf);
     }
 
-    private void cargarAsesores() {
-        try {
-            cbAsesor.removeAllItems();
-            AsesorDAO ad = new AsesorDAO();
-            for (Modelo.Asesor a : ad.listarActivosDetalle()) {
-                cbAsesor.addItem(a);
-            }
-            cbAsesor.setRenderer(new DefaultListCellRenderer() {
-                @Override
-                public Component getListCellRendererComponent(JList<?> list, Object value, int index,
-                                                              boolean isSelected, boolean cellHasFocus) {
-                    super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                    if (value instanceof Modelo.Asesor) setText(((Modelo.Asesor) value).getNombreCompleto());
-                    else if (value == null) setText("Selecciona asesor");
-                    return this;
-                }
-            });
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "No se pudieron cargar asesores: " + e.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+private void cargarAsesores() {
+    try {
+        cbAsesor.removeAllItems();
+
+        // Opción placeholder
+        cbAsesor.addItem(null);   // se verá como "Selecciona asesor" en el renderer
+
+        AsesorDAO ad = new AsesorDAO();
+        for (Modelo.Asesor a : ad.listarActivosDetalle()) {  // solo status='A' y tipo A/MA
+            cbAsesor.addItem(a);
         }
+
+        // Renderer (puedes dejarlo aquí o ponerlo una sola vez en el constructor)
+        cbAsesor.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                    JList<?> list, Object value, int index,
+                    boolean isSelected, boolean cellHasFocus) {
+
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof Modelo.Asesor a) {
+                    setText(a.getNombreCompleto());
+                } else if (value == null) {
+                    setText("Selecciona asesor");
+                }
+                return this;
+            }
+        });
+
+    } catch (SQLException e) {
+        JOptionPane.showMessageDialog(this,
+                "No se pudieron cargar asesores: " + e.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
     }
+}
 
     private void agregarArticulo() {
         try {
@@ -1031,26 +1067,23 @@ try {
 }
 
 
-            // ======= LIMPIAR UI =======
-model.setRowCount(0);  // Limpiar la tabla de artículos
-txtSubtotal.setText("");  // Limpiar subtotal
-txtTotal.setText("");  // Limpiar total
-
-// Limpiar las formas de pago
-txtTC.setText("");
-txtTD.setText("");
+            // ======= 5) LIMPIAR UI =======
+model.setRowCount(0);
+txtSubtotal.setText("");
+txtTotal.setText("");
+txtTC.setText(""); 
+txtTD.setText(""); 
 txtAMX.setText("");
-txtTRF.setText("");
-txtDEP.setText("");
+txtTRF.setText(""); 
+txtDEP.setText(""); 
 txtEFE.setText("");
-txtMontoDV.setText("");  // Limpiar monto de devolución
+txtMontoDV.setText(""); 
+montoDVAplicado = 0;
 
-montoDVAplicado = 0;  // Resetear monto de devolución aplicado
-
-// Limpiar folios de devolución
+// limpiar folios de devolución
 cbFolioDV.removeAllItems();
 
-// Limpiar datos del cliente
+// limpiar datos del cliente
 txtTelefono.setText("");
 txtTelefono2.setText("");
 txtNombreCompleto.setText("— no registrado —");
@@ -1060,14 +1093,18 @@ txtFechaPrueba2.setText("");
 txtFechaEntrega.setText("");
 txtUltimaNota.setText("");
 
-// Reset bandera
+// limpiar estado de factura en UI
+facturaDraft = null;
+actualizarFacturaBadge();
+
+// reset bandera
 lastTelefonoConsultado = null;
 
-// Limpiar obsequios
+// limpiar obsequios
 obsequiosSel.clear();
 lblObsequios.setText("0 obsequios seleccionados");
 
-// Enfocar el campo teléfono para el siguiente cliente
+// enfocar el campo teléfono para siguiente venta
 txtTelefono.requestFocus();
 
         } catch (SQLException e) {
@@ -2320,6 +2357,13 @@ static class DlgFactura extends JDialog {
     // pequeño helper local para grid
     private static void addCell(JPanel p, GridBagConstraints c, int x, int y, JComponent comp, int span, boolean growX){
         c.gridx=x; c.gridy=y; c.gridwidth=span; c.weightx = growX?1:0; p.add(comp,c); c.gridwidth=1;
+    }
+}
+@Override
+public void setVisible(boolean aFlag) {
+    super.setVisible(aFlag);
+    if (aFlag) {
+        cargarAsesores();   // recarga lista desde BD cada vez que entras al panel
     }
 }
 

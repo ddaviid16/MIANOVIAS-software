@@ -94,7 +94,7 @@ public class menuPrincipal extends JFrame {
         mainPanel.add(new EmpresaSubmenuPanel(card -> showCard(card, tituloDe(card))), CARD_EMPRESA);
         mainPanel.add(new EmpresaPanel(),        "Información de la empresa");
         mainPanel.add(new PanelFoliosIniciales(),"Asignación de Folios");
-        mainPanel.add(new AsesoresPanel(),       "Asesores");
+        mainPanel.add(new AsesoresPanel(),       "Empleados");
         mainPanel.add(new CondicionesEmpresaPanel(), "Condiciones de venta");
 
         // Submenú Reportes (mismo patrón que Operaciones)
@@ -266,7 +266,7 @@ public class menuPrincipal extends JFrame {
             case "Cambio de fecha de evento":
             case "Información de la empresa":
             case "Asignación de Folios":
-            case "Asesores":
+            case "Empleados":
             case "Hoja de entrega":
             
                 return card;

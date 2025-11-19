@@ -281,7 +281,6 @@ public class VentaContadoPanel extends JPanel {
             btRegistrarPedido.setVisible(s != null && s.trim().equalsIgnoreCase("PEDIR"));
         });
 
-        add(top, BorderLayout.NORTH);
 
         // ====== Tabla carrito
         String[] cols = {"Código","Artículo","Marca","Modelo","Talla","Color","Fecha art.","Precio","%Desc","Desc. $","Subtotal","Quitar"};
@@ -337,7 +336,9 @@ public class VentaContadoPanel extends JPanel {
             }
         });
 
-        add(new JScrollPane(tb), BorderLayout.CENTER);
+        JPanel panelTabla = new JPanel(new BorderLayout());
+        panelTabla.add(tb.getTableHeader(), BorderLayout.NORTH);
+        panelTabla.add(tb, BorderLayout.CENTER);
 
         // ====== Totales y pagos
         JPanel bottom = new JPanel(new GridBagLayout());
@@ -419,7 +420,24 @@ txtMontoDV.getDocument().addDocumentListener((SimpleDocListener) () -> {
         addCell(bottom,d,2,r,btnCondiciones,1,false);
         addCell(bottom,d,3,r,btGuardar,1,false);
 
-        add(bottom, BorderLayout.SOUTH);
+        // 1) Panel que contiene todo el formulario
+JPanel contenido = new JPanel(new BorderLayout());
+contenido.add(top, BorderLayout.NORTH);
+contenido.add(panelTabla, BorderLayout.CENTER);
+contenido.add(bottom, BorderLayout.SOUTH);
+
+// 2) Scroll vertical para todo
+JScrollPane scroll = new JScrollPane(
+        contenido,
+        JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+        JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+);
+scroll.getVerticalScrollBar().setUnitIncrement(16);
+scroll.setBorder(BorderFactory.createEmptyBorder());
+
+// 3) El panel principal ahora solo tiene el scroll en CENTER
+add(scroll, BorderLayout.CENTER);
+        cargarAsesores();
     }
 
     private void cargarClienteAutoHooks() {
@@ -1283,30 +1301,41 @@ private void aplicarDevolucion() {
         return new DefaultCellEditor(tf);
     }
 
-    private void cargarAsesores() {
-        try {
-            cbAsesor.removeAllItems();
-            AsesorDAO ad = new AsesorDAO();
-            for (Modelo.Asesor a : ad.listarActivosDetalle()) {
-                cbAsesor.addItem(a);
-            }
-            cbAsesor.setRenderer(new DefaultListCellRenderer() {
-                @Override
-                public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                    super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                    if (value instanceof Modelo.Asesor) {
-                        setText(((Modelo.Asesor) value).getNombreCompleto());
-                    } else if (value == null) {
-                        setText("Selecciona asesor");
-                    }
-                    return this;
-                }
-            });
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "No se pudieron cargar asesores: " + e.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+private void cargarAsesores() {
+    try {
+        cbAsesor.removeAllItems();
+
+        // Opción placeholder
+        cbAsesor.addItem(null);   // se verá como "Selecciona asesor" en el renderer
+
+        AsesorDAO ad = new AsesorDAO();
+        for (Modelo.Asesor a : ad.listarActivosDetalle()) {  // solo status='A' y tipo A/MA
+            cbAsesor.addItem(a);
         }
+
+        // Renderer (puedes dejarlo aquí o ponerlo una sola vez en el constructor)
+        cbAsesor.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                    JList<?> list, Object value, int index,
+                    boolean isSelected, boolean cellHasFocus) {
+
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof Modelo.Asesor a) {
+                    setText(a.getNombreCompleto());
+                } else if (value == null) {
+                    setText("Selecciona asesor");
+                }
+                return this;
+            }
+        });
+
+    } catch (SQLException e) {
+        JOptionPane.showMessageDialog(this,
+                "No se pudieron cargar asesores: " + e.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
     }
+}
 
     private void agregarArticulo() {
         try {
@@ -2845,6 +2874,13 @@ static class DlgFactura extends JDialog {
     // pequeño helper local para grid
     private static void addCell(JPanel p, GridBagConstraints c, int x, int y, JComponent comp, int span, boolean growX){
         c.gridx=x; c.gridy=y; c.gridwidth=span; c.weightx = growX?1:0; p.add(comp,c); c.gridwidth=1;
+    }
+}
+@Override
+public void setVisible(boolean aFlag) {
+    super.setVisible(aFlag);
+    if (aFlag) {
+        cargarAsesores();   // recarga lista desde BD cada vez que entras al panel
     }
 }
 

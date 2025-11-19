@@ -11,7 +11,7 @@ public class EmpresaSubmenuPanel extends JPanel {
     // Asegúrate de que estos IDs coincidan con los registrados en tu CardLayout
     private static final String CARD_EMPRESA_INFO     = "Información de la empresa";
     private static final String CARD_EMPRESA_FOLIOS   = "Asignación de Folios";
-    private static final String CARD_EMPRESA_ASESORES = "Asesores";
+    private static final String CARD_EMPRESA_ASESORES = "Empleados";
     private static final String CARD_EMPRESA_CONDICIONES = "Condiciones de venta";
 
     public EmpresaSubmenuPanel(Consumer<String> navigate) {
@@ -24,7 +24,7 @@ public class EmpresaSubmenuPanel extends JPanel {
 
         JButton btInfo   = botonGrande("Información de la empresa");
         JButton btFolios = botonGrande("Asignación de Folios");
-        JButton btAses   = botonGrande("Asesores");
+        JButton btAses   = botonGrande("Empleados");
         JButton btCond   = botonGrande("Condiciones de venta");
 
         btInfo.addActionListener(_e   -> navigate.accept(CARD_EMPRESA_INFO));
