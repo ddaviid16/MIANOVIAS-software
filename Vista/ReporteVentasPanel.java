@@ -165,7 +165,7 @@ static class CsvRow {
     public Double total;
     public Double saldo;
 
-    public Integer codigo;
+    public String codigo;
     public String articulo;
     public String marca;
     public String modelo;

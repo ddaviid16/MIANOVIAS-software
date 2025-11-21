@@ -24,7 +24,7 @@ public class DialogObsequio extends JDialog {
     private boolean guardado = false;
     private final ObsequioInvDAO dao = new ObsequioInvDAO();
     private final boolean edicion;
-    private final Integer codigoOriginal;
+    private final String codigoOriginal;
 
     private static final DateTimeFormatter DF = DateTimeFormatter.ISO_LOCAL_DATE;
 
@@ -51,7 +51,7 @@ public class DialogObsequio extends JDialog {
 
         int y = 0;
 
-        txtCodigo   = new JTextField(); applyDigitsOnly(txtCodigo, 10);
+        txtCodigo   = new JTextField();
         txtArticulo = new JTextField();
         txtMarca    = new JTextField();
         txtModelo   = new JTextField();
@@ -162,7 +162,7 @@ public class DialogObsequio extends JDialog {
 
         try {
             ObsequioInv ob = new ObsequioInv();
-            ob.setCodigoArticulo(Integer.parseInt(txtCodigo.getText().trim()));
+            ob.setCodigoArticulo(String.valueOf(txtCodigo.getText().trim()));;
             ob.setArticulo(txtArticulo.getText().trim());
             ob.setMarca(blankToNull(txtMarca));
             ob.setModelo(blankToNull(txtModelo));

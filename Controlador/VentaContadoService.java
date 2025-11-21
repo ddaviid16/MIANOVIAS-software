@@ -20,23 +20,30 @@ public class VentaContadoService {
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
 
     private static final String SQL_INS_FP =
-    "INSERT INTO Formas_Pago (" +
-    "numero_nota, fecha_operacion, tarjeta_credito, tarjeta_debito, american_express, " +
-    "transferencia_bancaria, deposito_bancario, efectivo, devolucion, referencia_dv, tipo_operacion, status" +
-    ") VALUES (?, CURDATE(), ?,?,?,?,?,?,?,?, 'CN', 'A')";
+        "INSERT INTO Formas_Pago (" +
+        "numero_nota, fecha_operacion, tarjeta_credito, tarjeta_debito, american_express, " +
+        "transferencia_bancaria, deposito_bancario, efectivo, devolucion, referencia_dv, tipo_operacion, status" +
+        ") VALUES (?, CURDATE(), ?,?,?,?,?,?,?,?, 'CN', 'A')";
 
 
-    public int crearVentaContado(Nota nota, List<NotaDetalle> dets, PagoFormas pago, LocalDate fechaEventoVenta, LocalDate fechaEntregaDefault) throws SQLException {
+    public int crearVentaContado(Nota nota,
+                                 List<NotaDetalle> dets,
+                                 PagoFormas pago,
+                                 LocalDate fechaEventoVenta,
+                                 LocalDate fechaEntregaDefault) throws SQLException {
+
         try (Connection cn = Conecta.getConnection()) {
             cn.setAutoCommit(false);
             try {
+                // ===== 1) Insertar cabecera de nota =====
                 FoliosDAO foliosDAO = new FoliosDAO();
                 String folio = foliosDAO.siguiente(cn, "CN");
 
                 int numeroNota;
                 try (PreparedStatement ps = cn.prepareStatement(SQL_INS_NOTA, Statement.RETURN_GENERATED_KEYS)) {
                     ps.setString(1, nota.getTelefono());
-                    if (nota.getAsesor() == null) ps.setNull(2, Types.INTEGER); else ps.setInt(2, nota.getAsesor());
+                    if (nota.getAsesor() == null) ps.setNull(2, Types.INTEGER);
+                    else ps.setInt(2, nota.getAsesor());
                     ps.setDouble(3, nota.getTotal() == null ? 0.0 : nota.getTotal());
                     ps.setString(4, folio);
                     ps.executeUpdate();
@@ -47,63 +54,99 @@ public class VentaContadoService {
                 }
                 nota.setFolio(folio);
 
+                // ===== 2) Detalle + validación de inventario =====
                 try (PreparedStatement psd = cn.prepareStatement(SQL_INS_DET)) {
                     InventarioDAO invDao = new InventarioDAO();
+
                     for (NotaDetalle d : dets) {
 
-                        try (PreparedStatement chk = cn.prepareStatement(
-                                 "SELECT TRIM(UPPER(status)) st, COALESCE(existencia,0) ex " +
-                                 "FROM Inventarios WHERE codigo_articulo=? FOR UPDATE")) {
-                            chk.setInt(1, d.getCodigoArticulo());
-                            try (ResultSet rs = chk.executeQuery()) {
-                                if (!rs.next())
-                                    throw new SQLException("Artículo no encontrado: " + d.getCodigoArticulo());
-                                String st = rs.getString("st");
-                                int ex    = rs.getInt("ex");
-                                if (!"A".equals(st)) throw new SQLException("Artículo inactivo (status=" + st + ")");
-                                if (ex < 1) throw new SQLException("Sin existencia para código " + d.getCodigoArticulo());
+                        // Normalizar código de artículo
+                        String codArt = d.getCodigoArticulo();
+                        if (codArt != null) codArt = codArt.trim();
+                        if (codArt == null) codArt = "";
+
+                        // Línea SIN código = PEDIDO / línea libre -> no valida inventario
+                        boolean esLineaSinCodigo = codArt.isEmpty();
+
+                        // Solo validar y tocar inventario si hay código real
+                        if (!esLineaSinCodigo) {
+                            try (PreparedStatement chk = cn.prepareStatement(
+                                     "SELECT TRIM(UPPER(status)) st, COALESCE(existencia,0) ex " +
+                                     "FROM Inventarios WHERE codigo_articulo=? FOR UPDATE")) {
+
+                                chk.setString(1, codArt);
+                                try (ResultSet rs = chk.executeQuery()) {
+                                    if (!rs.next()) {
+                                        throw new SQLException("Artículo no encontrado: " + codArt);
+                                    }
+                                    String st = rs.getString("st");
+                                    int ex    = rs.getInt("ex");
+                                    if (!"A".equals(st)) {
+                                        throw new SQLException("Artículo inactivo (status=" + st + ")");
+                                    }
+                                    if (ex < 1) {
+                                        throw new SQLException("Sin existencia para código " + codArt);
+                                    }
+                                }
                             }
                         }
 
                         psd.setInt(1, numeroNota);
-                        if (d.getCodigoArticulo() == null) psd.setNull(2, Types.INTEGER);
-                        else psd.setInt(2, d.getCodigoArticulo());
+
+                        // IMPORTANTE: para líneas sin código, guardar NULL
+                        if (esLineaSinCodigo) {
+                            psd.setNull(2, Types.VARCHAR);
+                        } else {
+                            psd.setString(2, codArt);
+                        }
+
                         psd.setString(3, nz(d.getArticulo()));
                         psd.setString(4, nz(d.getMarca()));
                         psd.setString(5, nz(d.getModelo()));
                         psd.setString(6, nz(d.getTalla()));
                         psd.setString(7, nz(d.getColor()));
-                        if (d.getPrecio() == null)     psd.setNull(8,  Types.DECIMAL); else psd.setDouble(8,  d.getPrecio());
-                        if (d.getDescuento() == null)  psd.setNull(9,  Types.DECIMAL); else psd.setDouble(9,  d.getDescuento());
-                        if (d.getSubtotal() == null)   psd.setNull(10, Types.DECIMAL); else psd.setDouble(10, d.getSubtotal());
 
-                        // NUEVO: fecha_evento por renglón, con fallback al parámetro (para compatibilidad)
+                        if (d.getPrecio() == null)    psd.setNull(8,  Types.DECIMAL);
+                        else                           psd.setDouble(8,  d.getPrecio());
+
+                        if (d.getDescuento() == null) psd.setNull(9,  Types.DECIMAL);
+                        else                           psd.setDouble(9,  d.getDescuento());
+
+                        if (d.getSubtotal() == null)  psd.setNull(10, Types.DECIMAL);
+                        else                           psd.setDouble(10, d.getSubtotal());
+
+                        // fecha_evento por renglón, con fallback al parámetro
                         LocalDate f = (d.getFechaEvento() != null) ? d.getFechaEvento() : fechaEventoVenta;
-                        if (f == null) psd.setNull(11, Types.DATE); else psd.setDate(11, Date.valueOf(f));
-                        // NUEVO: fecha_entrega de la venta (misma para todos los renglones)
+                        if (f == null) psd.setNull(11, Types.DATE);
+                        else           psd.setDate(11, Date.valueOf(f));
+
+                        // fecha_entrega de la venta (igual para todos)
                         if (fechaEntregaDefault == null) psd.setNull(12, Types.DATE);
-                        else psd.setDate(12, Date.valueOf(fechaEntregaDefault));
+                        else                             psd.setDate(12, Date.valueOf(fechaEntregaDefault));
 
                         psd.addBatch();
 
-                        invDao.descontarExistencia(cn, d.getCodigoArticulo(), 1);
+                        // Descontar existencia SOLO si hay código de inventario
+                        if (!esLineaSinCodigo) {
+                            invDao.descontarExistencia(cn, codArt, 1);
+                        }
                     }
                     psd.executeBatch();
                 }
 
+                // ===== 3) Formas de pago =====
                 try (PreparedStatement psp = cn.prepareStatement(SQL_INS_FP)) {
-                psp.setInt(1, numeroNota);
-                setNullable(psp, 2, pago.getTarjetaCredito());
-                setNullable(psp, 3, pago.getTarjetaDebito());
-                setNullable(psp, 4, pago.getAmericanExpress());
-                setNullable(psp, 5, pago.getTransferencia());
-                setNullable(psp, 6, pago.getDeposito());
-                setNullable(psp, 7, pago.getEfectivo());
-                setNullable(psp, 8, pago.getDevolucion());
-                psp.setString(9, pago.getReferenciaDV());
-                psp.executeUpdate();
-            }
-
+                    psp.setInt(1, numeroNota);
+                    setNullable(psp, 2, pago.getTarjetaCredito());
+                    setNullable(psp, 3, pago.getTarjetaDebito());
+                    setNullable(psp, 4, pago.getAmericanExpress());
+                    setNullable(psp, 5, pago.getTransferencia());
+                    setNullable(psp, 6, pago.getDeposito());
+                    setNullable(psp, 7, pago.getEfectivo());
+                    setNullable(psp, 8, pago.getDevolucion());
+                    psp.setString(9, pago.getReferenciaDV());
+                    psp.executeUpdate();
+                }
 
                 cn.commit();
                 return numeroNota;
@@ -118,7 +161,11 @@ public class VentaContadoService {
     }
 
     private static void setNullable(PreparedStatement ps, int idx, Double val) throws SQLException {
-        if (val == null) ps.setNull(idx, Types.DECIMAL); else ps.setDouble(idx, val);
+        if (val == null) ps.setNull(idx, Types.DECIMAL);
+        else             ps.setDouble(idx, val);
     }
-    private static String nz(String s){ return (s==null || s.isBlank()) ? null : s; }
+
+    private static String nz(String s){
+        return (s == null || s.isBlank()) ? null : s;
+    }
 }

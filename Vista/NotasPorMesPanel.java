@@ -524,7 +524,7 @@ private static String n(String s) { return (s == null) ? "" : s; }
         public String status;
         public String telefono;
         public String nombre;
-        public Integer codigo;
+        public String codigo;
         public String articulo;
         public String marca;
         public String modelo;

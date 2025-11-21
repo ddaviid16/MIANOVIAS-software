@@ -3,7 +3,7 @@ package Modelo;
 import java.time.LocalDate;
 
 public class Inventario {
-    private Integer codigoArticulo;     // PK
+    private String codigoArticulo;     // PK
     private String  articulo;           // nombre
     private String  marca;
     private String  modelo;
@@ -15,8 +15,8 @@ public class Inventario {
     private LocalDate fechaRegistro;    // puede venir de BD
     private String  status;             // 'A' o 'C'
 
-    public Integer getCodigoArticulo() { return codigoArticulo; }
-    public void setCodigoArticulo(Integer codigoArticulo) { this.codigoArticulo = codigoArticulo; }
+    public String getCodigoArticulo() { return codigoArticulo; }
+    public void setCodigoArticulo(String codigoArticulo) { this.codigoArticulo = codigoArticulo; }
     public String getArticulo() { return articulo; }
     public void setArticulo(String articulo) { this.articulo = articulo; }
     public String getMarca() { return marca; }

@@ -40,8 +40,8 @@ public class ArticulosAPedirPanel extends JPanel {
     private final JTabbedPane tabs = new JTabbedPane();
 
     // Estados originales para detectar cambios
-    private final Map<Integer, Boolean> originalPend = new HashMap<>();     // numero_nota -> enTienda
-    private final Map<Integer, Integer> originalCod  = new HashMap<>();     // numero_nota -> codigo_articulo
+    private final Map<Integer, Boolean> originalPend = new HashMap<>();   // numero_nota -> enTienda
+    private final Map<Integer, String>  originalCod  = new HashMap<>();   // numero_nota -> codigo_articulo (String)
 
     public ArticulosAPedirPanel() {
         setLayout(new BorderLayout());
@@ -52,11 +52,10 @@ public class ArticulosAPedirPanel extends JPanel {
         btCargar.addActionListener(_e -> cargar());
         btGuardar.addActionListener(_e -> guardarCambios());
         btExportar.addActionListener(_e -> {
-    if (Utilidades.SeguridadUI.pedirYValidarClave(this)) {
-        exportarCsv();
-    }
-});
-
+            if (Utilidades.SeguridadUI.pedirYValidarClave(this)) {
+                exportarCsv();
+            }
+        });
 
         JPanel north = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
         north.add(btCargar); north.add(btGuardar); north.add(btExportar);
@@ -64,22 +63,34 @@ public class ArticulosAPedirPanel extends JPanel {
 
         configurarTabla(tbPend, true);
         configurarTabla(tbEn,   false);
-        tbEn.getColumnModel().getColumn(12).setCellEditor(new DefaultCellEditor(new JTextField()) {
-    @Override public boolean stopCellEditing() {
-        String s = String.valueOf(getCellEditorValue()).trim();
-        if (!s.isEmpty()) {
-            try { Integer.parseInt(s); }
-            catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(ArticulosAPedirPanel.this,
-                        "El código debe ser numérico.", "Atención",
-                        JOptionPane.WARNING_MESSAGE);
-                return false;
-            }
-        }
-        return super.stopCellEditing();
-    }
-});
 
+        // Editor de la columna "Código art." en la pestaña "En tienda"
+        tbEn.getColumnModel().getColumn(12).setCellEditor(new DefaultCellEditor(new JTextField()) {
+            @Override public boolean stopCellEditing() {
+                String s = String.valueOf(getCellEditorValue());
+                if (s != null) s = s.trim();
+
+                if (s != null && !s.isEmpty()) {
+                    // máx 8 caracteres, solo letras, números y guiones
+                    if (s.length() > 8) {
+                        JOptionPane.showMessageDialog(ArticulosAPedirPanel.this,
+                                "El código debe tener máximo 8 caracteres.",
+                                "Atención", JOptionPane.WARNING_MESSAGE);
+                        return false;
+                    }
+                    for (int i = 0; i < s.length(); i++) {
+                        char ch = s.charAt(i);
+                        if (!Character.isLetterOrDigit(ch) && ch != '-') {
+                            JOptionPane.showMessageDialog(ArticulosAPedirPanel.this,
+                                    "El código solo puede contener letras, números y guiones (-).",
+                                    "Atención", JOptionPane.WARNING_MESSAGE);
+                            return false;
+                        }
+                    }
+                }
+                return super.stopCellEditing();
+            }
+        });
 
         tabs.addTab("Pedidos pendientes", new JScrollPane(tbPend));
         tabs.addTab("En tienda",          new JScrollPane(tbEn));
@@ -110,14 +121,14 @@ public class ArticulosAPedirPanel extends JPanel {
             // PESTAÑA PENDIENTES
             for (PedidosDAO.PedidoRow r : dao.listarPendientes()) {
                 modelPend.addRow(new Object[]{
-                        Boolean.FALSE,                 // aún no en tienda (por definición del filtro)
+                        Boolean.FALSE,                 // aún no en tienda
                         nz(r.folio),
                         str(r.fechaRegistro),
                         nz(r.articulo), nz(r.marca), nz(r.modelo), nz(r.talla), nz(r.color),
                         n(r.precio), n(r.descuento),
                         str(r.fechaEntrega),
                         nz(r.telefono),
-                        r.codigoArticulo == null ? "" : String.valueOf(r.codigoArticulo),
+                        r.codigoArticulo == null ? "" : r.codigoArticulo,
                         nz(r.status),
                         String.valueOf(r.numeroNota)   // oculta
                 });
@@ -134,11 +145,11 @@ public class ArticulosAPedirPanel extends JPanel {
                         n(r.precio), n(r.descuento),
                         str(r.fechaEntrega),
                         nz(r.telefono),
-                        r.codigoArticulo == null ? "" : String.valueOf(r.codigoArticulo), // editable
+                        r.codigoArticulo == null ? "" : r.codigoArticulo, // editable
                         nz(r.status),
                         String.valueOf(r.numeroNota)   // oculta
                 });
-                originalCod.put(r.numeroNota, r.codigoArticulo);
+                originalCod.put(r.numeroNota, r.codigoArticulo); // String
             }
 
         } catch (SQLException ex) {
@@ -147,53 +158,47 @@ public class ArticulosAPedirPanel extends JPanel {
         }
     }
 
-private void guardarCambios() {
-    try {
-        PedidosDAO dao = new PedidosDAO();
-        int aplicados = 0;
+    private void guardarCambios() {
+        try {
+            PedidosDAO dao = new PedidosDAO();
+            int aplicados = 0;
 
-        // Cambios en “Pendientes”: marcar en_tienda (checkbox)
-        for (int i = 0; i < modelPend.getRowCount(); i++) {
-            boolean nuevo = Boolean.TRUE.equals(modelPend.getValueAt(i, 0));
-            int numero = Integer.parseInt(String.valueOf(modelPend.getValueAt(i, 14))); // #Nota (oculta)
-            boolean anterior = originalPend.getOrDefault(numero, false);
-            if (nuevo != anterior) {
-                dao.setPedidoEnTienda(numero, nuevo);
-                originalPend.put(numero, nuevo);
-                aplicados++;
+            // Cambios en “Pendientes”: marcar en_tienda (checkbox)
+            for (int i = 0; i < modelPend.getRowCount(); i++) {
+                boolean nuevo = Boolean.TRUE.equals(modelPend.getValueAt(i, 0));
+                int numero = Integer.parseInt(String.valueOf(modelPend.getValueAt(i, 14))); // #Nota (oculta)
+                boolean anterior = originalPend.getOrDefault(numero, false);
+                if (nuevo != anterior) {
+                    dao.setPedidoEnTienda(numero, nuevo);
+                    originalPend.put(numero, nuevo);
+                    aplicados++;
+                }
             }
+
+            // Cambios en “En tienda”: actualizar codigo_articulo (col 12, String)
+            for (int i = 0; i < modelEn.getRowCount(); i++) {
+                Object val = modelEn.getValueAt(i, 12);
+                String codTxt = val == null ? "" : val.toString().trim();
+                String nuevoCod = codTxt.isEmpty() ? null : codTxt;
+
+                int numero = Integer.parseInt(String.valueOf(modelEn.getValueAt(i, 14))); // #Nota (oculta)
+                String anterior = originalCod.get(numero);
+
+                if (!Objects.equals(nuevoCod, anterior)) {
+                    dao.actualizarCodigoArticulo(numero, nuevoCod);  // (int, String)
+                    originalCod.put(numero, nuevoCod);
+                    aplicados++;
+                }
+            }
+
+            JOptionPane.showMessageDialog(this,
+                    aplicados == 0 ? "No hay cambios por guardar." : ("Cambios guardados: " + aplicados));
+            cargar();
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, "Error guardando cambios: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
         }
-
-        // Cambios en “En tienda”: actualizar código_artículo (col 12)
-        for (int i = 0; i < modelEn.getRowCount(); i++) {
-            String codTxt = String.valueOf(modelEn.getValueAt(i, 12)).trim();
-            Integer nuevoCod = codTxt.isEmpty() ? null : parseIntSafe(codTxt);
-            if (!codTxt.isEmpty() && nuevoCod == null) {
-                JOptionPane.showMessageDialog(this,
-                        "El código debe ser numérico (fila " + (i + 1) + ").",
-                        "Atención", JOptionPane.WARNING_MESSAGE);
-                continue;
-            }
-
-            int numero = Integer.parseInt(String.valueOf(modelEn.getValueAt(i, 14))); // #Nota (oculta)
-            Integer anterior = originalCod.get(numero);
-
-            if (!Objects.equals(nuevoCod, anterior)) {
-                // <- usa el método que añadiste al DAO (Opción B)
-                dao.actualizarCodigoArticulo(numero, nuevoCod);
-                originalCod.put(numero, nuevoCod);
-                aplicados++;
-            }
-        }
-
-        JOptionPane.showMessageDialog(this,
-                aplicados == 0 ? "No hay cambios por guardar." : ("Cambios guardados: " + aplicados));
-        cargar();
-    } catch (SQLException ex) {
-        JOptionPane.showMessageDialog(this, "Error guardando cambios: " + ex.getMessage(),
-                "Error", JOptionPane.ERROR_MESSAGE);
     }
-}
 
     // ===== Exportar CSV (elige pestaña) =====
     private void exportarCsv() {
@@ -223,7 +228,7 @@ private void guardarCambios() {
                 r.telefono    = String.valueOf(m.getValueAt(i,11));
                 r.codigo_art  = String.valueOf(m.getValueAt(i,12));
                 r.status      = String.valueOf(m.getValueAt(i,13));
-                r.numero_nota = String.valueOf(m.getValueAt(i,14)); // oculta (útil para cruces)
+                r.numero_nota = String.valueOf(m.getValueAt(i,14)); // oculta
                 rows.add(r);
             }
 
@@ -249,9 +254,6 @@ private void guardarCambios() {
     private static String nz(String s){ return s==null? "" : s; }
     private static String str(java.util.Date d){ return d==null? "" : new java.sql.Date(d.getTime()).toString(); }
     private static Double n(java.math.BigDecimal b){ return b==null? null : b.doubleValue(); }
-    private static Integer parseIntSafe(String s){
-        try { return Integer.valueOf(s); } catch(Exception e){ return null; }
-    }
 
     // POJO para ExportadorCSV (usa reflexión por nombre de campo)
     public static class CsvRow {

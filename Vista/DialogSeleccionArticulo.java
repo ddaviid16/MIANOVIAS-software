@@ -85,7 +85,7 @@ public class DialogSeleccionArticulo extends JDialog {
     int r = tabla.getSelectedRow();
     if (r < 0) { JOptionPane.showMessageDialog(this,"Selecciona un artículo"); return; }
 
-    int codigo = Integer.parseInt(modelo.getValueAt(r,0).toString());
+    String codigo = modelo.getValueAt(r,0).toString();
     try {
         InventarioDAO dao = new InventarioDAO();
         Inventario real = dao.buscarPorCodigo(codigo); // ya trae status + existencia

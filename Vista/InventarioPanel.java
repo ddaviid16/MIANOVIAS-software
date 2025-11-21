@@ -79,7 +79,7 @@ public class InventarioPanel extends JPanel {
             @Override public void actionPerformed(ActionEvent e) {
                 int row = Integer.parseInt(e.getActionCommand());
                 int modelRow = tabla.convertRowIndexToModel(row);
-                Integer codigo = (Integer) modeloTabla.getValueAt(modelRow, 0);
+                String codigo = (String) modeloTabla.getValueAt(modelRow, 0);
                 abrirDialogoModificar(codigo);
             }
         }, 12);
@@ -139,7 +139,7 @@ public class InventarioPanel extends JPanel {
         if (dlg.isGuardado()) cargarTabla(txtBuscar.getText());
     }
 
-    private void abrirDialogoModificar(Integer codigo) {
+    private void abrirDialogoModificar(String codigo) {
         try {
             Inventario inv = dao.buscarPorCodigo(codigo);
             if (inv == null) {

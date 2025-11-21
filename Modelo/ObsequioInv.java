@@ -3,7 +3,7 @@ package Modelo;
 import java.time.LocalDate;
 
 public class ObsequioInv {
-    private Integer codigoArticulo;
+    private String codigoArticulo;
     private String articulo;
     private String marca;
     private String modelo;
@@ -15,8 +15,8 @@ public class ObsequioInv {
     private String status;        // 'A' | 'C'
     private LocalDate fechaRegistro;
 
-    public Integer getCodigoArticulo() { return codigoArticulo; }
-    public void setCodigoArticulo(Integer v) { this.codigoArticulo = v; }
+    public String getCodigoArticulo() { return codigoArticulo; }
+    public void setCodigoArticulo(String v) { this.codigoArticulo = v; }
     public String getArticulo() { return articulo; }
     public void setArticulo(String v) { this.articulo = v; }
     public String getMarca() { return marca; }

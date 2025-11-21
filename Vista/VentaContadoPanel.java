@@ -661,13 +661,13 @@ private Map<String,String> buildMemoVars(EmpresaInfo emp, Nota n, java.util.List
 
     // Artículo principal
     NotaDetalle d0 = null;
-    for (NotaDetalle d : dets) { if (d.getCodigoArticulo() > 0) { d0 = d; break; } }
+    for (NotaDetalle d : dets) { if (d.getCodigoArticulo() != null && !d.getCodigoArticulo().isEmpty()) { d0 = d; break; } }
     if (d0 == null && !dets.isEmpty()) d0 = dets.get(0);
     v.put("modelo",  d0==null? "": n(d0.getModelo()));
     v.put("marca",   d0==null? "": n(d0.getMarca()));
     v.put("color",   d0==null? "": n(d0.getColor()));
     v.put("talla",   d0==null? "": n(d0.getTalla()));
-    v.put("codigo", (d0!=null && d0.getCodigoArticulo()>0) ? String.valueOf(d0.getCodigoArticulo()) : "");
+    v.put("codigo", (d0!=null && d0.getCodigoArticulo()!=null && !d0.getCodigoArticulo().isEmpty()) ? d0.getCodigoArticulo() : "");
     v.put("precio", String.format("%.2f", d0==null?0d:(d0.getPrecio()==null?0d:d0.getPrecio())));
     v.put("descuento_pct", String.format("%.2f", d0==null?0d:(d0.getDescuento()==null?0d:d0.getDescuento())));
     v.put("precio_pagar", String.format("%.2f", d0==null?0d:(d0.getSubtotal()==null?0d:d0.getSubtotal())));
@@ -749,7 +749,7 @@ private Printable construirPrintableCondiciones(
         y = drawFieldLine(g2, x, y, w, "NOMBRE DE LA NOVIA:", vNombre);
         y = drawTwoColsLine(g2, x, y, w, "FECHA DE COMPRA:", vCompra, "FECHA DE EVENTO:", vEvento);
         y = drawThreeColsLine(g2, x, y, w, 
-            "MODELO SELECCIONADO:", vModelo, 
+            "MODELO:", vModelo, 
             "TALLA:", vTalla,
             "COLOR:", vColor);
         y = drawFieldLine(g2, x, y, w, "DE LA MARCA:", vMarca);
@@ -1339,7 +1339,7 @@ private void cargarAsesores() {
 
     private void agregarArticulo() {
         try {
-            int cod = Integer.parseInt(txtCod.getText().trim());
+            String cod = txtCod.getText().trim();
             InventarioDAO dao = new InventarioDAO();
             Inventario i = dao.buscarParaVenta(cod);
             if (i == null) {
@@ -1644,9 +1644,12 @@ if (selItem != null) {
 
             List<NotaDetalle> dets = new ArrayList<>();
             for (int i=0; i<model.getRowCount(); i++){
-                int cod = 0;
-                try { cod = Integer.parseInt(model.getValueAt(i,0).toString()); } catch(Exception ignore){}
-                if (cod <= 0) continue; // pedidos no van al detalle
+                String cod = "";
+                try { cod = model.getValueAt(i,0).toString(); } catch(Exception ignore){}
+                if (cod == null) cod = "";
+                cod = cod.trim();
+                if (cod.isEmpty() || "0".equals(cod)) continue;   // 0 = PEDIDO
+
                 NotaDetalle d = new NotaDetalle();
                 d.setCodigoArticulo(cod);
                 d.setArticulo(model.getValueAt(i,1).toString());
@@ -1662,6 +1665,39 @@ if (selItem != null) {
                 d.setFechaEvento(fRow != null ? fRow : fechaEventoDefault);
                 dets.add(d);
             }
+
+
+        // ===== NUEVO: lista para IMPRESIÓN (inventario + pedidos) =====
+        List<NotaDetalle> detsPrint = new ArrayList<>(dets);
+
+        // Reusar lo que ya tienes para extraer PEDIR del carrito
+        List<PedidosDAO.PedidoDraft> pedidosCarrito = extraerPedidosDelCarrito();
+        for (PedidosDAO.PedidoDraft ped : pedidosCarrito) {
+            NotaDetalle d = new NotaDetalle();
+            d.setCodigoArticulo(""); // marca que es pedido
+            // puedes decidir si quieres el prefijo o no
+            d.setArticulo("PEDIDO – " + n(ped.articulo));
+            d.setMarca(n(ped.marca));
+            d.setModelo(n(ped.modelo));
+            d.setTalla(n(ped.talla));
+            d.setColor(n(ped.color));
+
+            double precio = ped.precio == null ? 0.0 : ped.precio.doubleValue();
+            double desc   = ped.descuento == null ? 0.0 : ped.descuento.doubleValue();
+            double monto  = precio * (desc / 100.0);
+            double sub    = precio - monto;
+
+            d.setPrecio(precio);
+            d.setDescuento(desc);
+            d.setDescuentoMonto(monto);
+            d.setSubtotal(sub);
+
+            // fecha_evento para el renglón (útil si luego lo usas)
+            d.setFechaEvento(fechaEventoDefault);
+
+            detsPrint.add(d);
+        }
+
 
             PagoFormas p = new PagoFormas();
             p.setFechaOperacion(LocalDate.now());
@@ -1687,7 +1723,10 @@ if (selItem != null) {
 
             // ======= 1) GUARDAR =======
             VentaContadoService svc = new VentaContadoService();
+            // CORRECTO: al servicio solo van los artículos reales de inventario
             int numeroNota = svc.crearVentaContado(n, dets, p, fechaEventoDefault, fechaEntregaDefault);
+
+
             n.setNumeroNota(numeroNota); // <-- ¡asigna el número real antes de imprimir!
 
             // ======= Factura: si hay captura, persístela en Factura_Datos =======
@@ -1746,26 +1785,33 @@ if (p.getDevolucion() != null && p.getDevolucion() > 0 &&
 
             // ======= 2) EXTRAS =======
             if (!obsequiosSel.isEmpty()) {
-                try {
-                    Controlador.ObsequiosDAO odao = new Controlador.ObsequiosDAO();
-                    String telObsequio = txtTelefono.getText().trim();
-                    LocalDate fEventoCliente = parseFecha(txtFechaEvento.getText());
-                    odao.insertarParaNota(
-                            numeroNota,
-                            telObsequio.isEmpty() ? null : telObsequio,
-                            LocalDate.now(),
-                            obsequiosSel,
-                            "CN",
-                            sel.getNumeroEmpleado(),
-                            "A",
-                            fEventoCliente
-                    );
-                } catch (SQLException ex) {
-                    JOptionPane.showMessageDialog(this,
-                        "Obsequios no guardados: " + ex.getMessage(),
-                        "Aviso", JOptionPane.WARNING_MESSAGE);
-                }
-            }
+    try {
+        Controlador.ObsequiosDAO odao = new Controlador.ObsequiosDAO();
+
+        // Normalizar teléfono igual que en el resto del sistema
+        String telObsequio = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+        if (telObsequio != null && telObsequio.isBlank()) {
+            telObsequio = null;
+        }
+
+        LocalDate fEventoCliente = parseFecha(txtFechaEvento.getText());
+        odao.insertarParaNota(
+                numeroNota,
+                telObsequio,          // <-- ya va limpio, como en clientes.telefono1
+                LocalDate.now(),
+                obsequiosSel,
+                "CN",
+                sel.getNumeroEmpleado(),
+                "A",
+                fEventoCliente
+        );
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this,
+            "Obsequios no guardados: " + ex.getMessage(),
+            "Aviso", JOptionPane.WARNING_MESSAGE);
+    }
+}
+
             guardarPedidosDeCarrito(numeroNota, fechaEventoDefault);
 
             // ======= 3) DETERMINAR FECHAS EFECTIVAS PARA MOSTRAR =======
@@ -1786,7 +1832,7 @@ String clienteNombre = txtNombreCompleto.getText().trim();
 String tel2 = Utilidades.TelefonosUI.soloDigitos(txtTelefono2.getText());
 
 Printable prn = construirPrintableEmpresarial(
-        emp, n, dets, p,
+        emp, n, detsPrint, p,
         entregaMostrar, eventoMostrar,
         sel.getNombreCompleto(), folioImpresion,
         clienteNombre, tel2);
@@ -1948,24 +1994,32 @@ txtTelefono.requestFocus();
     // ======== PEDIDOS ========
 
     private List<PedidosDAO.PedidoDraft> extraerPedidosDelCarrito() {
-        List<PedidosDAO.PedidoDraft> items = new ArrayList<>();
-        for (int i = 0; i < model.getRowCount(); i++) {
-            int cod = 0;
-            try { cod = Integer.parseInt(String.valueOf(model.getValueAt(i, 0))); } catch (Exception ignore) {}
-            if (cod == 0) {
-                PedidosDAO.PedidoDraft d = new PedidosDAO.PedidoDraft();
-                d.articulo  = limpiarPrefijoPedido(String.valueOf(model.getValueAt(i, 1)));
-                d.marca     = n(String.valueOf(model.getValueAt(i, 2)));
-                d.modelo    = n(String.valueOf(model.getValueAt(i, 3)));
-                d.talla     = n(String.valueOf(model.getValueAt(i, 4)));
-                d.color     = n(String.valueOf(model.getValueAt(i, 5)));
-                d.precio    = BigDecimal.valueOf(parseMoney(model.getValueAt(i, 7)));
-                d.descuento = BigDecimal.valueOf(parseMoney(model.getValueAt(i, 8))); // %
-                items.add(d);
-            }
+    List<PedidosDAO.PedidoDraft> items = new ArrayList<>();
+    for (int i = 0; i < model.getRowCount(); i++) {
+
+        String codStr = String.valueOf(model.getValueAt(i, 0));
+        if (codStr == null) codStr = "";
+        codStr = codStr.trim();
+
+        // Solo son PEDIDO las filas que tú mismo creas con código "0" o vacío
+        boolean esPedido = codStr.isEmpty() || "0".equals(codStr);
+        if (!esPedido) {
+            continue;
         }
-        return items;
+
+        PedidosDAO.PedidoDraft d = new PedidosDAO.PedidoDraft();
+        d.articulo  = limpiarPrefijoPedido(String.valueOf(model.getValueAt(i, 1)));
+        d.marca     = n(String.valueOf(model.getValueAt(i, 2)));
+        d.modelo    = n(String.valueOf(model.getValueAt(i, 3)));
+        d.talla     = n(String.valueOf(model.getValueAt(i, 4)));
+        d.color     = n(String.valueOf(model.getValueAt(i, 5)));
+        d.precio    = BigDecimal.valueOf(parseMoney(model.getValueAt(i, 7)));
+        d.descuento = BigDecimal.valueOf(parseMoney(model.getValueAt(i, 8))); // %
+        items.add(d);
     }
+    return items;
+}
+
     private static String limpiarPrefijoPedido(String s) {
         if (s == null) return "";
         return s.replaceFirst("^\\s*PEDIDO\\s*[–-]\\s*", "").trim();
@@ -2337,8 +2391,8 @@ private Printable construirPrintableEmpresarial(
 
             for (NotaDetalle d : dets) {
                 String artBase = (d.getArticulo() == null || d.getArticulo().isBlank())
-                        ? String.valueOf(d.getCodigoArticulo()) : d.getArticulo();
-                String detalle = (d.getCodigoArticulo() > 0 ? d.getCodigoArticulo() + " · " : "")
+                        ? d.getCodigoArticulo() : d.getArticulo();
+                String detalle = (d.getCodigoArticulo() != null && !d.getCodigoArticulo().isEmpty()  ? d.getCodigoArticulo() + " · " : "")
                         + safe(artBase)
                         + " | " + trimJoin(" ", safe(d.getMarca()), safe(d.getModelo()))
                         + " | " + labelIf("Color: ", safe(d.getColor()))
@@ -2446,60 +2500,67 @@ if (obsequiosPrint != null && !obsequiosPrint.isEmpty()) {
     y += 10; g2.drawLine(x, y, x + w, y); y += 14;
 
     // ---- Precargar detalles de TODOS los obsequios en un solo query (sin filtrar por status/existencia)
-    java.util.List<Integer> codigos = new java.util.ArrayList<>();
-    for (String raw : obsequiosPrint) {
-        if (raw == null) continue;
-        String digits = raw.replaceAll("[^0-9]", "");
-        if (!digits.isEmpty()) {
-            try { codigos.add(Integer.parseInt(digits)); } catch (Exception ignore) {}
+    // ---- Precargar detalles de TODOS los obsequios en un solo query
+List<String> codigos = new ArrayList<>();
+for (String raw : obsequiosPrint) {
+    if (raw == null) continue;
+    String codigo = raw.trim();
+    if (!codigo.isEmpty()) {
+        codigos.add(codigo);
+    }
+}
+
+Map<String, String[]> info = new HashMap<>();
+if (!codigos.isEmpty()) {
+    StringBuilder sql = new StringBuilder(
+        "SELECT codigo_articulo, articulo, marca, modelo, talla, color " +
+        "FROM InventarioObsequios WHERE codigo_articulo IN ("
+    );
+    for (int i = 0; i < codigos.size(); i++) {
+        if (i > 0) sql.append(',');
+        sql.append('?');
+    }
+    sql.append(')');
+
+    try (Connection cn = Conexion.Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql.toString())) {
+
+        for (int i = 0; i < codigos.size(); i++) {
+            ps.setString(i + 1, codigos.get(i));          // <--- ahora String
         }
-    }
 
-    java.util.Map<Integer, String[]> info = new java.util.HashMap<>();
-    if (!codigos.isEmpty()) {
-        StringBuilder sql = new StringBuilder(
-            "SELECT codigo_articulo, articulo, marca, modelo, talla, color " +
-            "FROM InventarioObsequios WHERE codigo_articulo IN (");
-        for (int i=0;i<codigos.size();i++){ if(i>0) sql.append(','); sql.append('?'); }
-        sql.append(')');
-
-        try (java.sql.Connection cn = Conexion.Conecta.getConnection();
-             java.sql.PreparedStatement ps = cn.prepareStatement(sql.toString())) {
-            for (int i=0;i<codigos.size();i++) ps.setInt(i+1, codigos.get(i));
-            try (java.sql.ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    int c         = rs.getInt(1);
-                    String nombre = safe(rs.getString(2));
-                    String marca  = safe(rs.getString(3));
-                    String modelo = safe(rs.getString(4));
-                    String talla  = safe(rs.getString(5));
-                    String color  = safe(rs.getString(6));
-                    info.put(c, new String[]{nombre, marca, modelo, talla, color});
-                }
+        try (ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String c      = rs.getString("codigo_articulo");
+                String nombre = safe(rs.getString("articulo"));
+                String marca  = safe(rs.getString("marca"));
+                String modelo = safe(rs.getString("modelo"));
+                String talla  = safe(rs.getString("talla"));
+                String color  = safe(rs.getString("color"));
+                info.put(c, new String[]{nombre, marca, modelo, talla, color});
             }
-        } catch (Exception ignore) { /* si falla, mostramos al menos el código */ }
+        }
+    } catch (Exception ex) {
+        ex.printStackTrace();   // al menos para ver qué pasa si truena
     }
+}
 
-    // ---- Pintar filas usando el mapa precargado
-    for (String raw : obsequiosPrint) {
+// ---- Pintar filas usando el mapa precargado
+for (String raw : obsequiosPrint) {
     if (raw == null || raw.trim().isEmpty()) continue;
 
     String codigoTxt = raw.trim();
-    int codNum = -1;
-    try { codNum = Integer.parseInt(codigoTxt.replaceAll("[^0-9]", "")); } catch (Exception ignore) {}
-
     String nombre = "", marca = "", modelo = "", talla = "", color = "";
-    String[] row = (codNum != -1) ? info.get(codNum) : null;
+
+    String[] row = info.get(codigoTxt);          // <--- clave = código tal cual
     if (row != null) {
-        codigoTxt = String.valueOf(codNum);
-        nombre    = row[0];
-        marca     = row[1];
-        modelo    = row[2];
-        talla     = row[3];
-        color     = row[4];
+        nombre = row[0];
+        marca  = row[1];
+        modelo = row[2];
+        talla  = row[3];
+        color  = row[4];
     }
 
-    // MEDIR cada columna con drawWrapped y tomar el mayor “y de salida”
     int yCod = drawWrapped(g2, "• " + codigoTxt, xCod, y, colCodW);
     int yNom = drawWrapped(g2, nombre,          xNom, y, colCodW);
     int yMar = drawWrapped(g2, marca,           xMar, y, colMarW);
@@ -2507,9 +2568,9 @@ if (obsequiosPrint != null && !obsequiosPrint.isEmpty()) {
     int yTal = drawWrapped(g2, talla,           xTal, y, colTalW);
     int yCol = drawWrapped(g2, color,           xCol, y, colColW);
 
-    // Avanza la siguiente fila exactamente al alto máximo consumido por esta
     y = Math.max(Math.max(Math.max(yCod, yNom), Math.max(yMar, yMod)), Math.max(yTal, yCol));
 }
+
 }
             return PAGE_EXISTS;
 }

@@ -165,7 +165,7 @@ public class PedidosDAO {
         public Date fechaEvento;
         public Date fechaEntrega;      // <-- se usa en la UI
         public String telefono;
-        public Integer codigoArticulo; // puede ser null
+        public String codigoArticulo; // puede ser null
         public String status;          // 'A' o 'C'
         public boolean enTienda;       // checkbox de la UI
     }
@@ -202,7 +202,7 @@ public class PedidosDAO {
  * Actualiza Pedidos.codigo_articulo.
  * Si el código NO existe en Inventarios, crea el artículo con los datos del pedido y existencia=1 (status 'A').
  */
-public void actualizarCodigoArticulo(int numeroNota, Integer codigoNuevo) throws SQLException {
+public void actualizarCodigoArticulo(int numeroNota, String codigoNuevo) throws SQLException {
     try (Connection cn = Conecta.getConnection()) {
         boolean auto = cn.getAutoCommit();
         cn.setAutoCommit(false);
@@ -234,7 +234,7 @@ public void actualizarCodigoArticulo(int numeroNota, Integer codigoNuevo) throws
             try (PreparedStatement up = cn.prepareStatement(
                     "UPDATE Pedidos SET codigo_articulo=? WHERE numero_nota=?")) {
                 if (codigoNuevo == null) up.setNull(1, java.sql.Types.INTEGER);
-                else                      up.setInt(1,  codigoNuevo);
+                else                      up.setString(1,  codigoNuevo);
                 up.setInt(2, numeroNota);
                 up.executeUpdate();
             }
@@ -317,8 +317,8 @@ public boolean existeCodigoArticulo(int codigo) throws SQLException {
                     r.fechaEvento    = rs.getDate("fecha_evento");
                     r.fechaEntrega   = rs.getDate("fecha_entrega");
                     r.telefono       = rs.getString("telefono");
-                    int cod          = rs.getInt("codigo_articulo");
-                    r.codigoArticulo = rs.wasNull() ? null : cod;
+                    String cod       = rs.getString("codigo_articulo");
+                    r.codigoArticulo = cod;
                     r.status         = rs.getString("status");
                     if (tieneEnTienda) {
                         String en = rs.getString("en_tienda");
@@ -370,8 +370,8 @@ public List<PedidoRow> listarPendientes() throws SQLException {
                 r.fechaEvento    = rs.getDate("fecha_evento");
                 r.fechaEntrega   = rs.getDate("fecha_entrega");
                 r.telefono       = rs.getString("telefono");
-                int cod          = rs.getInt("codigo_articulo");
-                r.codigoArticulo = rs.wasNull() ? null : cod;
+                String cod       = rs.getString("codigo_articulo");
+                r.codigoArticulo = cod;
                 r.status         = rs.getString("status");
                 if (tieneEnTienda) {
                     String en = rs.getString("en_tienda");
@@ -422,8 +422,8 @@ public List<PedidoRow> listarEnTienda() throws SQLException {
                 r.fechaEvento    = rs.getDate("fecha_evento");
                 r.fechaEntrega   = rs.getDate("fecha_entrega");
                 r.telefono       = rs.getString("telefono");
-                int cod          = rs.getInt("codigo_articulo");
-                r.codigoArticulo = rs.wasNull() ? null : cod;
+                String cod       = rs.getString("codigo_articulo");
+                r.codigoArticulo = cod;
                 r.status         = rs.getString("status");
                 if (tieneEnTienda) {
                     String en = rs.getString("en_tienda");

@@ -322,11 +322,15 @@ switch (tipo) {
     }
 
 case ABONO: {
-    // 1. Dame la venta ligada a este abono
+    // Total y saldo que trae la fila del ABONO (la que está seleccionada en la tabla)
+    double abonoReal   = (total == null ? 0d : total);
+    double saldoAbono  = (saldo == null ? 0d : saldo);
+
+    // 1. Dame la venta ligada a este abono (Notas.nota_relacionada)
     Integer notaOrigen = null;
     try (java.sql.Connection cn = Conexion.Conecta.getConnection();
          java.sql.PreparedStatement ps = cn.prepareStatement(
-             "SELECT nota_relacionada FROM Notas WHERE numero_nota = ?")) {
+                 "SELECT nota_relacionada FROM Notas WHERE numero_nota = ?")) {
         ps.setInt(1, numeroNota);
         try (java.sql.ResultSet rs = ps.executeQuery()) {
             if (rs.next()) {
@@ -336,14 +340,17 @@ case ABONO: {
         }
     } catch (Exception ignore) { }
 
-    // 2. Cargar detalle EXACTO de esa venta origen
-    List<NotaDetalle> detsOrigen = java.util.Collections.emptyList();
+    // 2. Cargar detalle EXACTO de esa venta origen (como ya hacías)
+    java.util.List<NotaDetalle> detsOrigen = java.util.Collections.emptyList();
+    NotaHead headOrigen = null;
     if (notaOrigen != null) {
         try {
             detsOrigen = new NotasDAO().listarDetalleDeNota(notaOrigen);
         } catch (SQLException ex) {
             detsOrigen = java.util.Collections.emptyList();
         }
+        // Cabecera real de la nota de crédito (total y saldo actuales)
+        headOrigen = leerNotaHead(notaOrigen);
     }
 
     // 3. Observaciones de la venta original
@@ -355,11 +362,33 @@ case ABONO: {
         } catch (Exception ignore) {}
     }
 
-    double abonoReal = (total == null ? 0d : total);
-    double saldoPosterior = (saldo == null ? 0d : saldo);
+    // 4. Ajustar la nota "base" para el formato:
+    //    TOTAL debe ser el de la venta original (CR), no el del abono.
+    double saldoPosterior;
+    if (headOrigen != null) {
+        // ahora notaBase.getTotal() = total de la venta original
+        setNotaTotalSeguro(nota, headOrigen.total);
+        // el formato usa saldoPosterior para "SALDO RESTANTE"
+        saldoPosterior = headOrigen.saldo;
+    } else {
+        // fallback por si no se pudo leer la nota origen
+        saldoPosterior = saldoAbono;
+    }
 
+    // 5. El desglose de pagos para reimpresión: todo el abono como un solo pago (efectivo)
+    Modelo.PagoFormas pagosAbono =
+            crearPagoFormasParaReimpresion(abonoReal, saldoPosterior, "ABONO");
+
+    // 6. Construir el mismo formato de "RECIBO DE ABONO" que usas al registrar
     printable = construirPrintableAbono(
-        emp, nota, detsOrigen, pagos, abonoReal, saldoPosterior, folio, observacionesOriginal
+            emp,
+            nota,           // ahora con TOTAL de la venta original
+            detsOrigen,     // detalle de la venta, no del abono
+            pagosAbono,     // abono en "pagos"
+            abonoReal,      // "Abono: $..."
+            saldoPosterior, // "Saldo restante: $..."
+            folio,          // folio del abono
+            observacionesOriginal
     );
     break;
 }
@@ -830,7 +859,7 @@ private void setNotaTotalSeguro(Object nota, double valor) {
                 for (Modelo.NotaDetalle d : dets) {
                     String artBase = (d.getArticulo() == null || d.getArticulo().isBlank())
                             ? String.valueOf(d.getCodigoArticulo()) : d.getArticulo();
-                    String detalle = (d.getCodigoArticulo() > 0 ? d.getCodigoArticulo() + " · " : "")
+                    String detalle = (d.getCodigoArticulo() != null && !d.getCodigoArticulo().isEmpty() ? d.getCodigoArticulo() + " · " : "")
                             + safe(artBase)
                             + " | " + trimJoin(" ", safe(d.getMarca()), safe(d.getModelo()))
                             + " | " + labelIf("Color: ", safe(d.getColor()))
@@ -1315,7 +1344,7 @@ if (observacionesTexto != null && !observacionesTexto.isBlank()) {
                 for (Modelo.NotaDetalle d : dets) {
                     String artBase = (d.getArticulo() == null || d.getArticulo().isBlank())
                             ? String.valueOf(d.getCodigoArticulo()) : d.getArticulo();
-                    String detalle = (d.getCodigoArticulo() > 0 ? d.getCodigoArticulo() + " · " : "")
+                    String detalle = (d.getCodigoArticulo() != null && !d.getCodigoArticulo().isEmpty() ? d.getCodigoArticulo() + " · " : "")
                             + safe(artBase)
                             + " | " + trimJoin(" ", safe(d.getMarca()), safe(d.getModelo()))
                             + " | " + labelIf("Color: ", safe(d.getColor()))
@@ -1762,7 +1791,7 @@ if (observacionesTexto != null && !observacionesTexto.isBlank()) {
                     for (Modelo.NotaDetalle d : dets) {
                         String artBase = (d.getArticulo() == null || d.getArticulo().isBlank())
                                 ? String.valueOf(d.getCodigoArticulo()) : d.getArticulo();
-                        String detalle = (d.getCodigoArticulo() > 0 ? d.getCodigoArticulo() + " · " : "")
+                        String detalle = (d.getCodigoArticulo() != null && !d.getCodigoArticulo().isEmpty() ? d.getCodigoArticulo() + " · " : "")
                                 + safe(artBase)
                                 + " | " + trimJoin(" ", safe(d.getMarca()), safe(d.getModelo()))
                                 + " | " + labelIf("Color: ", safe(d.getColor()))
@@ -2234,7 +2263,7 @@ private Printable construirPrintableDevolucion(
                 for (Modelo.NotaDetalle d : dets) {
                     String artBase = (d.getArticulo() == null || d.getArticulo().isBlank())
                             ? String.valueOf(d.getCodigoArticulo()) : d.getArticulo();
-                    String detalle = (d.getCodigoArticulo() > 0 ? d.getCodigoArticulo() + " · " : "")
+                    String detalle = (d.getCodigoArticulo() != null && !d.getCodigoArticulo().isEmpty() ? d.getCodigoArticulo() + " · " : "")
                             + safe(artBase)
                             + " | " + trimJoin(" ", safe(d.getMarca()), safe(d.getModelo()))
                             + " | " + labelIf("Color: ", safe(d.getColor()))

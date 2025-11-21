@@ -15,9 +15,11 @@ public class DialogSeleccionObsequios extends JDialog {
     private final JTable tb;
     private final JTextField txtBuscar = new JTextField();
     private final JLabel lblContador = new JLabel("0 seleccionados (máx 5)");
-    private List<String> seleccionados; // aquí guardaremos **códigos** seleccionados
 
-    public DialogSeleccionObsequios(Frame owner, List<String> preSeleccion) {
+    // AQUÍ: lista de códigos seleccionados, no String suelto
+    private List<String> seleccionados; 
+
+    public DialogSeleccionObsequios(Frame owner, List<String> obsequiosSel) {
         super(owner, "Seleccionar obsequios (máx 5)", true);
         setSize(760, 520);
         setLocationRelativeTo(owner);
@@ -33,7 +35,7 @@ public class DialogSeleccionObsequios extends JDialog {
         add(top, BorderLayout.NORTH);
 
         // Tabla
-        String[] cols = {"Sel","Código","Artículo","Talla","Color","Exist.","Status"};
+        String[] cols = {"Sel","Código","Artículo","Modelo","Talla","Color","Exist.","Status"};
         model = new DefaultTableModel(cols,0){
             @Override public Class<?> getColumnClass(int col){
                 return col==0 ? Boolean.class : Object.class;
@@ -63,9 +65,9 @@ public class DialogSeleccionObsequios extends JDialog {
         // precargar
         cargar();
 
-        // aplicar preselección (acepta lista de códigos o nombres)
-        if (preSeleccion != null && !preSeleccion.isEmpty()) {
-            marcarPreseleccion(preSeleccion);
+        // aplicar preselección (lista de códigos ya guardados)
+        if (obsequiosSel != null && !obsequiosSel.isEmpty()) {
+            marcarPreseleccion(obsequiosSel);
         }
 
         actualizarContador();
@@ -79,8 +81,9 @@ public class DialogSeleccionObsequios extends JDialog {
             for (ObsequioInv i : lista) {
                 model.addRow(new Object[]{
                         Boolean.FALSE,
-                        i.getCodigoArticulo(),
+                        i.getCodigoArticulo(),  // puede ser Integer o String, da igual
                         i.getArticulo(),
+                        i.getModelo(),
                         i.getTalla(),
                         i.getColor(),
                         i.getExistencia(),
@@ -93,13 +96,21 @@ public class DialogSeleccionObsequios extends JDialog {
         }
     }
 
-    /** Marca filas por código (preferente) o por nombre si la preselección trae nombres. */
-    private void marcarPreseleccion(List<String> pre) {
+    /** Marca filas por código (preferente) o por nombre si la lista viene con nombres. */
+    private void marcarPreseleccion(List<String> obsequiosSel) {
+        if (obsequiosSel == null || obsequiosSel.isEmpty()) return;
+
         for (int r = 0; r < model.getRowCount(); r++) {
             String code = String.valueOf(model.getValueAt(r,1));
             String name = String.valueOf(model.getValueAt(r,2));
-            if (pre.contains(code) || pre.contains(name)) {
-                model.setValueAt(Boolean.TRUE, r, 0);
+
+            for (String s : obsequiosSel) {
+                if (s == null) continue;
+                String t = s.trim();
+                if (t.equals(code) || t.equalsIgnoreCase(name)) {
+                    model.setValueAt(Boolean.TRUE, r, 0);
+                    break;
+                }
             }
         }
         actualizarContador();
@@ -117,7 +128,7 @@ public class DialogSeleccionObsequios extends JDialog {
         List<String> out = new ArrayList<>();
         for (int r=0; r<model.getRowCount(); r++) {
             if (Boolean.TRUE.equals(model.getValueAt(r,0))) {
-                out.add(String.valueOf(model.getValueAt(r,1))); // **CÓDIGO**
+                out.add(String.valueOf(model.getValueAt(r,1)).trim()); // **CÓDIGO**
                 if (out.size() == 5) break; // máximo 5
             }
         }
@@ -129,12 +140,12 @@ public class DialogSeleccionObsequios extends JDialog {
         dispose();
     }
 
-    /** Devuelve los **códigos** de los obsequios seleccionados. */
+    /** Devuelve los códigos de los obsequios seleccionados. */
     public List<String> getSeleccionados() {
-        // Si ya aceptaron, devolvemos lo almacenado:
+        // Si ya se aceptó el diálogo, devolvemos lo que guardamos
         if (seleccionados != null) return seleccionados;
 
-        // Si alguien llama sin aceptar (raro), leemos directo de la tabla:
+        // Si alguien llama sin aceptar (raro), leemos directo de la tabla
         List<String> out = new ArrayList<>();
         for (int r = 0; r < tb.getRowCount(); r++) {
             int mr = tb.convertRowIndexToModel(r);

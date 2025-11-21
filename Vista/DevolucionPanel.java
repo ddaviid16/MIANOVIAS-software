@@ -592,7 +592,7 @@ public class DevolucionPanel extends JPanel {
                     for (NotaDetalle d : dets) {
                         String artBase = (d.getArticulo() == null || d.getArticulo().isBlank())
                                 ? String.valueOf(d.getCodigoArticulo()) : d.getArticulo();
-                        String detalle = (d.getCodigoArticulo() > 0 ? d.getCodigoArticulo() + " · " : "")
+                        String detalle = (d.getCodigoArticulo() != null && !d.getCodigoArticulo().isEmpty() ? d.getCodigoArticulo() + " · " : "")
                                 + safe(artBase)
                                 + " | " + trimJoin(" ", safe(d.getMarca()), safe(d.getModelo()))
                                 + " | " + labelIf("Color: ", safe(d.getColor()))

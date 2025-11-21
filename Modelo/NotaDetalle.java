@@ -5,7 +5,7 @@ import java.time.LocalDate;
 public class NotaDetalle {
     private Integer id;                 // autoincremento
     private Integer numeroNota;         // FK
-    private Integer codigoArticulo;     // FK
+    private String codigoArticulo;     // FK
     private String articulo;
     private String marca;
     private String modelo;   
@@ -22,8 +22,8 @@ public class NotaDetalle {
     public void setId(Integer id) { this.id = id; }
     public Integer getNumeroNota() { return numeroNota; }
     public void setNumeroNota(Integer numeroNota) { this.numeroNota = numeroNota; }
-    public Integer getCodigoArticulo() { return codigoArticulo; }
-    public void setCodigoArticulo(Integer codigoArticulo) { this.codigoArticulo = codigoArticulo; }
+    public String getCodigoArticulo() { return codigoArticulo; }
+    public void setCodigoArticulo(String codigoArticulo) { this.codigoArticulo = codigoArticulo; }
     public String getArticulo() { return articulo; }
     public void setArticulo(String articulo) { this.articulo = articulo; }
     public String getMarca() { return marca; }        // <--- NUEVO

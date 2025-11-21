@@ -63,10 +63,10 @@ public class ObsequioInvDAO {
         }
     }
 
-    public ObsequioInv obtener(int codigo) throws SQLException {
+    public ObsequioInv obtener(String codigo) throws SQLException {
         try (Connection cn = Conecta.getConnection();
              PreparedStatement ps = cn.prepareStatement(SEL_ONE)) {
-            ps.setInt(1, codigo);
+            ps.setString(1, codigo);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? map(rs) : null;
             }
@@ -77,7 +77,7 @@ public class ObsequioInvDAO {
         try (Connection cn = Conecta.getConnection();
              PreparedStatement ps = cn.prepareStatement(INS)) {
             int k=1;
-            ps.setInt(k++, o.getCodigoArticulo());
+            ps.setString(k++, o.getCodigoArticulo());
             ps.setString(k++, o.getArticulo());
             ps.setString(k++, empty(o.getMarca()));
             ps.setString(k++, empty(o.getModelo()));
@@ -104,7 +104,7 @@ public class ObsequioInvDAO {
             ps.setObject(k++, o.getDescuento(), Types.DECIMAL);
             ps.setObject(k++, o.getExistencia(), Types.INTEGER);
             ps.setString(k++, (o.getStatus()==null||o.getStatus().isBlank())?"A":o.getStatus());
-            ps.setInt(k++, o.getCodigoArticulo());
+            ps.setString(k++, o.getCodigoArticulo());
             return ps.executeUpdate()==1;
         }
     }
@@ -157,7 +157,7 @@ public class ObsequioInvDAO {
 
     private static ObsequioInv map(ResultSet rs) throws SQLException {
         ObsequioInv o = new ObsequioInv();
-        o.setCodigoArticulo(rs.getInt("codigo_articulo"));
+        o.setCodigoArticulo(rs.getString("codigo_articulo"));
         o.setArticulo(rs.getString("articulo"));
         o.setMarca(rs.getString("marca"));
         o.setModelo(rs.getString("modelo"));

@@ -66,13 +66,13 @@ public class InventarioDAO {
     }
 
     // EDITAR: trae el artículo exista o no, sin importar status
-public Inventario buscarPorCodigo(int codigo) throws SQLException {
+public Inventario buscarPorCodigo(String codigoNuevo) throws SQLException {
     try (Connection cn = Conecta.getConnection();
          PreparedStatement ps = cn.prepareStatement(
              "SELECT codigo_articulo, articulo, marca, modelo, talla, color, precio, descuento, " +
              "       existencia, fecha_registro, status " +
              "FROM Inventarios WHERE codigo_articulo = ?")) {
-        ps.setInt(1, codigo);
+        ps.setString(1, codigoNuevo);
         try (ResultSet rs = ps.executeQuery()) {
             return rs.next() ? mapRow(rs) : null;
         }
@@ -80,14 +80,14 @@ public Inventario buscarPorCodigo(int codigo) throws SQLException {
 }
 
 // VENDER: sólo activos y con stock
-public Inventario buscarParaVenta(int codigo) throws SQLException {
+public Inventario buscarParaVenta(String cod) throws SQLException {
     try (Connection cn = Conecta.getConnection();
          PreparedStatement ps = cn.prepareStatement(
              "SELECT codigo_articulo, articulo, marca, modelo, talla, color, precio, descuento, " +
              "       existencia, fecha_registro, status " +
              "FROM Inventarios " +
              "WHERE codigo_articulo=? AND status='A' AND COALESCE(existencia,0) > 0")) {
-        ps.setInt(1, codigo);
+        ps.setString(1, cod);
         try (ResultSet rs = ps.executeQuery()) {
             return rs.next() ? mapRow(rs) : null;
         }
@@ -115,7 +115,7 @@ public Inventario buscarParaVenta(int codigo) throws SQLException {
                 java.util.List<Modelo.Inventario> out = new java.util.ArrayList<>();
                 while (rs.next()) {
                     Modelo.Inventario i = new Modelo.Inventario();
-                    i.setCodigoArticulo(rs.getInt("codigo_articulo"));
+                    i.setCodigoArticulo(rs.getString("codigo_articulo"));
                     i.setArticulo(rs.getString("articulo"));
                     i.setMarca(rs.getString("marca"));
                     i.setModelo(rs.getString("modelo"));
@@ -142,7 +142,7 @@ public Inventario buscarParaVenta(int codigo) throws SQLException {
         try (Connection cn = Conecta.getConnection();
              PreparedStatement ps = cn.prepareStatement(INSERT_SQL)) {
             int k = 1;
-            ps.setInt(k++,    i.getCodigoArticulo());
+            ps.setString(k++,    i.getCodigoArticulo());
             ps.setString(k++, i.getArticulo());
             ps.setString(k++, emptyToNull(i.getMarca()));
             ps.setString(k++, emptyToNull(i.getModelo()));
@@ -169,7 +169,7 @@ public Inventario buscarParaVenta(int codigo) throws SQLException {
             if (i.getDescuento() == null) ps.setNull(k++, Types.DECIMAL); else ps.setDouble(k++, i.getDescuento());
             if (i.getExistencia() == null) ps.setNull(k++, Types.INTEGER); else ps.setInt(k++, i.getExistencia());
             ps.setString(k++, (i.getStatus() == null || i.getStatus().isBlank()) ? "A" : i.getStatus());
-            ps.setInt(k++, i.getCodigoArticulo());
+            ps.setString(k++, i.getCodigoArticulo());
             return ps.executeUpdate() == 1;
         }
     }
@@ -178,14 +178,14 @@ public Inventario buscarParaVenta(int codigo) throws SQLException {
 
     /** Descuenta existencia. Lanza SQLException si no hay stock suficiente. */
     /** Descuenta existencia. NO cambia el status. */
-public void descontarExistencia(Connection cn, int codigo, int cantidad) throws SQLException {
+public void descontarExistencia(Connection cn, String codigo, int cantidad) throws SQLException {
     if (cantidad <= 0) return;
 
     // 1) Bloquea fila y verifica stock
     int existenciaActual;
     try (PreparedStatement ps = cn.prepareStatement(
             "SELECT COALESCE(existencia,0) FROM Inventarios WHERE codigo_articulo=? FOR UPDATE")) {
-        ps.setInt(1, codigo);
+        ps.setString(1, codigo);
         try (ResultSet rs = ps.executeQuery()) {
             if (!rs.next()) throw new SQLException("Artículo no encontrado: " + codigo);
             existenciaActual = rs.getInt(1);
@@ -199,17 +199,17 @@ public void descontarExistencia(Connection cn, int codigo, int cantidad) throws 
     try (PreparedStatement ps = cn.prepareStatement(
             "UPDATE Inventarios SET existencia = COALESCE(existencia,0) - ? WHERE codigo_articulo=?")) {
         ps.setInt(1, cantidad);
-        ps.setInt(2, codigo);
+        ps.setString(2, codigo);
         ps.executeUpdate();
     }
 }
 // Reingresar existencia (devolución)
-public void incrementarExistencia(java.sql.Connection cn, int codigo, int cantidad) throws java.sql.SQLException {
+public void incrementarExistencia(java.sql.Connection cn, String codigo, int cantidad) throws java.sql.SQLException {
     if (cantidad <= 0) return;
     try (java.sql.PreparedStatement ps = cn.prepareStatement(
             "UPDATE Inventarios SET existencia = COALESCE(existencia,0) + ? WHERE codigo_articulo=?")) {
         ps.setInt(1, cantidad);
-        ps.setInt(2, codigo);
+        ps.setString(2, codigo);
         ps.executeUpdate();
     }
     // No tocar status automáticamente (queda como esté).
@@ -222,7 +222,7 @@ public void incrementarExistencia(java.sql.Connection cn, int codigo, int cantid
 
     private Inventario mapRow(ResultSet rs) throws SQLException {
     Inventario i = new Inventario();
-    i.setCodigoArticulo(rs.getInt("codigo_articulo"));
+    i.setCodigoArticulo(rs.getString("codigo_articulo"));
     i.setArticulo(rs.getString("articulo"));
     i.setMarca(rs.getString("marca"));
     i.setModelo(rs.getString("modelo"));

@@ -2,6 +2,8 @@ package Vista;
 
 import Controlador.clienteDAO;
 import Modelo.cliente;
+import Utilidades.TelefonosUI;
+
 
 import javax.swing.*;
 import javax.swing.text.*;
@@ -42,12 +44,17 @@ public class ClientesPanel extends JPanel {
         int y = 0;
 
         // ===== Teléfonos (solo números)
+        // ===== Teléfonos (con formato TelefonosUI)
         txtTel1 = new JTextField();
         txtTel2 = new JTextField();
-        applyDigitsOnly(txtTel1, 15);
-        applyDigitsOnly(txtTel2, 15);
-        txtTel1.setToolTipText("Solo números.");
-        txtTel2.setToolTipText("Solo números.");
+
+        // Aplica el mismo formato que en los otros paneles (10 dígitos)
+        TelefonosUI.instalar(txtTel1, 10);
+        TelefonosUI.instalar(txtTel2, 10);
+
+        txtTel1.setToolTipText("Teléfono (10 dígitos).");
+        txtTel2.setToolTipText("Teléfono (10 dígitos).");
+
         addRow(p, c, y++, new JLabel("Teléfono 1*:"), txtTel1,
                 new JLabel("Teléfono 2:"), txtTel2);
 
@@ -222,10 +229,12 @@ public class ClientesPanel extends JPanel {
     // ---------------------- Guardar (con confirmación y conversión de fechas a MySQL)
     private void guardar() {
         // Requeridos mínimos
-    if (txtTel1.getText().isBlank()) {
-        JOptionPane.showMessageDialog(this, "Teléfono 1 es obligatorio", "Validación", JOptionPane.WARNING_MESSAGE);
-        txtTel1.requestFocus(); return;
-    }
+        if (TelefonosUI.soloDigitos(txtTel1.getText()).isBlank()) {
+            JOptionPane.showMessageDialog(this, "Teléfono 1 es obligatorio", "Validación", JOptionPane.WARNING_MESSAGE);
+            txtTel1.requestFocus();
+            return;
+        }
+
     if (txtNombre.getText().isBlank()) {
         JOptionPane.showMessageDialog(this, "El nombre es obligatorio", "Validación", JOptionPane.WARNING_MESSAGE);
         txtNombre.requestFocus(); return;
@@ -252,8 +261,9 @@ public class ClientesPanel extends JPanel {
 
         try {
             cliente cli = new cliente();
-            cli.setTelefono1(txtTel1.getText().trim());
-            cli.setTelefono2(blankToNull(txtTel2));
+            String tel1Dig = TelefonosUI.soloDigitos(txtTel1.getText());
+            cli.setTelefono1(tel1Dig);
+            cli.setTelefono2(phoneOrNull(txtTel2));
             cli.setNombre(txtNombre.getText().trim());
             cli.setApellidoPaterno(blankToNull(txtApPat));
             cli.setApellidoMaterno(blankToNull(txtApMat));
@@ -313,6 +323,13 @@ public class ClientesPanel extends JPanel {
         if (t.getText().isBlank()) return null;
         return Double.parseDouble(t.getText().trim());
     }
+    private String phoneOrNull(JTextField t) {
+    String dig = TelefonosUI.soloDigitos(
+            t.getText() == null ? "" : t.getText()
+    );
+    return dig.isBlank() ? null : dig;
+}
+
 
     /**
      * Convierte campo con máscara DD-MM-YYYY a "YYYY-MM-DD" (para MySQL).
@@ -430,33 +447,52 @@ private static String toSql(LocalDate d) {
 }
 
 /** Devuelve null si todo OK; si hay error, devuelve el mensaje. */
-private static String validarFechas(LocalDate evento, LocalDate p1, LocalDate p2, LocalDate entrega) {
+private static String validarFechas(LocalDate evento,
+                                    LocalDate p1,
+                                    LocalDate p2,
+                                    LocalDate entrega) {
     LocalDate hoy = LocalDate.now();
-    if (evento == null) return "La fecha de evento es obligatoria.";
 
-    // evento > hoy (solo si se capturó)
-    if (evento != null && !evento.isAfter(hoy))
+    // La única obligatoria
+    if (evento == null)
+        return "La fecha de evento es obligatoria.";
+
+    // evento > hoy
+    if (!evento.isAfter(hoy))
         return "La fecha de evento debe ser mayor a la fecha actual.";
 
-    // p1 > hoy && p1 < evento
+    // ----- Prueba 1 (opcional) -----
+    if (p1 != null) {
         if (!p1.isAfter(hoy))
             return "La fecha de prueba 1 debe ser mayor a la fecha actual.";
         if (!p1.isBefore(evento))
             return "La fecha de prueba 1 debe ser menor a la fecha de evento.";
+    }
 
-    // p2 > p1 && p2 < evento
-        if (!p2.isAfter(p1))
+    // ----- Prueba 2 (opcional) -----
+    if (p2 != null) {
+        // Si también hay prueba1, respetar el orden
+        if (p1 != null && !p2.isAfter(p1))
             return "La fecha de prueba 2 debe ser mayor a la fecha de prueba 1.";
+
+        if (!p2.isAfter(hoy))
+            return "La fecha de prueba 2 debe ser mayor a la fecha actual.";
         if (!p2.isBefore(evento))
             return "La fecha de prueba 2 debe ser menor a la fecha de evento.";
-
-    // entrega > p2 && entrega < evento
-        if (!entrega.isAfter(p2))
+    }
+    // ----- Entrega (opcional) -----
+    if (entrega != null) {
+        // Si existe prueba2, respetar el orden
+        if (p2 != null && !entrega.isAfter(p2))
             return "La fecha de entrega debe ser mayor a la fecha de prueba 2.";
+
+        if (!entrega.isAfter(hoy))
+            return "La fecha de entrega debe ser mayor a la fecha actual.";
         if (!entrega.isBefore(evento))
             return "La fecha de entrega debe ser menor a la fecha de evento.";
+    }
 
-    return null; // OK
+    return null;
 }
 
     // ---- main de prueba opcional (panel standalone) ----

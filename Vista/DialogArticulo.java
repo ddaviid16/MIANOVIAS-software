@@ -40,7 +40,7 @@ public class DialogArticulo extends JDialog {
     private final InventarioDAO dao = new InventarioDAO();
 
     private final boolean edicion;             // true si estamos modificando
-    private final Integer codigoOriginal;      // PK (no se modifica)
+    private final String codigoOriginal;      // PK (no se modifica)
     private static final DateTimeFormatter DF = DateTimeFormatter.ISO_LOCAL_DATE;
 
     // ---- Constructor para ALTA ----
@@ -65,7 +65,7 @@ public class DialogArticulo extends JDialog {
 
         int y = 0;
 
-        txtCodigo = new JTextField();   applyDigitsOnly(txtCodigo, 10);
+        txtCodigo = new JTextField();
         txtArticulo = new JTextField();
         txtMarca = new JTextField();
         txtModelo = new JTextField();
@@ -186,7 +186,7 @@ public class DialogArticulo extends JDialog {
 
         try {
             Inventario inv = new Inventario();
-            inv.setCodigoArticulo(Integer.parseInt(txtCodigo.getText().trim()));
+            inv.setCodigoArticulo(txtCodigo.getText().trim());
             inv.setArticulo(txtArticulo.getText().trim());
             inv.setMarca(blankToNull(txtMarca));
             inv.setModelo(blankToNull(txtModelo));

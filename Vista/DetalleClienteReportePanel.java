@@ -539,7 +539,7 @@ public static class CsvDetalle {
     public Double saldo;
 
     // Detalle
-    public Integer codigo;
+    public String codigo;
     public String articulo;
     public String marca;
     public String modelo;

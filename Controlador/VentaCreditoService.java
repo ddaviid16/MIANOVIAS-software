@@ -47,10 +47,9 @@ public class VentaCreditoService {
                         nz(pago.getTransferencia()) +
                         nz(pago.getDeposito()) +
                         nz(pago.getEfectivo()) +
-                        nz(pago.getDevolucion());      // ← AQUÍ se suma la DV
+                        nz(pago.getDevolucion());      // incluye DV
 
                 double saldo = Math.max(0.0, total - anticipo);
-                // Alineamos también el objeto Nota en memoria
                 nota.setSaldo(saldo);
 
                 // ===== INSERT EN NOTAS =====
@@ -71,12 +70,36 @@ public class VentaCreditoService {
                 // ===== DETALLE DE LA NOTA =====
                 try (PreparedStatement psd = cn.prepareStatement(SQL_INS_DET)) {
                     InventarioDAO invDao = new InventarioDAO();
+
                     for (NotaDetalle d : dets) {
+
+                        String cod = d.getCodigoArticulo();
+                        boolean tieneInventario = esCodigoInventarioValido(cod);  // <<< clave
+
                         psd.setInt(1, nota.getNumeroNota());
-                        if (d.getCodigoArticulo() == null)
+
+                        if (!tieneInventario) {
+                            // Renglones especiales (PEDIDO, manuales, etc.): guardar SIN código
                             psd.setNull(2, Types.INTEGER);
-                        else
-                            psd.setInt(2, d.getCodigoArticulo());
+                        } else {
+                            // Validar que el artículo exista, esté activo y con stock
+                            try (PreparedStatement chk = cn.prepareStatement(
+                                     "SELECT TRIM(UPPER(status)) st, COALESCE(existencia,0) ex " +
+                                     "FROM Inventarios WHERE codigo_articulo=? FOR UPDATE")) {
+                                chk.setString(1, cod);
+                                try (ResultSet rs = chk.executeQuery()) {
+                                    if (!rs.next())
+                                        throw new SQLException("Artículo no encontrado: " + cod);
+                                    String st = rs.getString("st");
+                                    int ex    = rs.getInt("ex");
+                                    if (!"A".equals(st))
+                                        throw new SQLException("Artículo inactivo (status=" + st + ")");
+                                    if (ex < 1)
+                                        throw new SQLException("Sin existencia para código " + cod);
+                                }
+                            }
+                            psd.setString(2, cod);
+                        }
 
                         psd.setString(3,  nz(d.getArticulo()));
                         psd.setString(4,  nz(d.getMarca()));
@@ -98,12 +121,15 @@ public class VentaCreditoService {
 
                         psd.addBatch();
 
-                        invDao.descontarExistencia(cn, d.getCodigoArticulo(), 1);
+                        // Descontar del inventario SOLO si el código es válido
+                        if (tieneInventario) {
+                            invDao.descontarExistencia(cn, cod, 1);
+                        }
                     }
                     psd.executeBatch();
                 }
 
-                // ===== FORMAS DE PAGO (incluye devolucion / referencia_dv) =====
+                // ===== FORMAS DE PAGO =====
                 try (PreparedStatement psp = cn.prepareStatement(SQL_INS_FP)) {
                     psp.setInt(1, nota.getNumeroNota());
                     setNullable(psp, 2, pago.getTarjetaCredito());
@@ -127,6 +153,12 @@ public class VentaCreditoService {
                 cn.setAutoCommit(true);
             }
         }
+    }
+
+    // ======================= HELPERS =======================
+
+    private static boolean esCodigoInventarioValido(String cod) {
+        return cod != null && !cod.isBlank() && !"0".equals(cod.trim());
     }
 
     private static void setNullable(PreparedStatement ps, int idx, Double val) throws SQLException {

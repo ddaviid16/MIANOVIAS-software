@@ -28,7 +28,7 @@ public class ObsequiosInvPanel extends JPanel {
 
         // Panel izquierdo
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton btNuevo = new JButton("Nuevo registro");
+        JButton btNuevo = new JButton("Registrar artículo");
         left.add(btNuevo);
 
         JButton btExportar = new JButton("Exportar CSV");
@@ -93,7 +93,7 @@ public class ObsequiosInvPanel extends JPanel {
             @Override public void actionPerformed(java.awt.event.ActionEvent e) {
                 int row = Integer.parseInt(e.getActionCommand());
                 int mr  = tb.convertRowIndexToModel(row);
-                int codigo = Integer.parseInt(model.getValueAt(mr, 0).toString());
+                String codigo = model.getValueAt(mr, 0).toString();
                 try {
                     ObsequioInvDAO dao = new ObsequioInvDAO();
                     ObsequioInv o = dao.obtener(codigo);

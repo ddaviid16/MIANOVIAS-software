@@ -330,7 +330,7 @@
                 while (rs.next()) {
                     Modelo.NotaDetalle d = new Modelo.NotaDetalle();
                     d.setId(rs.getInt("id"));
-                    d.setCodigoArticulo((Integer) rs.getObject("codigo_articulo")); // null para PEDIDOS
+                    d.setCodigoArticulo( rs.getString("codigo_articulo")); // null para PEDIDOS
                     d.setArticulo(rs.getString("articulo"));
                     d.setMarca(rs.getString("marca"));
                     d.setModelo(rs.getString("modelo"));
@@ -472,36 +472,50 @@
 
         /** Notas de un cliente por teléfono (todas, orden más reciente primero). */
         public List<NotaResumen> listarNotasPorTelefonoResumen(String telefono) throws SQLException {
-            String sql = "SELECT numero_nota, tipo, folio, DATE(fecha_registro) AS fecha, " +
-                        "       total, saldo, status " +
-                        "FROM Notas WHERE telefono=? " +
-                        "ORDER BY fecha_registro DESC, numero_nota DESC";
-            try (Connection cn = Conecta.getConnection();
-                PreparedStatement ps = cn.prepareStatement(sql)) {
+    String sql = "SELECT numero_nota, tipo, folio, DATE(fecha_registro) AS fecha, " +
+                 "       total, saldo, status " +
+                 "FROM Notas WHERE telefono=? " +
+                 "ORDER BY fecha_registro DESC, numero_nota DESC";
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
 
-                ps.setString(1, telefono);
-                try (ResultSet rs = ps.executeQuery()) {
-                    List<NotaResumen> out = new java.util.ArrayList<>();
-                    while (rs.next()) {
-                        NotaResumen r = new NotaResumen();
-                        r.numero = rs.getInt("numero_nota");
-                        r.tipo   = rs.getString("tipo");
-                        try { r.folio = rs.getString("folio"); } catch (Throwable ignore) {}
-                        Date f = rs.getDate("fecha");
-                        r.fecha = (f == null ? null : f.toLocalDate());
-                        try { r.total = (rs.getBigDecimal("total")==null? null : rs.getBigDecimal("total").doubleValue()); }
-                        catch(Throwable t){ r.total = rs.getDouble("total"); }
-                        try { r.saldo = (rs.getBigDecimal("saldo")==null? null : rs.getBigDecimal("saldo").doubleValue()); }
-                        catch(Throwable t){ r.saldo = rs.getDouble("saldo"); }
-                        r.status = rs.getString("status");
-                        r.uuidFactura    = rs.getString("uuid_fact");
-                        r.estatusFactura = rs.getString("est_fact");
-                        out.add(r);
-                    }
-                    return out;
+        ps.setString(1, telefono);
+        try (ResultSet rs = ps.executeQuery()) {
+            List<NotaResumen> out = new java.util.ArrayList<>();
+            while (rs.next()) {
+                NotaResumen r = new NotaResumen();
+                r.numero = rs.getInt("numero_nota");
+                r.tipo   = rs.getString("tipo");
+                try { r.folio = rs.getString("folio"); } catch (Throwable ignore) {}
+                Date f = rs.getDate("fecha");
+                r.fecha = (f == null ? null : f.toLocalDate());
+                try {
+                    r.total = (rs.getBigDecimal("total")==null
+                               ? null
+                               : rs.getBigDecimal("total").doubleValue());
+                } catch(Throwable t){
+                    r.total = rs.getDouble("total");
                 }
+                try {
+                    r.saldo = (rs.getBigDecimal("saldo")==null
+                               ? null
+                               : rs.getBigDecimal("saldo").doubleValue());
+                } catch(Throwable t){
+                    r.saldo = rs.getDouble("saldo");
+                }
+                r.status = rs.getString("status");
+
+                // Estas dos líneas QUITARLAS (o dejarlas comentadas):
+                // r.uuidFactura    = rs.getString("uuid_fact");
+                // r.estatusFactura = rs.getString("est_fact");
+
+                out.add(r);
             }
+            return out;
         }
+    }
+}
+
             /** 
      * Crea o actualiza la nota de CR de "migración" para un cliente.
      * Usa folio 'MIG-<telefono>' para identificarla.
