@@ -1,17 +1,33 @@
 package Vista;
 
-import Controlador.ExportadorCSV;
-import Controlador.ObsequioInvDAO;
-import Modelo.ObsequioInv;
-
-import javax.swing.*;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableColumnModel;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.FlowLayout;
+import java.awt.Frame;
+import java.awt.Window;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+
+import javax.swing.AbstractAction;
+import javax.swing.AbstractCellEditor;
+import javax.swing.Action;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableColumnModel;
+
+import Controlador.ExportadorCSV;
+import Controlador.ObsequioInvDAO;
+import Modelo.ObsequioInv;
 
 public class ObsequiosInvPanel extends JPanel {
 
@@ -28,7 +44,7 @@ public class ObsequiosInvPanel extends JPanel {
 
         // Panel izquierdo
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton btNuevo = new JButton("Registrar artículo");
+        JButton btNuevo = new JButton("Registrar obsequio");
         left.add(btNuevo);
 
         JButton btExportar = new JButton("Exportar CSV");
