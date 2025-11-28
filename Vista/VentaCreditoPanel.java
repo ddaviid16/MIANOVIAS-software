@@ -100,7 +100,14 @@ public class VentaCreditoPanel extends JPanel {
     private String memoEditable; // texto del formato de condiciones
     private String observacionesTexto; // texto libre capturado por operador
 
+    // ===== Usuario en sesión (cajera) =====
+private int cajeraCodigo;
+private String cajeraNombre;
 
+public void setCajeraActual(int codigoEmpleado, String nombreCompleto) {
+    this.cajeraCodigo = codigoEmpleado;
+    this.cajeraNombre = nombreCompleto;
+}
     
     private JButton btFactura;
     private DlgFactura.CapturaFactura facturaDraft; // nulo si el usuario no capturó
@@ -1054,27 +1061,86 @@ if (dvAplicadas != null && !dvAplicadas.isEmpty()) {
         LocalDate entregaMostrar = (fechaEntregaDefault != null) ? fechaEntregaDefault : entregaCliente;
 
         // ======= IMPRIMIR =======
-        EmpresaInfo emp = cargarEmpresaInfo();
-        String clienteNombre = txtNombreCompleto.getText().trim();
-        String tel2 = Utilidades.TelefonosUI.soloDigitos(txtTelefono2.getText());
-        String folioImpresion = (n.getFolio()==null || n.getFolio().isBlank()) ? "—" : n.getFolio();
+EmpresaInfo emp = cargarEmpresaInfo();
+String clienteNombre = txtNombreCompleto.getText().trim();
+String tel2 = Utilidades.TelefonosUI.soloDigitos(txtTelefono2.getText());
+String folioImpresion = (n.getFolio()==null || n.getFolio().isBlank()) ? "—" : n.getFolio();
 
-        Printable prn = construirPrintableEmpresarial(
-                emp, n, detsPrint, p,
-                entregaMostrar, eventoMostrar,
-                sel.getNombreCompleto(), folioImpresion,
-                clienteNombre, tel2, observacionesTexto);
-
-            imprimirYConfirmarAsync(
-            prn,
-            () -> JOptionPane.showMessageDialog(this,
-                    "Venta de CRÉDITO registrada e impresa.\nNota No: " + numeroNota + "   Folio: " + folioImpresion),
-                    
-            () -> JOptionPane.showMessageDialog(this,
-                    "Venta de CRÉDITO registrada pero la impresión no se confirmó.\n" +
-                    "Puedes reimprimir desde el módulo de notas (Folio: " + folioImpresion + ").",
-                    "Aviso", JOptionPane.WARNING_MESSAGE)
+// 1) Ticket / nota de anticipo
+Printable prnTicket = construirPrintableEmpresarial(
+        emp, n, detsPrint, p,
+        entregaMostrar, eventoMostrar,
+        sel.getNombreCompleto(), folioImpresion,
+        clienteNombre, tel2, observacionesTexto,
+        cajeraCodigo, cajeraNombre
 );
+
+// ¿Hay al menos un artículo que cuente como "Vestido"?
+boolean imprimirCondiciones = detsPrint.stream()
+        .anyMatch(d -> esArticuloVestido(d.getArticulo()));
+
+// Decidimos qué printable usar:
+Printable printablePrincipal;
+if (imprimirCondiciones) {
+    
+    // === 4.1) MEMO / CONDICIONES ===
+    if (memoEditable == null) {
+        // Fuerza a que el usuario vea/edite el texto al menos una vez
+        editarMemoPrevia(true);
+    }
+    // Render final con datos reales para condiciones
+    Map<String,String> varsFinal = buildMemoVars(
+            emp, n, dets, entregaMostrar, eventoMostrar, sel.getNombreCompleto()
+    );
+
+    Printable condiciones = construirPrintableCondiciones(
+            emp,
+            n,
+            dets,
+            varsFinal,
+            folioImpresion,
+            sel.getNombreCompleto(),
+            eventoMostrar,
+            entregaMostrar,         // la usaremos como "estará en tienda"
+            clienteNombre
+    );
+
+    printablePrincipal = combinarEnDosPaginas(prnTicket, condiciones);
+} else {
+    // Solo ticket, sin hoja de condiciones
+    printablePrincipal = prnTicket;
+}
+// >>> SNAPSHOT PARA TARJETAS (antes de limpiar UI)
+java.util.List<String> obsequiosTarjetas = new java.util.ArrayList<>(obsequiosSel);
+String obsTarjetas = observacionesTexto;
+LocalDate fechaCompraTarjetas = LocalDate.now();
+
+        imprimirYConfirmarAsync(
+        printablePrincipal,
+        () -> {
+            // Primero las tarjetas por artículo
+            imprimirTarjetasVenta(
+                    emp,
+                    clienteNombre,
+                    eventoMostrar,
+                    fechaCompraTarjetas,
+                    sel.getNombreCompleto(),
+                    detsPrint,
+                    obsequiosTarjetas,
+                    obsTarjetas
+            );
+
+            // Y luego el mensaje de éxito, SIN otra lambda
+            JOptionPane.showMessageDialog(this,
+                    "Venta de CRÉDITO registrada e impresa.\n Folio: " + folioImpresion);
+        },
+        () -> JOptionPane.showMessageDialog(this,
+                "Venta de CRÉDITO registrada pero la impresión no se confirmó.\n" +
+                        "Puedes reimprimir desde el módulo de reimpresión (Folio: " + folioImpresion + ").",
+                "Aviso", JOptionPane.WARNING_MESSAGE)
+);
+
+
 // Notificar a Corte de Caja que hubo una operación completada
 try {
     Utilidades.EventBus.notificarOperacionFinalizada();
@@ -1083,9 +1149,6 @@ try {
 
         // ======= FORMATO DE CONDICIONES =======
 try {
-    if (memoEditable == null || memoEditable.isBlank()) {
-        memoEditable = obtenerCondicionesPredeterminadas();
-    }
 
     NotasMemoDAO memoDao = new NotasMemoDAO();
     memoDao.upsert(numeroNota, memoEditable);
@@ -1429,6 +1492,127 @@ private Map<String,String> buildMemoVars(EmpresaInfo emp, Nota n, java.util.List
 
     return v;
 }
+// Segunda página con las condiciones, ahora con formato controlado y encabezado
+private Printable construirPrintableCondiciones(
+        EmpresaInfo emp,
+        Nota n,
+        java.util.List<NotaDetalle> dets,
+        Map<String, String> vars, // <-- Asegúrate que la firma acepte el Map
+        String folio,
+        String asesorNombre,
+        LocalDate fechaEvento,
+        LocalDate fechaEnTienda,
+        String clienteNombre) {
+
+    // (Opcional) Carga el texto de las cláusulas desde la BD
+    // Esto asume que seguiste el PASO 1 y el texto SÓLO son las cláusulas.
+    final String baseTexto = (memoEditable != null && !memoEditable.isBlank())
+        ? memoEditable
+        : obtenerCondicionesPredeterminadas();
+    
+    // Fallback por si la BD está vacía, basado en tu foto
+    final String P1_INTRO = "En MIANOVIAS, ¡te damos la bienvenida a vivir esta gran experiencia!";
+    final String P5_ACUERDO = "ESTOY DE ACUERDO:";
+    final String P6_FIRMA = "NOMBRE Y FIRMA DEL CLIENTE";
+
+
+    return (g, pf, pageIndex) -> {
+        if (pageIndex > 0) return Printable.NO_SUCH_PAGE;
+        Graphics2D g2 = (Graphics2D) g;
+        g2.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING,
+                            java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        // Márgenes estándar carta (~2.5 cm ≈ 70 px)
+        final int M = 70;
+        int x = (int) pf.getImageableX() + M;
+        int y = (int) pf.getImageableY() + M;
+        int w = (int) pf.getImageableWidth() - (M * 2);
+
+        // === Fuentes ===
+        Font bodyFont = new Font("Arial", Font.PLAIN, 11);
+        Font labelFont = new Font("Arial", Font.BOLD, 10);
+        
+        g2.setFont(bodyFont);
+        
+        // 1. Párrafo de Bienvenida
+        y = drawWrappedSimple(g2, P1_INTRO, x, y, w);
+        y += 18; // Espacio extra
+
+        // === 2. Bloque de Datos (usando los helpers) ===
+        g2.setFont(labelFont); // Fuente negrita para etiquetas
+
+        // Extraer datos del mapa
+        String vNombre = vars.getOrDefault("cliente_nombre", "");
+        String vCompra = vars.getOrDefault("fecha_compra", "");
+        String vEvento = vars.getOrDefault("fecha_evento", "");
+        String vModelo = vars.getOrDefault("modelo", "");
+        String vTalla  = vars.getOrDefault("talla", "");
+        String vColor  = vars.getOrDefault("color", "");
+        String vMarca  = vars.getOrDefault("marca", "");
+        String vAsesora = vars.getOrDefault("asesora", "");
+        String vCodigo = vars.getOrDefault("codigo", "");
+        String vEntrega = vars.getOrDefault("fecha_en_tienda", "");
+        String vPrecio = vars.getOrDefault("precio", "");
+        String vDesc = vars.getOrDefault("descuento_pct", "");
+        String vPagar = vars.getOrDefault("precio_pagar", "");
+        String vBusto = vars.getOrDefault("busto", "");
+        String vCintura = vars.getOrDefault("cintura", "");
+        String vCadera = vars.getOrDefault("cadera", "");
+
+        // Dibujar los campos
+        y = drawFieldLine(g2, x, y, w, "NOMBRE DE LA NOVIA:", vNombre);
+        y = drawTwoColsLine(g2, x, y, w, "FECHA DE COMPRA:", vCompra, "FECHA DE EVENTO:", vEvento);
+        y = drawThreeColsLine(g2, x, y, w, 
+            "MODELO:", vModelo, 
+            "TALLA:", vTalla,
+            "COLOR:", vColor);
+        y = drawFieldLine(g2, x, y, w, "DE LA MARCA:", vMarca);
+        y = drawFieldLine(g2, x, y, w, "TU ASESORA:", vAsesora);
+        y = drawTwoColsLine(g2, x, y, w, "CÓDIGO:", vCodigo, "TU VESTIDO ESTARÁ EN TIENDA EL DIA:", vEntrega);
+        y = drawFieldLine(g2, x, y, w, "PRECIO:", "$" + vPrecio);
+        y = drawFieldLine(g2,x,y,w,"APLICANDO UN DESCUENTO DEL:", vDesc + "%");
+        y = drawFieldLine(g2,x,y,w,"PRECIO A PAGAR:", "$" + vPagar);
+        
+        // Medidas
+        y += 6; // espacio
+        g2.drawString("MEDIDAS CORPORALES AL DIA DE HOY:", x, y + g2.getFontMetrics().getAscent());
+        y += 18;
+        y = drawThreeColsLine(g2, x, y, w, 
+            "C.BUSTO:", vBusto, 
+            "C.CINTURA:", vCintura, 
+            "C.CADERA:", vCadera);
+        
+        y += 18; // Espacio antes de las cláusulas
+
+        // === 3. Cláusulas ===
+        g2.setFont(bodyFont); // Volver a fuente normal
+        final String clausulasRenderizadas = renderMemo(baseTexto, vars);
+        // Dibuja el texto de la BD (que ahora SÓLO tiene cláusulas)
+        String[] parrafos = clausulasRenderizadas.split("\n");
+        for (String p : parrafos) {
+            if (p.trim().isEmpty()) continue;
+            y = drawWrappedSimple(g2, p.trim(), x, y, w);
+            y += 6; // Espacio entre párrafos
+        }
+        
+        y += 36; // Espacio grande antes de la firma
+
+        // === 4. Firma ===
+        // === 4. Firma ===
+        g2.setFont(labelFont);
+        
+        // Dibuja "ESTOY DE ACUERDO" SIN línea
+        g2.drawString(P5_ACUERDO, x, y + g2.getFontMetrics().getAscent());
+        y += 18; // Avanza una línea
+        
+        y += 36; // Espacio grande antes de la firma
+        
+        // Dibuja "NOMBRE Y FIRMA" CON línea
+        y = drawFieldLine(g2, x, y, w, P6_FIRMA, "");
+        
+        return Printable.PAGE_EXISTS;
+    };
+}
 // Empaqueta "ticket + condiciones" en un solo Printable
 private static Printable combinarEnDosPaginas(Printable p0, Printable p1){
     return (g, pf, pageIndex) -> {
@@ -1527,13 +1711,93 @@ private EmpresaInfo cargarEmpresaInfo() {
     }
     return info;
 }
+// ---------- Printable para hoja de condiciones ----------
+private Printable construirPrintableCondiciones(
+        EmpresaInfo emp, String memoTexto, String folioTxt, String clienteNombre) {
+
+    final String texto   = (memoTexto == null) ? "" : memoTexto;
+    final String folio   = (folioTxt == null || folioTxt.isBlank()) ? "—" : folioTxt;
+    final String cliente = (clienteNombre == null) ? "" : clienteNombre;
+
+    return (graphics, pf, pageIndex) -> {
+        if (pageIndex > 0) return Printable.NO_SUCH_PAGE;
+
+        Graphics2D g2 = (Graphics2D) graphics;
+        g2.setColor(Color.BLACK);
+        g2.translate(pf.getImageableX(), pf.getImageableY());
+
+        final int MARGIN = 36;
+        int x = MARGIN;
+        int y = MARGIN;
+        int w = (int) Math.round(pf.getImageableWidth()) - (MARGIN * 2);
+
+        Font fTitle = g2.getFont().deriveFont(Font.BOLD, 14f);
+        Font fText  = g2.getFont().deriveFont(10.5f);
+        Font fSmall = g2.getFont().deriveFont(9f);
+
+        // Título
+        g2.setFont(fTitle);
+        String titulo = "CONDICIONES DE RENTA / COMPRA";
+        java.awt.FontMetrics fm = g2.getFontMetrics();
+        int cx = x + (w - fm.stringWidth(titulo)) / 2;
+        g2.drawString(titulo, cx, y);
+        y += 22;
+
+        // Nombre de la empresa (si existe)
+        g2.setFont(fSmall);
+        String nomEmp = (emp != null && emp.razonSocial != null && !emp.razonSocial.isBlank())
+                ? emp.razonSocial
+                : "";
+        if (!nomEmp.isEmpty()) {
+            int wEmp = g2.getFontMetrics().stringWidth(nomEmp);
+            g2.drawString(nomEmp, x + (w - wEmp) / 2, y);
+            y += 16;
+        }
+
+        // Folio y cliente
+        g2.drawString("Nota / Folio: " + folio, x, y);
+        if (!cliente.isBlank()) {
+            String sCli = "Cliente: " + cliente;
+            int wCli = g2.getFontMetrics().stringWidth(sCli);
+            g2.drawString(sCli, x + w - wCli, y);
+        }
+        y += 20;
+
+        // Cuerpo del texto (respetando saltos de línea del formato)
+        g2.setFont(fText);
+        int lineHeight = g2.getFontMetrics().getHeight();
+        for (String linea : texto.split("\\R")) {
+            String ln = (linea == null) ? "" : linea;
+            if (ln.isEmpty()) {
+                y += lineHeight;
+            } else {
+                g2.drawString(ln, x, y);
+                y += lineHeight;
+            }
+        }
+
+        // Área de firma del cliente
+        y += 40;
+        int lineaWidth = 260;
+        int xLinea = x + (w - lineaWidth) / 2;
+        g2.drawLine(xLinea, y, xLinea + lineaWidth, y);
+        y += 14;
+
+        String lblFirma = "FIRMA DEL CLIENTE";
+        int wFirma = g2.getFontMetrics().stringWidth(lblFirma);
+        g2.drawString(lblFirma, x + (w - wFirma) / 2, y);
+
+        return Printable.PAGE_EXISTS;
+    };
+}
 
 // ---------- Printable empresarial (márgenes seguros y obsequios) ----------
 private Printable construirPrintableEmpresarial(
         EmpresaInfo emp, Nota n, List<NotaDetalle> dets, PagoFormas p,
         LocalDate fechaEntregaMostrar, LocalDate fechaEventoMostrar,
         String asesorNombre, String folioTxt,
-        String clienteNombreFallback, String tel2Fallback, String observacionesTexto) {
+        String clienteNombreFallback, String tel2Fallback, String observacionesTexto,
+        int cajeraCodigo, String cajeraNombre) {
 
     final String tel1      = (n.getTelefono() == null) ? "" : n.getTelefono();
     final String fechaHoy  = LocalDate.now().format(MX);
@@ -1590,6 +1854,8 @@ private Printable construirPrintableEmpresarial(
     final String medidasFmt = _med.toString();
 
     final String folio = (folioTxt == null || folioTxt.isBlank()) ? "—" : folioTxt;
+    final String fCajeraCodigo = (cajeraCodigo == 0 ? "0" : String.valueOf(cajeraCodigo));
+    final String fCajeraNombre = (cajeraNombre == null ? "" : cajeraNombre.trim());
 
     final String fCliNombre  = cliNombre;
     final String fCliTel2    = cliTel2;
@@ -1600,7 +1866,6 @@ private Printable construirPrintableEmpresarial(
     try { tmp = new java.util.ArrayList<>(VentaCreditoPanel.this.obsequiosSel); } catch (Throwable ignore) {}
     final java.util.List<String> obsequiosPrint =
             (tmp == null) ? java.util.Collections.emptyList() : tmp;
-
 
     return new Printable() {
         @Override public int print(Graphics g, PageFormat pf, int pageIndex) throws PrinterException {
@@ -1682,7 +1947,7 @@ private Printable construirPrintableEmpresarial(
 
             // ===== Título =====
             g2.setFont(fTitle);
-            center(g2, "NOTA DE ANTICIPO", x, w, afterTail + 14);
+            center(g2, "NOTA DE VENTA CRÉDITO", x, w, afterTail + 14);
             y = afterTail + 32;
 
             // ===== Datos del cliente (sin cambios) =====
@@ -1918,6 +2183,15 @@ for (String raw : obsequiosPrint) {
                 }
             }
 
+            String cajeraLinea = "Cajera: " + safe(fCajeraCodigo);
+            if (!fCajeraNombre.isEmpty()) {
+                cajeraLinea += " - " + fCajeraNombre;
+            }
+            y += 16;
+            g2.drawLine(x, y, x + w, y);
+            y += 14;
+            g2.setFont(fText);
+            g2.drawString(cajeraLinea, x, y);
             return PAGE_EXISTS;
         }
 
@@ -2430,5 +2704,477 @@ public void setVisible(boolean aFlag) {
         cargarAsesores();   // recarga lista desde BD cada vez que entras al panel
     }
 }
+private static int drawWrappedSimple(Graphics2D g2, String text, int x, int y, int maxWidth) {
+    if (text == null || text.trim().isEmpty()) return y;  // Se asegura que no intente dibujar texto vacío
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    String[] words = text.split("\\s+");
+    StringBuilder line = new StringBuilder();
+    
+    for (String word : words) {
+        String tryLine = (line.length() == 0 ? word : line + " " + word);
+        if (fm.stringWidth(tryLine) <= maxWidth) {
+            line.setLength(0);  // Restablece la línea
+            line.append(tryLine);
+        } else {
+            g2.drawString(line.toString(), x, y);  // Dibuja la línea
+            y += fm.getHeight();  // Aumenta la altura de la línea
+            line.setLength(0);  // Restablece la línea
+            line.append(word);  // Inicia la nueva línea con la palabra actual
+        }
+    }
+    
+    if (line.length() > 0) {
+        g2.drawString(line.toString(), x, y);  // Dibuja la última línea
+    }
 
+    return y + fm.getHeight();  // Asegura que se agregue el espacio adecuado para la última línea
+}
+/** Dibuja 2 columnas (70/30) [Valor encima de la línea]. (Para DESCUENTO y PAGAR) */
+private static int drawTwoColsLine7030(Graphics2D g2, int x, int y, int w,
+                                       String leftLabel, String leftVal,
+                                       String rightLabel, String rightVal) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    // ----- ESTE ES EL CAMBIO: 70% para la columna 1 -----
+    int col1_width = (int)((w - 20) * 0.70);
+    int x1_end = x + col1_width;
+    // ---------------------------------------------------
+    int xr = x1_end + 20;
+    int x2_end = x + w;
+    int yy = y + fm.getAscent();
+
+    // Col 1 (70%)
+    int lw = fm.stringWidth(leftLabel) + 6;
+    g2.drawString(leftLabel, x, yy);
+    int value1X = x + lw + 3;
+    g2.drawLine(value1X, yy + 3, x1_end, yy + 3); // Dibuja línea
+    if (leftVal != null && !leftVal.isBlank()) {
+        g2.drawString(leftVal, value1X, yy); // Dibuja valor encima
+    }
+
+    // Col 2 (30%)
+    int rw = fm.stringWidth(rightLabel) + 6;
+    g2.drawString(rightLabel, xr, yy);
+    int value2X = xr + rw + 3;
+    g2.drawLine(value2X, yy + 3, x2_end, yy + 3); // Dibuja línea
+    if (rightVal != null && !rightVal.isBlank()) {
+        g2.drawString(rightVal, value2X, yy); // Dibuja valor encima
+    }
+
+    return y + 18;
+}
+/** Dibuja 2 columnas (35/65) [Valor encima de la línea]. (Para CODIGO y VESTIDO) */
+private static int drawTwoColsLine(Graphics2D g2, int x, int y, int w,
+                                       String leftLabel, String leftVal,
+                                       String rightLabel, String rightVal) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    // ----- ESTE ES EL CAMBIO: 35% para la columna 1 -----
+    int col1_width = (int)((w - 20) * 0.35);
+    int x1_end = x + col1_width;
+    // ---------------------------------------------------
+    int xr = x1_end + 20;
+    int x2_end = x + w;
+    int yy = y + fm.getAscent();
+
+    // Col 1 (35%)
+    int lw = fm.stringWidth(leftLabel) + 6;
+    g2.drawString(leftLabel, x, yy);
+    int value1X = x + lw + 3;
+    g2.drawLine(value1X, yy + 3, x1_end, yy + 3); // Dibuja línea
+    if (leftVal != null && !leftVal.isBlank()) {
+        g2.drawString(leftVal, value1X, yy); // Dibuja valor encima
+    }
+
+    // Col 2 (65%)
+    int rw = fm.stringWidth(rightLabel) + 6;
+    g2.drawString(rightLabel, xr, yy);
+    int value2X = xr + rw + 3;
+    g2.drawLine(value2X, yy + 3, x2_end, yy + 3); // Dibuja línea
+    if (rightVal != null && !rightVal.isBlank()) {
+        g2.drawString(rightVal, value2X, yy); // Dibuja valor encima
+    }
+
+    return y + 18;
+}
+/** Dibuja 3 columnas (33/33/33) [Valor encima de la línea]. */
+private static int drawThreeColsLine(Graphics2D g2, int x, int y, int w,
+                                     String leftLabel, String leftVal,
+                                     String midLabel, String midVal,
+                                     String rightLabel, String rightVal) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    int third = (w - 40) / 3;
+    int yy = y + fm.getAscent();
+
+    int x1_end = x + third;
+    int xm = x1_end + 20;
+    int x2_end = xm + third;
+    int xr = x2_end + 20;
+    int x3_end = x + w;
+
+    // Col 1
+    int lw = fm.stringWidth(leftLabel) + 6;
+    g2.drawString(leftLabel, x, yy);
+    int value1X = x + lw + 3;
+    g2.drawLine(value1X, yy + 3, x1_end, yy + 3); // Dibuja línea
+    if (leftVal != null && !leftVal.isBlank()) {
+        g2.drawString(leftVal, value1X, yy); // Dibuja valor encima
+    }
+
+    // Col 2
+    int mw = fm.stringWidth(midLabel) + 6;
+    g2.drawString(midLabel, xm, yy);
+    int value2X = xm + mw + 3;
+    g2.drawLine(value2X, yy + 3, x2_end, yy + 3); // Dibuja línea
+    if (midVal != null && !midVal.isBlank()) {
+        g2.drawString(midVal, value2X, yy); // Dibuja valor encima
+    }
+
+    // Col 3
+    int rw = fm.stringWidth(rightLabel) + 6;
+    g2.drawString(rightLabel, xr, yy);
+    int value3X = xr + rw + 3;
+    g2.drawLine(value3X, yy + 3, x3_end, yy + 3); // Dibuja línea
+    if (rightVal != null && !rightVal.isBlank()) {
+        g2.drawString(rightVal, value3X, yy); // Dibuja valor encima
+    }
+
+    return y + 18;
+}
+
+/** Dibuja: LABEL: [Valor encima de la línea]. Devuelve el nuevo y. */
+private static int drawFieldLine(Graphics2D g2, int x, int y, int w, String label, String value) {
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    int yy = y + fm.getAscent();
+    int lw = fm.stringWidth(label) + 6;
+    g2.drawString(label, x, yy);
+    
+    int valueX = x + lw + 3;
+    int x_end = x + w;
+
+    // 1. Dibuja la LÍNEA PRIMERO (continua)
+    g2.drawLine(valueX, yy + 3, x_end, yy + 3);
+
+    // 2. Dibuja el VALOR ENCIMA de la línea
+    if (value != null && !value.isBlank()) {
+        g2.drawString(value, valueX, yy);
+    }
+    return y + 18;
+}
+// ===== Tarjetas por artículo (¼ de hoja carta) =====
+private static class TarjetaVentaData {
+    String razonSocial;
+    String cliente;
+    String fechaEvento;
+    String fechaCompra;
+    String asesor;
+    String codigoArticulo;
+    String articulo;
+    String marca;
+    String modelo;
+    String talla;
+    String color;
+    String obsequios;
+    String observaciones;
+}
+
+private static class TarjetasVentaPrinter implements Printable {
+
+    private final java.util.List<TarjetaVentaData> tarjetas;
+
+    TarjetasVentaPrinter(java.util.List<TarjetaVentaData> tarjetas) {
+        this.tarjetas = tarjetas;
+    }
+
+    @Override
+    public int print(Graphics g, PageFormat pf, int pageIndex) throws PrinterException {
+        int tarjetasPorPagina = 4; // 2 x 2
+        int start = pageIndex * tarjetasPorPagina;
+        if (start >= tarjetas.size()) {
+            return NO_SUCH_PAGE;
+        }
+
+        Graphics2D g2 = (Graphics2D) g;
+        g2.setRenderingHint(
+                java.awt.RenderingHints.KEY_TEXT_ANTIALIASING,
+                java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON
+        );
+
+        double iw = pf.getImageableWidth();
+        double ih = pf.getImageableHeight();
+        double ix = pf.getImageableX();
+        double iy = pf.getImageableY();
+
+        double cardW = iw / 2.0;
+        double cardH = ih / 2.0;
+
+        for (int i = 0; i < tarjetasPorPagina; i++) {
+            int idx = start + i;
+            if (idx >= tarjetas.size()) break;
+
+            TarjetaVentaData t = tarjetas.get(idx);
+            int row = i / 2;
+            int col = i % 2;
+            double x = ix + col * cardW;
+            double y = iy + row * cardH;
+
+            dibujarTarjeta(g2, t, x, y, cardW, cardH);
+        }
+
+        return PAGE_EXISTS;
+    }
+
+    private void dibujarTarjeta(Graphics2D g2, TarjetaVentaData t,
+                                double x, double y, double w, double h) {
+
+        int ix = (int) Math.round(x);
+        int iy = (int) Math.round(y);
+        int iw = (int) Math.round(w);
+        int ih = (int) Math.round(h);
+
+        // Marco
+        g2.drawRect(ix, iy, iw, ih);
+
+        int margin = 10;
+        int lineH  = 12;
+
+        Font base = g2.getFont();
+        Font titleFont = base.deriveFont(Font.BOLD, 12f);
+        Font textFont  = base.deriveFont(10f);
+
+        // RAZÓN SOCIAL centrada
+        g2.setFont(titleFont);
+        String rs = safe(t.razonSocial);
+        java.awt.FontMetrics fm = g2.getFontMetrics();
+        int titleX = ix + (iw - fm.stringWidth(rs)) / 2;
+        int yCursor = iy + margin + fm.getAscent();
+        g2.drawString(rs, titleX, yCursor);
+
+        // Resto de texto
+        g2.setFont(textFont);
+        yCursor += lineH * 2;
+        int textX = ix + margin;
+
+        g2.drawString("Cliente: " + safe(t.cliente), textX, yCursor);          yCursor += lineH;
+        g2.drawString("Fecha Evento: " + safe(t.fechaEvento), textX, yCursor); yCursor += lineH;
+        g2.drawString("Fecha Compra: " + safe(t.fechaCompra), textX, yCursor); yCursor += lineH;
+        g2.drawString("Asesor: " + safe(t.asesor), textX, yCursor);            yCursor += lineH;
+
+        yCursor += lineH / 2;
+        g2.drawString("Código Artículo: " + safe(t.codigoArticulo), textX, yCursor); yCursor += lineH;
+        g2.drawString("Artículo: " + safe(t.articulo), textX, yCursor);               yCursor += lineH;
+        g2.drawString("Marca: " + safe(t.marca), textX, yCursor);                     yCursor += lineH;
+        g2.drawString("Modelo: " + safe(t.modelo), textX, yCursor);                   yCursor += lineH;
+        g2.drawString("Talla: " + safe(t.talla) + "   Color: " + safe(t.color),
+                      textX, yCursor);
+        yCursor += lineH * 2;
+
+        // Obsequios
+g2.drawString("Obsequios:", textX, yCursor);
+yCursor += lineH;
+String ob = safe(t.obsequios);
+if (!ob.isEmpty()) {
+    String[] lineas = ob.split("\\r?\\n");
+    for (String linea : lineas) {
+        if (linea.trim().isEmpty()) continue;
+        yCursor = drawWrappedSimple(
+                g2,
+                linea.trim(),
+                textX + 10,
+                yCursor,
+                iw - 2 * margin - 10
+        );
+    }
+} else {
+    yCursor += lineH;
+}
+
+
+        // Observaciones
+        yCursor += lineH / 2;
+        g2.drawString("Observaciones:", textX, yCursor);
+        yCursor += lineH;
+        String obs = safe(t.observaciones);
+        if (!obs.isEmpty()) {
+            yCursor = drawWrappedSimple(g2, obs, textX + 10, yCursor, iw - 2 * margin - 10);
+        }
+    }
+
+    private static String safe(String s) {
+        return (s == null) ? "" : s;
+    }
+
+    static void imprimir(Component parent, java.util.List<TarjetaVentaData> tarjetas) throws PrinterException {
+        if (tarjetas == null || tarjetas.isEmpty()) return;
+        PrinterJob job = PrinterJob.getPrinterJob();
+        job.setPrintable(new TarjetasVentaPrinter(tarjetas));
+        if (!job.printDialog()) return;
+        job.print();
+    }
+}
+// ¿Este artículo cuenta como "Vestido"?
+private boolean esArticuloVestido(String articulo) {
+    if (articulo == null) return false;
+    String s = articulo.toLowerCase();
+    return s.contains("vestido");
+}
+
+private java.util.List<TarjetaVentaData> construirTarjetasVenta(
+        EmpresaInfo emp,
+        String clienteNombre,
+        LocalDate fechaEvento,
+        LocalDate fechaCompra,
+        String asesorNombre,
+        java.util.List<NotaDetalle> detsPrint,
+        java.util.List<String> obsequiosCodigos,
+        String observaciones) {
+
+    java.util.List<TarjetaVentaData> tarjetas = new java.util.ArrayList<>();
+
+    String razon = (emp.razonSocial != null && !emp.razonSocial.isBlank())
+            ? emp.razonSocial
+            : (emp.nombreFiscal != null ? emp.nombreFiscal : "");
+
+    String fechaEventoStr = (fechaEvento == null) ? "" : fechaEvento.format(MX);
+    String fechaCompraStr = (fechaCompra == null) ? "" : fechaCompra.format(MX);
+
+    // ======================== O B S E Q U I O S ========================
+    String obsequiosTexto = "";
+    if (obsequiosCodigos != null && !obsequiosCodigos.isEmpty()) {
+        // normalizar códigos
+        java.util.List<String> codigos = new java.util.ArrayList<>();
+        for (String raw : obsequiosCodigos) {
+            if (raw == null) continue;
+            String c = raw.trim();
+            if (!c.isEmpty()) codigos.add(c);
+        }
+
+        if (!codigos.isEmpty()) {
+            java.util.Map<String,String> descPorCodigo = new java.util.HashMap<>();
+
+            StringBuilder sql = new StringBuilder(
+                    "SELECT codigo_articulo, articulo, marca, modelo, talla, color " +
+                    "FROM InventarioObsequios WHERE codigo_articulo IN ("
+            );
+            for (int i = 0; i < codigos.size(); i++) {
+                if (i > 0) sql.append(',');
+                sql.append('?');
+            }
+            sql.append(')');
+
+            try (Connection cn = Conexion.Conecta.getConnection();
+                 PreparedStatement ps = cn.prepareStatement(sql.toString())) {
+
+                for (int i = 0; i < codigos.size(); i++) {
+                    ps.setString(i + 1, codigos.get(i));
+                }
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        String c      = rs.getString("codigo_articulo");
+                        String nombre = n(rs.getString("articulo"));
+                        String marca  = n(rs.getString("marca"));
+                        String modelo = n(rs.getString("modelo"));
+                        String talla  = n(rs.getString("talla"));
+                        String color  = n(rs.getString("color"));
+
+                        StringBuilder desc = new StringBuilder();
+                        if (!nombre.isBlank()) {
+                            desc.append(nombre);
+                        }
+
+                        // Marca / modelo opcional entre paréntesis
+                        String mm = "";
+                        if (!marca.isBlank()) mm = marca;
+                        if (!modelo.isBlank()) {
+                            if (!mm.isEmpty()) mm += " ";
+                            mm += modelo;
+                        }
+                        if (!mm.isEmpty()) {
+                            if (desc.length() > 0) desc.append(" ");
+                            desc.append('(').append(mm).append(')');
+                        }
+
+                        if (!talla.isBlank()) {
+                            if (desc.length() > 0) desc.append(" ");
+                            desc.append("Talla ").append(talla);
+                        }
+                        if (!color.isBlank()) {
+                            if (desc.length() > 0) desc.append(" ");
+                            desc.append("Color ").append(color);
+                        }
+
+                        descPorCodigo.put(c, desc.toString());
+                    }
+                }
+            } catch (SQLException ex) {
+                // si truena, al menos se imprimen los códigos solos
+            }
+
+            StringBuilder sb = new StringBuilder();
+            for (String c : codigos) {
+                if (sb.length() > 0) sb.append('\n');
+                String desc = descPorCodigo.get(c);
+                if (desc == null || desc.isBlank()) {
+                    sb.append(c);
+                } else {
+                    sb.append(c).append(" - ").append(desc);
+                }
+            }
+            obsequiosTexto = sb.toString();
+        }
+    }
+    // ==================== FIN OBSEQUIOS =====================
+
+    String obs = (observaciones == null) ? "" : observaciones;
+
+    for (NotaDetalle d : detsPrint) {
+        String art = d.getArticulo();
+        int repeticiones = esArticuloVestido(art) ? 2 : 1;   // 2 tarjetas si es Vestido, 1 si no
+
+        for (int i = 0; i < repeticiones; i++) {
+            TarjetaVentaData t = new TarjetaVentaData();
+            t.razonSocial    = razon;
+            t.cliente        = clienteNombre == null ? "" : clienteNombre;
+            t.fechaEvento    = fechaEventoStr;
+            t.fechaCompra    = fechaCompraStr;
+            t.asesor         = asesorNombre == null ? "" : asesorNombre;
+            t.codigoArticulo = d.getCodigoArticulo() == null ? "" : d.getCodigoArticulo();
+            t.articulo       = art == null ? "" : art;
+            t.marca          = d.getMarca() == null ? "" : d.getMarca();
+            t.modelo         = d.getModelo() == null ? "" : d.getModelo();
+            t.talla          = d.getTalla() == null ? "" : d.getTalla();
+            t.color          = d.getColor() == null ? "" : d.getColor();
+            t.obsequios      = obsequiosTexto;   // aquí ya va "COD - DESC" por línea
+            t.observaciones  = obs;
+            tarjetas.add(t);
+        }
+    }
+
+    return tarjetas;
+}
+
+private void imprimirTarjetasVenta(
+        EmpresaInfo emp,
+        String clienteNombre,
+        LocalDate fechaEvento,
+        LocalDate fechaCompra,
+        String asesorNombre,
+        java.util.List<NotaDetalle> detsPrint,
+        java.util.List<String> obsequiosCodigos,
+        String observaciones) {
+
+    java.util.List<TarjetaVentaData> tarjetas = construirTarjetasVenta(
+            emp, clienteNombre, fechaEvento, fechaCompra,
+            asesorNombre, detsPrint, obsequiosCodigos, observaciones
+    );
+
+    if (tarjetas.isEmpty()) return;
+
+    try {
+        TarjetasVentaPrinter.imprimir(this, tarjetas);
+    } catch (PrinterException ex) {
+        JOptionPane.showMessageDialog(this,
+                "Las tarjetas no se pudieron imprimir: " + ex.getMessage(),
+                "Impresión de tarjetas", JOptionPane.WARNING_MESSAGE);
+    }
+}
 }

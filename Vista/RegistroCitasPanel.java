@@ -10,6 +10,7 @@ import javax.swing.text.*;
 import java.awt.*;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
@@ -205,12 +206,32 @@ public RegistroCitasPanel() {
             );
 
             LocalDate ev = clienteActual.getFechaEvento();
-            txtFechaEvento.setText(ev == null ? "" : ev.format(MX_FECHA));
+    txtFechaEvento.setText(ev == null ? "" : ev.format(MX_FECHA));
 
-            // Prefill fechas de pruebas / entrega si ya existen
-            setDateToField(txtFechaPrueba1, clienteActual.getFechaPrueba1());
-            setDateToField(txtFechaPrueba2, clienteActual.getFechaPrueba2());
-            setDateToField(txtFechaEntrega, clienteActual.getFechaEntrega());
+    // ========= CITA 1 =========
+    setDateToField(txtFechaCita1, clienteActual.getFechaCita1());
+    txtHoraCita1.setText(horaSafe(clienteActual.getHoraCita1()));
+    seleccionarEnCombo(cbAsesora1, clienteActual.getAsesoraCita1());
+
+    // ========= CITA 2 =========
+    setDateToField(txtFechaCita2, clienteActual.getFechaCita2());
+    txtHoraCita2.setText(horaSafe(clienteActual.getHoraCita2()));
+    seleccionarEnCombo(cbAsesora2, clienteActual.getAsesoraCita2());
+
+    // ========= PRUEBA 1 =========
+    setDateToField(txtFechaPrueba1, clienteActual.getFechaPrueba1());
+    txtHoraPrueba1.setText(horaSafe(clienteActual.getHoraPrueba1()));
+    seleccionarEnCombo(cbModista1, clienteActual.getModistaPrueba1());
+
+    // ========= PRUEBA 2 =========
+    setDateToField(txtFechaPrueba2, clienteActual.getFechaPrueba2());
+    txtHoraPrueba2.setText(horaSafe(clienteActual.getHoraPrueba2()));
+    seleccionarEnCombo(cbModista2, clienteActual.getModistaPrueba2());
+
+    // ========= ENTREGA =========
+    setDateToField(txtFechaEntrega, clienteActual.getFechaEntrega());
+    txtHoraEntrega.setText(horaSafe(clienteActual.getHoraEntrega()));
+    seleccionarEnCombo(cbAsesoraEntrega, clienteActual.getAsesoraEntrega());
 
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this,
@@ -307,12 +328,20 @@ private void cargarPersonalCitas() {
             LocalDate fp2  = parseFechaField(txtFechaPrueba2);
             LocalDate fEnt = parseFechaField(txtFechaEntrega);
 
-            // Horas
+            // Horas (validan formato HH:mm y devuelven null si está vacío)
             String hc1   = horaFieldToString(txtHoraCita1);
             String hc2   = horaFieldToString(txtHoraCita2);
             String hp1   = horaFieldToString(txtHoraPrueba1);
             String hp2   = horaFieldToString(txtHoraPrueba2);
             String hEnt  = horaFieldToString(txtHoraEntrega);
+
+            // ======= VALIDACIÓN: no permitir horas pasadas para HOY =======
+            validarHoraNoPasada(fc1,  hc1,  "1ª cita");
+            validarHoraNoPasada(fc2,  hc2,  "2ª cita");
+            validarHoraNoPasada(fp1,  hp1,  "prueba 1");
+            validarHoraNoPasada(fp2,  hp2,  "prueba 2");
+            validarHoraNoPasada(fEnt, hEnt, "entrega");
+            // =============================================================
 
             // Asesoras / modistas (texto)
             String ases1   = comboVal(cbAsesora1);
@@ -349,6 +378,7 @@ private void cargarPersonalCitas() {
             }
 
         } catch (IllegalArgumentException ex) {
+            // Aquí caen tanto fechas/horas inválidas como la validación de hora pasada
             JOptionPane.showMessageDialog(this,
                     ex.getMessage(),
                     "Validación", JOptionPane.WARNING_MESSAGE);
@@ -537,5 +567,45 @@ public void setVisible(boolean aFlag) {
         cargarPersonalCitas();
     }
 }
+    /**
+     * Valida que una cita NO quede en una hora pasada del día de hoy.
+     * - Si la fecha es distinta de hoy, no se valida (se permite pasado / futuro).
+     * - Si fecha u hora son null, no se valida.
+     */
+    private void validarHoraNoPasada(LocalDate fecha, String hora, String etiquetaCampo) {
+        if (fecha == null || hora == null) return;
 
+        LocalDate hoy = LocalDate.now();
+        if (!fecha.isEqual(hoy)) {
+            // Solo nos interesa el caso "hoy con hora en el pasado"
+            return;
+        }
+
+        LocalTime horaCita = LocalTime.parse(hora, MX_HORA);
+
+        // quitamos segundos/nanos para que 16:00:00.001 no cause tonterías
+        LocalTime ahora = LocalTime.now().withSecond(0).withNano(0);
+
+        if (horaCita.isBefore(ahora)) {
+            throw new IllegalArgumentException(
+                    "La " + etiquetaCampo + " no puede ser en una hora anterior a la actual."
+            );
+        }
+    }
+    private String horaSafe(String h) {
+    if (h == null) return "";
+    h = h.trim();
+    // Por si en BD quedó "HH:mm:ss"
+    if (h.length() >= 5) return h.substring(0, 5);
+    return h;
+}
+
+private void seleccionarEnCombo(JComboBox<String> cb, String valor) {
+    if (valor == null || valor.isBlank()) {
+        cb.setSelectedIndex(0);
+        return;
+    }
+    cb.setSelectedItem(valor);
+}
+        
 }

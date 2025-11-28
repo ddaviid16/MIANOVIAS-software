@@ -42,59 +42,62 @@
             /** Busca una nota por folio. Devuelve null si no existe.
          *  Se usa para la Hoja de Entrega. */
         public Nota buscarNotaPorFolio(String folio) throws SQLException {
-            String sql = "SELECT numero_nota, fecha_registro, telefono, asesor, " +
-                        "tipo, total, saldo, status, folio " +
-                        "FROM Notas WHERE folio = ? " +
-                        "ORDER BY fecha_registro DESC, numero_nota DESC";
-            try (Connection cn = Conecta.getConnection();
-                PreparedStatement ps = cn.prepareStatement(sql)) {
+    String sql = "SELECT numero_nota, fecha_registro, telefono, asesor, " +
+                 "tipo, total, saldo, status, folio " +
+                 "FROM Notas WHERE folio = ? " +
+                 "ORDER BY fecha_registro DESC, numero_nota DESC";
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
 
-                ps.setString(1, folio);
+        ps.setString(1, folio);
 
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (!rs.next()) return null;
+        try (ResultSet rs = ps.executeQuery()) {
+            if (!rs.next()) return null;
 
-                    Nota n = new Nota();
-                    n.setNumeroNota(rs.getInt("numero_nota"));
+            Nota n = new Nota();
+            n.setNumeroNota(rs.getInt("numero_nota"));
 
-                    Timestamp ts = rs.getTimestamp("fecha_registro");
-                    if (ts != null) {
-                        n.setFechaRegistro(ts.toLocalDateTime());
-                    }
-
-                    n.setTelefono(rs.getString("telefono"));
-
-                    int asesor = rs.getInt("asesor");
-                    if (!rs.wasNull()) {
-                        n.setAsesor(asesor);
-                    }
-
-                    try {
-                        n.setTotal(
-                                rs.getBigDecimal("total") == null
-                                        ? null
-                                        : rs.getBigDecimal("total").doubleValue()
-                        );
-                    } catch (Throwable t) {
-                        n.setTotal(rs.getDouble("total"));
-                    }
-
-                    try {
-                        n.setSaldo(
-                                rs.getBigDecimal("saldo") == null
-                                        ? null
-                                        : rs.getBigDecimal("saldo").doubleValue()
-                        );
-                    } catch (Throwable t) {
-                        n.setSaldo(rs.getDouble("saldo"));
-                    }
-
-                    n.setStatus(rs.getString("status"));
-                    n.setFolio(rs.getString("folio"));
-                    return n;
-                }
+            Timestamp ts = rs.getTimestamp("fecha_registro");
+            if (ts != null) {
+                n.setFechaRegistro(ts.toLocalDateTime());
             }
+
+            n.setTelefono(rs.getString("telefono"));
+
+            int asesor = rs.getInt("asesor");
+            if (!rs.wasNull()) {
+                n.setAsesor(asesor);
+            }
+
+            // FALTABA ESTO:
+            n.setTipo(rs.getString("tipo"));
+
+            try {
+                n.setTotal(
+                        rs.getBigDecimal("total") == null
+                                ? null
+                                : rs.getBigDecimal("total").doubleValue()
+                );
+            } catch (Throwable t) {
+                n.setTotal(rs.getDouble("total"));
+            }
+
+            try {
+                n.setSaldo(
+                        rs.getBigDecimal("saldo") == null
+                                ? null
+                                : rs.getBigDecimal("saldo").doubleValue()
+                );
+            } catch (Throwable t) {
+                n.setSaldo(rs.getDouble("saldo"));
+            }
+
+            n.setStatus(rs.getString("status"));
+            n.setFolio(rs.getString("folio"));
+            return n;
         }
+    }
+}
             /** Notas liquidadas (saldo ~ 0) de un teléfono. */
         public List<Nota> listarNotasLiquidadasPorTelefono(String telefono) throws SQLException {
             String sql = "SELECT numero_nota, fecha_registro, telefono, asesor, " +
@@ -615,6 +618,113 @@ public void registrarNotaMigracion(String telefono, java.time.LocalDate fechaSal
                 ps.setInt(4, numeroExistente);
                 ps.executeUpdate();
             }
+        }
+    }
+}
+// En NotasDAO
+
+/** Devuelve la fecha_evento de la nota (la mínima de los renglones activos). */
+public LocalDate obtenerFechaEventoDeNota(int numeroNota) throws SQLException {
+    String sql =
+        "SELECT MIN(fecha_evento) AS f " +
+        "FROM Nota_Detalle " +
+        "WHERE numero_nota = ? AND COALESCE(status,'A') = 'A'";
+
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setInt(1, numeroNota);
+
+        try (ResultSet rs = ps.executeQuery()) {
+            if (!rs.next()) return null;
+            Date f = rs.getDate("f");
+            return (f == null ? null : f.toLocalDate());
+        }
+    }
+}
+// En NotasDAO
+
+public String obtenerObsequiosDeNota(int numeroNota) throws SQLException {
+    String sql =
+        "SELECT obsequio1_cod, obsequio1, " +
+        "       obsequio2_cod, obsequio2, " +
+        "       obsequio3_cod, obsequio3, " +
+        "       obsequio4_cod, obsequio4, " +
+        "       obsequio5_cod, obsequio5 " +
+        "FROM obsequios " +
+        "WHERE numero_nota = ? AND status = 'A' " +
+        "ORDER BY fecha_operacion DESC " +
+        "LIMIT 1";
+
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setInt(1, numeroNota);
+
+        try (ResultSet rs = ps.executeQuery()) {
+            if (!rs.next()) return "";
+
+            StringBuilder sb = new StringBuilder();
+
+            agregarLineaObsequio(sb, rs.getString("obsequio1_cod"), rs.getString("obsequio1"));
+            agregarLineaObsequio(sb, rs.getString("obsequio2_cod"), rs.getString("obsequio2"));
+            agregarLineaObsequio(sb, rs.getString("obsequio3_cod"), rs.getString("obsequio3"));
+            agregarLineaObsequio(sb, rs.getString("obsequio4_cod"), rs.getString("obsequio4"));
+            agregarLineaObsequio(sb, rs.getString("obsequio5_cod"), rs.getString("obsequio5"));
+
+            return sb.toString().trim();
+        }
+    }
+}
+
+private void agregarLineaObsequio(StringBuilder sb, String cod, String desc) {
+    boolean codOk  = cod  != null && !cod.isBlank();
+    boolean descOk = desc != null && !desc.isBlank();
+
+    if (!codOk && !descOk) return;  // nada que agregar
+
+    if (sb.length() > 0) sb.append("\n"); // siguiente línea
+
+    if (codOk) {
+        sb.append(cod.trim());
+        if (descOk) {
+            sb.append(" - ").append(desc.trim());
+        }
+    } else {
+        sb.append(desc.trim());
+    }
+}
+
+// En NotasDAO
+
+/** Regresa las observaciones de la nota (tabla notas_observaciones). */
+public String obtenerObservacionesDeNota(int numeroNota) throws SQLException {
+    String sql = "SELECT observaciones FROM notas_observaciones WHERE numero_nota = ?";
+
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setInt(1, numeroNota);
+
+        try (ResultSet rs = ps.executeQuery()) {
+            if (!rs.next()) return "";
+            String obs = rs.getString("observaciones");
+            return (obs == null ? "" : obs);
+        }
+    }
+}
+public String obtenerNombreAsesor(int idAsesor) throws SQLException {
+    String sql = "SELECT nombre_completo " +      // AJUSTA ESTE NOMBRE
+                 "FROM asesor " +               // AJUSTA EL NOMBRE DE LA TABLA
+                 "WHERE numero_empleado = ?";           // AJUSTA EL NOMBRE DEL CAMPO
+
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setInt(1, idAsesor);
+        try (ResultSet rs = ps.executeQuery()) {
+            if (!rs.next()) return "";
+            return rs.getString(1);
         }
     }
 }

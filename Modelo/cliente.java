@@ -3,6 +3,7 @@ package Modelo;
 public class cliente {
     private String telefono1;          // PK
     private String telefono2;
+    private String parentescoTel2;    // puede ser null
     private String nombre;
     private String apellidoPaterno;
     private String apellidoMaterno;
@@ -24,6 +25,10 @@ public class cliente {
     public void setTelefono1(String telefono1) { this.telefono1 = telefono1; }
     public String getTelefono2() { return telefono2; }
     public void setTelefono2(String telefono2) { this.telefono2 = telefono2; }
+    public String getParentescoTel2() { return parentescoTel2; }
+    public void setParentescoTel2(String parentescoTel2) {
+    this.parentescoTel2 = parentescoTel2;
+}
     public String getNombre() { return nombre; }
     public void setNombre(String nombre) { this.nombre = nombre; }
     public String getApellidoPaterno() { return apellidoPaterno; }

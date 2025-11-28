@@ -11,7 +11,7 @@ public class ClientesSubmenuPanel extends JPanel {
     // IDs de tarjetas reales dentro del CardLayout
     public static final String CARD_CLIENTES_REGISTRO = "Registro de Clientes";
     public static final String CARD_CLIENTES_EDITAR   = "Editar información de Cliente";
-    public static final String CARD_CLIENTES_CITAS    = "Registro de Citas";
+    public static final String CARD_CLIENTES_CITAS    = "Agenda y Registro de Citas";
     public static final String CARD_CLIENTES_HIST     = "Registrar historial de cliente";
 
     public ClientesSubmenuPanel(Consumer<String> navigate) {
@@ -23,7 +23,7 @@ public class ClientesSubmenuPanel extends JPanel {
 
         JButton btRegistro  = botonGrande("Registro de clientes");
         JButton btEditar    = botonGrande("Editar información de Cliente");
-        JButton btCitas     = botonGrande("Registro de Citas");
+        JButton btCitas     = botonGrande("Agenda y Registro de Citas");
         JButton btHistorial = botonGrande("Registrar historial de cliente");
 
         btRegistro.addActionListener(_e  -> navigate.accept(CARD_CLIENTES_REGISTRO));

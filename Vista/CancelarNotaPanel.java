@@ -6,6 +6,8 @@ import Controlador.clienteDAO;
 import Modelo.ClienteResumen;
 import Modelo.Nota;
 import Modelo.NotaDetalle;
+import Modelo.SesionUsuario;
+
 
 import Utilidades.TelefonosUI;
 
@@ -153,40 +155,72 @@ public class CancelarNotaPanel extends JPanel {
         }
     }
 
-    private void cancelarNota(ActionEvent ev) {
-        Nota sel = (Nota) cbNotas.getSelectedItem();
-        if (sel == null) { JOptionPane.showMessageDialog(this, "Selecciona una nota."); return; }
-
-        // 1) Confirmación clásica
-        Object[] ops = {"SI","NO"};
-        int r = JOptionPane.showOptionDialog(this,
-                "¿Cancelar la nota "+sel.getNumeroNota()+" ("+(sel.getFolio()==null?"s/folio":sel.getFolio())+")?",
-                "Confirmación", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, ops, ops[0]);
-        if (r != JOptionPane.YES_OPTION) return;
-
-        // 2) Resumen y “¿Es la correcta?”
-        String resumen = construirResumen(sel);
-        r = JOptionPane.showOptionDialog(this,
-                "¿Esta es la nota correcta?\n\n" + resumen,
-                "Verificación", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null, ops, ops[0]);
-        if (r != JOptionPane.YES_OPTION) return;
-
-        // 3) Guardar
-        try {
-            CancelacionService svc = new CancelacionService();
-            // Si tienes asesor logueado, pásalo; si no, manda null:
-            CancelacionService.ResultadoCancelacion res =
-                    svc.cancelarNota(sel.getNumeroNota(), null, txtMotivo.getText());
-
-            JOptionPane.showMessageDialog(this, "Nota cancelada.\nFolio: "+
-                    (res.folio==null? "s/folio" : res.folio) + "  ["+res.tipo+"]");
-
-            // refrescar UI
-            cargarDetalle();
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "Error al cancelar: "+e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-        }
+private void cancelarNota(ActionEvent ev) {
+    Nota sel = (Nota) cbNotas.getSelectedItem();
+    if (sel == null) {
+        JOptionPane.showMessageDialog(this, "Selecciona una nota.");
+        return;
     }
+
+    // 0) VALIDAR SESIÓN Y PERMISO
+    Integer numEmp = SesionUsuario.getNumeroEmpleadoActual();
+    if (numEmp == null) {
+        JOptionPane.showMessageDialog(this,
+                "No hay ningún empleado con sesión activa.\n" +
+                "Inicia sesión para poder cancelar notas.",
+                "Sesión requerida", JOptionPane.WARNING_MESSAGE);
+        return;
+    }
+    if (!SesionUsuario.puedeCancelarNotas()) {
+        JOptionPane.showMessageDialog(this,
+                "El empleado actual NO tiene permiso para cancelar notas.",
+                "Permiso denegado", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+
+    // 1) Confirmación clásica
+    Object[] ops = {"SI","NO"};
+    int r = JOptionPane.showOptionDialog(this,
+            "¿Cancelar la nota " + sel.getNumeroNota() + " (" +
+                    (sel.getFolio()==null ? "s/folio" : sel.getFolio()) + ")?",
+            "Confirmación",
+            JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
+            null, ops, ops[0]);
+    if (r != JOptionPane.YES_OPTION) return;
+
+    // 2) Resumen y “¿Es la correcta?”
+    String resumen = construirResumen(sel);
+    r = JOptionPane.showOptionDialog(this,
+            "¿Esta es la nota correcta?\n\n" + resumen,
+            "Verificación",
+            JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE,
+            null, ops, ops[0]);
+    if (r != JOptionPane.YES_OPTION) return;
+
+    // 3) Guardar
+    try {
+        CancelacionService svc = new CancelacionService();
+
+        // AHORA sí pasamos el asesor que está logueado:
+        CancelacionService.ResultadoCancelacion res =
+                svc.cancelarNota(sel.getNumeroNota(), numEmp, txtMotivo.getText());
+
+        JOptionPane.showMessageDialog(this,
+                "Nota cancelada.\nFolio: " +
+                (res.folio == null ? "s/folio" : res.folio) +
+                "  [" + res.tipo + "]");
+
+        // 4) Limpiar todo y dejar listo para la siguiente
+        txtTel.setText("");   // esto dispara cargarClienteYNotas() y luego limpiar()
+        limpiar();
+        txtTel.requestFocus();
+
+    } catch (SQLException e) {
+        JOptionPane.showMessageDialog(this,
+                "Error al cancelar: " + e.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
 
     // ===== helpers
 

@@ -114,6 +114,10 @@ public class VentaContadoPanel extends JPanel {
 
     private java.util.List<String> obsequiosSel = new java.util.ArrayList<>();
     private JLabel lblObsequios;
+        // ===== Usuario en sesión (cajera) =====
+    private int cajeraCodigo;
+    private String cajeraNombre;
+
 
     // ========= Campos cabecera
     private JTextField txtTelefono, txtTelefono2, txtNombreCompleto;
@@ -149,6 +153,10 @@ public class VentaContadoPanel extends JPanel {
 
 
     private double clamp0a100(double v){ if (v<0) return 0; if (v>100) return 100; return v; }
+    public void setCajeraActual(int codigoEmpleado, String nombreCompleto) {
+        this.cajeraCodigo = codigoEmpleado;
+        this.cajeraNombre = nombreCompleto;
+    }
 
     public VentaContadoPanel(Navigator navigator) {
         this.nav = navigator;
@@ -1815,17 +1823,17 @@ if (p.getDevolucion() != null && p.getDevolucion() > 0 &&
             guardarPedidosDeCarrito(numeroNota, fechaEventoDefault);
 
             // ======= 3) DETERMINAR FECHAS EFECTIVAS PARA MOSTRAR =======
-            LocalDate eventoCliente  = parseFecha(txtFechaEvento.getText());
-            LocalDate entregaCliente = parseFecha(txtFechaEntrega.getText());
+LocalDate eventoCliente  = parseFecha(txtFechaEvento.getText());
+LocalDate entregaCliente = parseFecha(txtFechaEntrega.getText());
 
-            LocalDate eventoDetalle = null;
-            for (NotaDetalle d : dets) {
-                if (d.getFechaEvento() != null) { eventoDetalle = d.getFechaEvento(); break; }
-            }
-            LocalDate eventoMostrar  = (eventoDetalle != null) ? eventoDetalle : eventoCliente;
-            LocalDate entregaMostrar = (fechaEntregaDefault != null) ? fechaEntregaDefault : entregaCliente;
+LocalDate eventoDetalle = null;
+for (NotaDetalle d : dets) {
+    if (d.getFechaEvento() != null) { eventoDetalle = d.getFechaEvento(); break; }
+}
+LocalDate eventoMostrar  = (eventoDetalle != null) ? eventoDetalle : eventoCliente;
+LocalDate entregaMostrar = (fechaEntregaDefault != null) ? fechaEntregaDefault : entregaCliente;
 
-            // ======= 4) IMPRIMIR CON FOLIO Y DATOS DEL CLIENTE =======
+// ======= 4) IMPRIMIR CON FOLIO Y DATOS DEL CLIENTE =======
 EmpresaInfo emp = cargarEmpresaInfo();
 
 String clienteNombre = txtNombreCompleto.getText().trim();
@@ -1835,25 +1843,10 @@ Printable prn = construirPrintableEmpresarial(
         emp, n, detsPrint, p,
         entregaMostrar, eventoMostrar,
         sel.getNombreCompleto(), folioImpresion,
-        clienteNombre, tel2);
+        clienteNombre, tel2, cajeraCodigo, cajeraNombre
+);
 
-// === 4.1) MEMO ===
-// si el usuario no abrió el editor antes, muéstrale la plantilla una vez
-if (memoEditable == null) editarMemoPrevia(true);
-
-// Texto CRUDO a guardar (puede incluir {tokens})
-String memoCrudoAGuardar = (memoEditable == null || memoEditable.isBlank())
-        ? obtenerCondicionesPredeterminadas()
-        : memoEditable;
-
-// Guardar/actualizar en BD
-try {
-    new NotasMemoDAO().upsert(numeroNota, memoCrudoAGuardar);
-} catch (SQLException ex) {
-    JOptionPane.showMessageDialog(this,
-        "No se pudo guardar el MEMO de condiciones: " + ex.getMessage(),
-        "Aviso", JOptionPane.WARNING_MESSAGE);
-}
+// === 4.0) Guardar OBSERVACIONES (van en el ticket, siempre) ===
 try {
     if (observacionesTexto != null && !observacionesTexto.isBlank()) {
         new Controlador.NotasObservacionesDAO().upsert(numeroNota, observacionesTexto);
@@ -1864,36 +1857,85 @@ try {
         "Aviso", JOptionPane.WARNING_MESSAGE);
 }
 
+// ¿Hay al menos un artículo tipo "Vestido" en la venta (incluye PEDIDOS)?
+boolean imprimirCondiciones = detsPrint.stream()
+        .anyMatch(d -> esArticuloVestido(d.getArticulo()));
 
+// Por defecto: solo ticket
+Printable printablePrincipal = prn;
 
-// Render final con datos reales
-Map<String,String> varsFinal = buildMemoVars(
-        emp, n, dets, entregaMostrar, eventoMostrar, sel.getNombreCompleto());
+if (imprimirCondiciones) {
+    // === 4.1) MEMO / CONDICIONES ===
+    if (memoEditable == null) {
+        // Fuerza a que el usuario vea/edite el texto al menos una vez
+        editarMemoPrevia(true);
+    }
 
-// Pasamos 'varsFinal' (el mapa con los datos) en lugar de 'memoRender' (el texto renderizado)
-Printable condiciones = construirPrintableCondiciones(
-        emp,
-        n,
-        dets,
-        varsFinal, // <-- ESTE ES EL CAMBIO IMPORTANTE
-        folioImpresion,
-        sel.getNombreCompleto(),
-        eventoMostrar,
-        entregaMostrar,         // la usaremos como "estará en tienda"
-        clienteNombre
-);
-Printable combinado = combinarEnDosPaginas(prn, condiciones);
+    // Texto CRUDO a guardar (puede incluir {tokens})
+    String memoCrudoAGuardar = (memoEditable == null || memoEditable.isBlank())
+            ? obtenerCondicionesPredeterminadas()
+            : memoEditable;
 
-// === 4.2) IMPRIMIR (UNA sola vez)
+    // Guardar/actualizar el texto de condiciones SOLO si habrá hoja de condiciones
+    try {
+        new NotasMemoDAO().upsert(numeroNota, memoCrudoAGuardar);
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this,
+            "No se pudo guardar el MEMO de condiciones: " + ex.getMessage(),
+            "Aviso", JOptionPane.WARNING_MESSAGE);
+    }
+
+    // Render final con datos reales para la hoja de condiciones
+    java.util.Map<String,String> varsFinal = buildMemoVars(
+            emp, n, dets, entregaMostrar, eventoMostrar, sel.getNombreCompleto());
+
+    Printable condiciones = construirPrintableCondiciones(
+            emp,
+            n,
+            dets,
+            varsFinal,
+            folioImpresion,
+            sel.getNombreCompleto(),
+            eventoMostrar,
+            entregaMostrar,
+            clienteNombre
+    );
+
+    // Ticket + hoja de condiciones en 2 páginas
+    printablePrincipal = combinarEnDosPaginas(prn, condiciones);
+}
+
+// >>> SNAPSHOT PARA TARJETAS (antes de limpiar UI)
+java.util.List<String> obsequiosTarjetas = new java.util.ArrayList<>(obsequiosSel);
+String obsTarjetas = observacionesTexto;
+LocalDate fechaCompraTarjetas = LocalDate.now();
+
+// === 4.2) IMPRIMIR (ticket +/- condiciones, luego tarjetas) ===
 imprimirYConfirmarAsync(
-    combinado,
+    printablePrincipal,   // <- aquí ahora va ticket solo o ticket+condiciones
+    () -> {
+        // Primero las tarjetas por artículo
+        imprimirTarjetasVenta(
+                emp,
+                clienteNombre,
+                eventoMostrar,
+                fechaCompraTarjetas,
+                sel.getNombreCompleto(),
+                detsPrint,
+                obsequiosTarjetas,
+                obsTarjetas
+        );
+
+        JOptionPane.showMessageDialog(this,
+                "Venta registrada e impresa.\nNota No: " + numeroNota + "   Folio: " + folioImpresion);
+    },
     () -> JOptionPane.showMessageDialog(this,
-            "Venta registrada e impresa.\nNota No: " + numeroNota + "   Folio: " + folioImpresion),
-    () -> JOptionPane.showMessageDialog(this,
-            "Venta registrada pero la impresión no se confirmó.\n" +
+            "Venta registrada pero la impresión del ticket no se confirmó.\n" +
             "Puedes reimprimir desde el módulo de notas (Folio: " + folioImpresion + ").",
             "Aviso", JOptionPane.WARNING_MESSAGE)
 );
+
+
 // Notificar a Corte de Caja que hubo una operación completada
 try {
     Utilidades.EventBus.notificarOperacionFinalizada();
@@ -2172,7 +2214,8 @@ private Printable construirPrintableEmpresarial(
         EmpresaInfo emp, Nota n, List<NotaDetalle> dets, PagoFormas p,
         LocalDate fechaEntregaMostrar, LocalDate fechaEventoMostrar,
         String asesorNombre, String folioTxt,
-        String clienteNombreFallback, String tel2Fallback) {
+        String clienteNombreFallback, String tel2Fallback,
+        int cajeraCodigo, String cajeraNombre) {
 
     // ===== datos base ya calculados (efectivamente finales) =====
     final String tel1      = (n.getTelefono() == null) ? "" : n.getTelefono();
@@ -2228,6 +2271,8 @@ private Printable construirPrintableEmpresarial(
     final String medidasFmt = _med.toString();
 
     final String folio = (folioTxt == null || folioTxt.isBlank()) ? "—" : folioTxt;
+        final String fCajeraCodigo = (cajeraCodigo == 0 ? "" : String.valueOf(cajeraCodigo).trim());
+    final String fCajeraNombre = (cajeraNombre == null ? "" : cajeraNombre.trim());
 
     // Congelar datos cliente (evita "final or effectively final")
     final String fCliNombre  = cliNombre;
@@ -2328,7 +2373,7 @@ private Printable construirPrintableEmpresarial(
 
             // Título
             g2.setFont(fTitle);
-            center(g2, "NOTA DE VENTA", x, w, afterTail + 14);
+            center(g2, "NOTA DE VENTA CONTADO", x, w, afterTail + 14);
             y = afterTail + 32;
             usedHeader = Math.max(yy - y, headerH) + 6; // altura ocupada por logo+empresa
             afterTail = y + usedHeader;
@@ -2478,25 +2523,13 @@ if (obsequiosPrint != null && !obsequiosPrint.isEmpty()) {
     // Columnas: Código | Obsequio | Talla | Color
     final int gap2      = 16;
     final int colCodW   = 70;
-    final int colTalW   = 70;
-    final int colMarW   = 70;
-    final int colModW   = 70;
-    final int colColW   = 120;
 
     final int xCod = x;
     final int xNom = xCod + colCodW + gap2;
-    final int xMar = xNom + colCodW + gap2;
-    final int xMod = xMar + colMarW + gap2;
-    final int xTal = xMod + colModW + gap2;
-    final int xCol = xTal + colTalW + gap2;
 
     // Encabezado
     g2.drawString("Código",   xCod, y);
     g2.drawString("Obsequio", xNom, y);
-    g2.drawString("Marca",    xMar, y);
-    g2.drawString("Modelo",   xMod, y);
-    g2.drawString("Talla",    xTal, y);
-    g2.drawString("Color",    xCol, y);
     y += 10; g2.drawLine(x, y, x + w, y); y += 14;
 
     // ---- Precargar detalles de TODOS los obsequios en un solo query (sin filtrar por status/existencia)
@@ -2550,28 +2583,30 @@ for (String raw : obsequiosPrint) {
     if (raw == null || raw.trim().isEmpty()) continue;
 
     String codigoTxt = raw.trim();
-    String nombre = "", marca = "", modelo = "", talla = "", color = "";
+    String nombre = "";
 
     String[] row = info.get(codigoTxt);          // <--- clave = código tal cual
     if (row != null) {
         nombre = row[0];
-        marca  = row[1];
-        modelo = row[2];
-        talla  = row[3];
-        color  = row[4];
     }
 
     int yCod = drawWrapped(g2, "• " + codigoTxt, xCod, y, colCodW);
     int yNom = drawWrapped(g2, nombre,          xNom, y, colCodW);
-    int yMar = drawWrapped(g2, marca,           xMar, y, colMarW);
-    int yMod = drawWrapped(g2, modelo,          xMod, y, colModW);
-    int yTal = drawWrapped(g2, talla,           xTal, y, colTalW);
-    int yCol = drawWrapped(g2, color,           xCol, y, colColW);
 
-    y = Math.max(Math.max(Math.max(yCod, yNom), Math.max(yMar, yMod)), Math.max(yTal, yCol));
+    y = Math.max(yCod, yNom);
 }
 
 }
+// ===== Cajera (pie de página) =====
+String cajeraLinea = "Cajera: " + safe(fCajeraCodigo);
+if (!fCajeraNombre.isEmpty()) {
+    cajeraLinea += " - " + fCajeraNombre;
+}
+y += 16;
+g2.drawLine(x, y, x + w, y);
+y += 14;
+g2.setFont(fText);
+g2.drawString(cajeraLinea, x, y);
             return PAGE_EXISTS;
 }
 
@@ -2942,6 +2977,324 @@ public void setVisible(boolean aFlag) {
     super.setVisible(aFlag);
     if (aFlag) {
         cargarAsesores();   // recarga lista desde BD cada vez que entras al panel
+    }
+}
+// ===== Tarjetas por artículo (¼ de hoja carta) =====
+private static class TarjetaVentaData {
+    String razonSocial;
+    String cliente;
+    String fechaEvento;
+    String fechaCompra;
+    String asesor;
+    String codigoArticulo;
+    String articulo;
+    String marca;
+    String modelo;
+    String talla;
+    String color;
+    String obsequios;
+    String observaciones;
+}
+
+private static class TarjetasVentaPrinter implements Printable {
+
+    private final java.util.List<TarjetaVentaData> tarjetas;
+
+    TarjetasVentaPrinter(java.util.List<TarjetaVentaData> tarjetas) {
+        this.tarjetas = tarjetas;
+    }
+
+    @Override
+    public int print(Graphics g, PageFormat pf, int pageIndex) throws PrinterException {
+        int tarjetasPorPagina = 4; // 2 x 2
+        int start = pageIndex * tarjetasPorPagina;
+        if (start >= tarjetas.size()) {
+            return NO_SUCH_PAGE;
+        }
+
+        Graphics2D g2 = (Graphics2D) g;
+        g2.setRenderingHint(
+                java.awt.RenderingHints.KEY_TEXT_ANTIALIASING,
+                java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON
+        );
+
+        double iw = pf.getImageableWidth();
+        double ih = pf.getImageableHeight();
+        double ix = pf.getImageableX();
+        double iy = pf.getImageableY();
+
+        double cardW = iw / 2.0;
+        double cardH = ih / 2.0;
+
+        for (int i = 0; i < tarjetasPorPagina; i++) {
+            int idx = start + i;
+            if (idx >= tarjetas.size()) break;
+
+            TarjetaVentaData t = tarjetas.get(idx);
+            int row = i / 2;
+            int col = i % 2;
+            double x = ix + col * cardW;
+            double y = iy + row * cardH;
+
+            dibujarTarjeta(g2, t, x, y, cardW, cardH);
+        }
+
+        return PAGE_EXISTS;
+    }
+
+    private void dibujarTarjeta(Graphics2D g2, TarjetaVentaData t,
+                                double x, double y, double w, double h) {
+
+        int ix = (int) Math.round(x);
+        int iy = (int) Math.round(y);
+        int iw = (int) Math.round(w);
+        int ih = (int) Math.round(h);
+
+        // Marco
+        g2.drawRect(ix, iy, iw, ih);
+
+        int margin = 10;
+        int lineH  = 12;
+
+        Font base = g2.getFont();
+        Font titleFont = base.deriveFont(Font.BOLD, 12f);
+        Font textFont  = base.deriveFont(10f);
+
+        // RAZÓN SOCIAL centrada
+        g2.setFont(titleFont);
+        String rs = safe(t.razonSocial);
+        java.awt.FontMetrics fm = g2.getFontMetrics();
+        int titleX = ix + (iw - fm.stringWidth(rs)) / 2;
+        int yCursor = iy + margin + fm.getAscent();
+        g2.drawString(rs, titleX, yCursor);
+
+        // Resto de texto
+        g2.setFont(textFont);
+        yCursor += lineH * 2;
+        int textX = ix + margin;
+
+        g2.drawString("Cliente: " + safe(t.cliente), textX, yCursor);          yCursor += lineH;
+        g2.drawString("Fecha Evento: " + safe(t.fechaEvento), textX, yCursor); yCursor += lineH;
+        g2.drawString("Fecha Compra: " + safe(t.fechaCompra), textX, yCursor); yCursor += lineH;
+        g2.drawString("Asesor: " + safe(t.asesor), textX, yCursor);            yCursor += lineH;
+
+        yCursor += lineH / 2;
+        g2.drawString("Código Artículo: " + safe(t.codigoArticulo), textX, yCursor); yCursor += lineH;
+        g2.drawString("Artículo: " + safe(t.articulo), textX, yCursor);               yCursor += lineH;
+        g2.drawString("Marca: " + safe(t.marca), textX, yCursor);                     yCursor += lineH;
+        g2.drawString("Modelo: " + safe(t.modelo), textX, yCursor);                   yCursor += lineH;
+        g2.drawString("Talla: " + safe(t.talla) + "   Color: " + safe(t.color),
+                      textX, yCursor);
+        yCursor += lineH * 2;
+
+        // Obsequios
+g2.drawString("Obsequios:", textX, yCursor);
+yCursor += lineH;
+String ob = safe(t.obsequios);
+if (!ob.isEmpty()) {
+    String[] lineas = ob.split("\\r?\\n");
+    for (String linea : lineas) {
+        if (linea.trim().isEmpty()) continue;
+        yCursor = drawWrappedSimple(
+                g2,
+                linea.trim(),
+                textX + 10,
+                yCursor,
+                iw - 2 * margin - 10
+        );
+    }
+} else {
+    yCursor += lineH;
+}
+
+
+        // Observaciones
+        yCursor += lineH / 2;
+        g2.drawString("Observaciones:", textX, yCursor);
+        yCursor += lineH;
+        String obs = safe(t.observaciones);
+        if (!obs.isEmpty()) {
+            yCursor = drawWrappedSimple(g2, obs, textX + 10, yCursor, iw - 2 * margin - 10);
+        }
+    }
+
+    private static String safe(String s) {
+        return (s == null) ? "" : s;
+    }
+
+    static void imprimir(Component parent, java.util.List<TarjetaVentaData> tarjetas) throws PrinterException {
+        if (tarjetas == null || tarjetas.isEmpty()) return;
+        PrinterJob job = PrinterJob.getPrinterJob();
+        job.setPrintable(new TarjetasVentaPrinter(tarjetas));
+        if (!job.printDialog()) return;
+        job.print();
+    }
+}
+// ¿Este artículo cuenta como "Vestido"?
+private boolean esArticuloVestido(String articulo) {
+    if (articulo == null) return false;
+    String s = articulo.toLowerCase();
+    return s.contains("vestido");
+}
+
+private java.util.List<TarjetaVentaData> construirTarjetasVenta(
+        EmpresaInfo emp,
+        String clienteNombre,
+        LocalDate fechaEvento,
+        LocalDate fechaCompra,
+        String asesorNombre,
+        java.util.List<NotaDetalle> detsPrint,
+        java.util.List<String> obsequiosCodigos,
+        String observaciones) {
+
+    java.util.List<TarjetaVentaData> tarjetas = new java.util.ArrayList<>();
+
+    String razon = (emp.razonSocial != null && !emp.razonSocial.isBlank())
+            ? emp.razonSocial
+            : (emp.nombreFiscal != null ? emp.nombreFiscal : "");
+
+    String fechaEventoStr = (fechaEvento == null) ? "" : fechaEvento.format(MX);
+    String fechaCompraStr = (fechaCompra == null) ? "" : fechaCompra.format(MX);
+
+    // ======================== O B S E Q U I O S ========================
+    String obsequiosTexto = "";
+    if (obsequiosCodigos != null && !obsequiosCodigos.isEmpty()) {
+        // normalizar códigos
+        java.util.List<String> codigos = new java.util.ArrayList<>();
+        for (String raw : obsequiosCodigos) {
+            if (raw == null) continue;
+            String c = raw.trim();
+            if (!c.isEmpty()) codigos.add(c);
+        }
+
+        if (!codigos.isEmpty()) {
+            java.util.Map<String,String> descPorCodigo = new java.util.HashMap<>();
+
+            StringBuilder sql = new StringBuilder(
+                    "SELECT codigo_articulo, articulo, marca, modelo, talla, color " +
+                    "FROM InventarioObsequios WHERE codigo_articulo IN ("
+            );
+            for (int i = 0; i < codigos.size(); i++) {
+                if (i > 0) sql.append(',');
+                sql.append('?');
+            }
+            sql.append(')');
+
+            try (Connection cn = Conexion.Conecta.getConnection();
+                 PreparedStatement ps = cn.prepareStatement(sql.toString())) {
+
+                for (int i = 0; i < codigos.size(); i++) {
+                    ps.setString(i + 1, codigos.get(i));
+                }
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        String c      = rs.getString("codigo_articulo");
+                        String nombre = n(rs.getString("articulo"));
+                        String marca  = n(rs.getString("marca"));
+                        String modelo = n(rs.getString("modelo"));
+                        String talla  = n(rs.getString("talla"));
+                        String color  = n(rs.getString("color"));
+
+                        StringBuilder desc = new StringBuilder();
+                        if (!nombre.isBlank()) {
+                            desc.append(nombre);
+                        }
+
+                        // Marca / modelo opcional entre paréntesis
+                        String mm = "";
+                        if (!marca.isBlank()) mm = marca;
+                        if (!modelo.isBlank()) {
+                            if (!mm.isEmpty()) mm += " ";
+                            mm += modelo;
+                        }
+                        if (!mm.isEmpty()) {
+                            if (desc.length() > 0) desc.append(" ");
+                            desc.append('(').append(mm).append(')');
+                        }
+
+                        if (!talla.isBlank()) {
+                            if (desc.length() > 0) desc.append(" ");
+                            desc.append("Talla ").append(talla);
+                        }
+                        if (!color.isBlank()) {
+                            if (desc.length() > 0) desc.append(" ");
+                            desc.append("Color ").append(color);
+                        }
+
+                        descPorCodigo.put(c, desc.toString());
+                    }
+                }
+            } catch (SQLException ex) {
+                // si truena, al menos se imprimen los códigos solos
+            }
+
+            StringBuilder sb = new StringBuilder();
+            for (String c : codigos) {
+                if (sb.length() > 0) sb.append('\n');
+                String desc = descPorCodigo.get(c);
+                if (desc == null || desc.isBlank()) {
+                    sb.append(c);
+                } else {
+                    sb.append(c).append(" - ").append(desc);
+                }
+            }
+            obsequiosTexto = sb.toString();
+        }
+    }
+    // ==================== FIN OBSEQUIOS =====================
+
+    String obs = (observaciones == null) ? "" : observaciones;
+
+    for (NotaDetalle d : detsPrint) {
+        String art = d.getArticulo();
+        int repeticiones = esArticuloVestido(art) ? 2 : 1;   // 2 tarjetas si es Vestido, 1 si no
+
+        for (int i = 0; i < repeticiones; i++) {
+            TarjetaVentaData t = new TarjetaVentaData();
+            t.razonSocial    = razon;
+            t.cliente        = clienteNombre == null ? "" : clienteNombre;
+            t.fechaEvento    = fechaEventoStr;
+            t.fechaCompra    = fechaCompraStr;
+            t.asesor         = asesorNombre == null ? "" : asesorNombre;
+            t.codigoArticulo = d.getCodigoArticulo() == null ? "" : d.getCodigoArticulo();
+            t.articulo       = art == null ? "" : art;
+            t.marca          = d.getMarca() == null ? "" : d.getMarca();
+            t.modelo         = d.getModelo() == null ? "" : d.getModelo();
+            t.talla          = d.getTalla() == null ? "" : d.getTalla();
+            t.color          = d.getColor() == null ? "" : d.getColor();
+            t.obsequios      = obsequiosTexto;   // aquí ya va "COD - DESC" por línea
+            t.observaciones  = obs;
+            tarjetas.add(t);
+        }
+    }
+
+    return tarjetas;
+}
+
+private void imprimirTarjetasVenta(
+        EmpresaInfo emp,
+        String clienteNombre,
+        LocalDate fechaEvento,
+        LocalDate fechaCompra,
+        String asesorNombre,
+        java.util.List<NotaDetalle> detsPrint,
+        java.util.List<String> obsequiosCodigos,
+        String observaciones) {
+
+    java.util.List<TarjetaVentaData> tarjetas = construirTarjetasVenta(
+            emp, clienteNombre, fechaEvento, fechaCompra,
+            asesorNombre, detsPrint, obsequiosCodigos, observaciones
+    );
+
+    if (tarjetas.isEmpty()) return;
+
+    try {
+        TarjetasVentaPrinter.imprimir(this, tarjetas);
+    } catch (PrinterException ex) {
+        JOptionPane.showMessageDialog(this,
+                "Las tarjetas no se pudieron imprimir: " + ex.getMessage(),
+                "Impresión de tarjetas", JOptionPane.WARNING_MESSAGE);
     }
 }
 

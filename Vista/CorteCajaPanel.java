@@ -51,6 +51,18 @@ public class CorteCajaPanel extends JPanel {
     private final JTextField txtRetirosHoy  = ro();
     private final JTextField txtEfecNeto    = ro();
 
+        // Tabla de desglose diario (folios y formas de pago)
+    private final javax.swing.table.DefaultTableModel modelDetalle =
+            new javax.swing.table.DefaultTableModel(
+                    new String[]{
+                            "# Nota", "Tipo", "Folio", "Total",
+                            "EF", "TD", "TC", "AMEX", "TR", "DEP", "DV", "Ref DV"
+                    }, 0) {
+                @Override public boolean isCellEditable(int r, int c) { return false; }
+            };
+
+    private final JTable tbDetalle = new JTable(modelDetalle);
+
 private static final Locale ES_MX = Locale.forLanguageTag("es-MX");
 
 private void actualizarTextoFecha() {
@@ -101,10 +113,12 @@ private void actualizarTextoFecha() {
 
         // Botón de refresco manual (auto-refresh siempre activo, sin checkbox)
         JButton btRefrescar = new JButton("Refrescar");
-        btRefrescar.addActionListener(_e -> {
+                btRefrescar.addActionListener(_e -> {
             cargarSistemaYRetiros(selectedDate);
             cargarIngresosOperacion(selectedDate);
+            cargarDetalleDia(selectedDate);
         });
+
 
 
         addCell(grid,c,0,y,btRefrescar,1,false);
@@ -148,7 +162,20 @@ private void actualizarTextoFecha() {
         addCell(grid,c,0,y,new JLabel("Efectivo neto:"),1,false);
         addCell(grid,c,1,y,txtEfecNeto,3,true);
 
-        add(grid, BorderLayout.CENTER);
+                // Panel central: arriba resumen, abajo desglose por folios
+        JPanel center = new JPanel(new BorderLayout());
+        center.add(grid, BorderLayout.NORTH);
+
+        JScrollPane spDetalle = new JScrollPane(tbDetalle);
+        spDetalle.setBorder(BorderFactory.createTitledBorder(
+                "Detalle del día (folios y formas de pago)"));
+                // Ocultar la columna "# Nota" solo en la vista (se queda en el modelo)
+        tbDetalle.getColumnModel().removeColumn(tbDetalle.getColumnModel().getColumn(0));
+
+        center.add(spDetalle, BorderLayout.CENTER);
+
+        add(center, BorderLayout.CENTER);
+
 
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton btGuardar = new JButton("Guardar corte");
@@ -177,6 +204,7 @@ private void actualizarTextoFecha() {
         LocalDate f = obtenerFechaSeleccionada();
         cargarSistemaYRetiros(f);
         cargarIngresosOperacion(f);
+        cargarDetalleDia(f);
 
 
     }
@@ -283,6 +311,40 @@ private void exportarCSV() {
             txtCN.setText("0.00"); txtCR.setText("0.00"); txtAB.setText("0.00");
         }
     }
+        /** Llena la tabla inferior con las operaciones del día (folios + formas de pago). */
+    private void cargarDetalleDia(LocalDate fecha) {
+        modelDetalle.setRowCount(0);
+        try {
+            CorteCajaDAO dao = new CorteCajaDAO();
+            java.util.List<CorteCajaDAO.DetalleOperacion> list = dao.listarDetalleDia(fecha);
+
+            for (CorteCajaDAO.DetalleOperacion d : list) {
+                String tipo = (d.tipoOperacion != null && !d.tipoOperacion.isBlank())
+                        ? d.tipoOperacion
+                        : (d.tipoNota == null ? "" : d.tipoNota);
+
+                modelDetalle.addRow(new Object[] {
+                        d.numeroNota,
+                        tipo,
+                        d.folio == null ? "" : d.folio,
+                        fmt(d.totalNota),
+                        fmt(d.efectivo),
+                        fmt(d.tarjetaDebito),
+                        fmt(d.tarjetaCredito),
+                        fmt(d.americanExpress),
+                        fmt(d.transferenciaBanc),
+                        fmt(d.depositoBanc),
+                        fmt(d.devolucion),
+                        d.referenciaDV == null ? "" : d.referenciaDV.trim()
+                });
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al cargar detalle del día: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
 
     private void cargarDatosPorFecha() {
     try {
@@ -290,6 +352,8 @@ private void exportarCSV() {
         LocalDate f = obtenerFechaSeleccionada();
         cargarSistemaYRetiros(f);
         cargarIngresosOperacion(f);
+        cargarDetalleDia(f);
+
 
 
         // Si existe un corte previo en BD, cargarlo en los campos manuales
@@ -513,9 +577,11 @@ public void refrescarDespuesDeOperacion() {
         LocalDate f = obtenerFechaSeleccionada();
         cargarSistemaYRetiros(f);
         cargarIngresosOperacion(f);
+        cargarDetalleDia(f);
 
     });
 }
+
 // ========= Calendario emergente de 1 día (igual que VentasPorVendedorPanel) =========
 static class DayPopup extends JPopupMenu {
     private java.time.YearMonth ym;

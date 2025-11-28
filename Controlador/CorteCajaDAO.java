@@ -27,6 +27,24 @@ public class CorteCajaDAO {
         public BigDecimal abonos  = BigDecimal.ZERO;   // AB
     }
 
+        // Detalle de cada operación (para el corte de caja)
+    public static class DetalleOperacion {
+        public int numeroNota;
+        public String folio;
+        public String tipoNota;        // notas.tipo (CN, CR, AB, DV)
+        public String tipoOperacion;   // formas_pago.tipo_operacion
+        public java.math.BigDecimal totalNota;
+
+        public java.math.BigDecimal efectivo;
+        public java.math.BigDecimal tarjetaDebito;
+        public java.math.BigDecimal tarjetaCredito;
+        public java.math.BigDecimal americanExpress;
+        public java.math.BigDecimal transferenciaBanc;
+        public java.math.BigDecimal depositoBanc;
+        public java.math.BigDecimal devolucion;
+        public String referenciaDV;
+    }
+
     // Corte a persistir en Cortes_Caja
     public static class Corte {
         public LocalDate fecha;
@@ -136,6 +154,59 @@ public class CorteCajaDAO {
             return ing;
         }
     }
+        /** Lista cada operación del día con sus formas de pago y folio. */
+    public java.util.List<DetalleOperacion> listarDetalleDia(LocalDate fecha) throws SQLException {
+        String sql =
+                "SELECT fp.numero_nota, " +
+                "       n.folio, " +
+                "       n.tipo        AS tipo_nota, " +
+                "       fp.tipo_operacion, " +
+                "       n.total, " +
+                "       fp.efectivo, " +
+                "       fp.tarjeta_debito, " +
+                "       fp.tarjeta_credito, " +
+                "       fp.american_express, " +
+                "       fp.transferencia_bancaria, " +
+                "       fp.deposito_bancario, " +
+                "       fp.devolucion, " +
+                "       fp.referencia_dv " +
+                "FROM formas_pago fp " +
+                "JOIN notas n ON n.numero_nota = fp.numero_nota " +
+                "WHERE fp.fecha_operacion = ? " +
+                "  AND fp.status = 'A' " +
+                "ORDER BY fp.numero_nota";
+
+        try (Connection cn = Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+
+            ps.setDate(1, Date.valueOf(fecha));
+
+            java.util.List<DetalleOperacion> out = new java.util.ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    DetalleOperacion d = new DetalleOperacion();
+                    d.numeroNota        = rs.getInt("numero_nota");
+                    d.folio             = rs.getString("folio");
+                    d.tipoNota          = rs.getString("tipo_nota");
+                    d.tipoOperacion     = rs.getString("tipo_operacion");
+                    d.totalNota         = rs.getBigDecimal("total");
+
+                    d.efectivo          = rs.getBigDecimal("efectivo");
+                    d.tarjetaDebito     = rs.getBigDecimal("tarjeta_debito");
+                    d.tarjetaCredito    = rs.getBigDecimal("tarjeta_credito");
+                    d.americanExpress   = rs.getBigDecimal("american_express");
+                    d.transferenciaBanc = rs.getBigDecimal("transferencia_bancaria");
+                    d.depositoBanc      = rs.getBigDecimal("deposito_bancario");
+                    d.devolucion        = rs.getBigDecimal("devolucion");
+                    d.referenciaDV      = rs.getString("referencia_dv");
+
+                    out.add(d);
+                }
+            }
+            return out;
+        }
+    }
+
 
     public Corte leerCortePorFecha(LocalDate fecha) throws SQLException {
     String sql = """

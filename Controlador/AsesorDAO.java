@@ -7,6 +7,9 @@ import java.sql.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 public class AsesorDAO {
 
@@ -38,7 +41,7 @@ public class AsesorDAO {
     /** Todos los empleados. */
     public List<Asesor> listarTodos() throws SQLException {
         String sql = "SELECT numero_empleado, nombre_completo, fecha_alta, fecha_baja, " +
-                     "       tipo_empleado, status " +
+                     "       tipo_empleado, status, permiso_cancelar_nota " +
                      "FROM Asesor " +
                      "ORDER BY status DESC, numero_empleado";
         try (Connection cn = Conecta.getConnection();
@@ -55,6 +58,7 @@ public class AsesorDAO {
                 a.setFechaBaja(fb == null ? null : fb.toLocalDate());
                 a.setTipoEmpleado(rs.getString("tipo_empleado"));
                 a.setStatus(rs.getString("status"));
+                a.setPermisoCancelaNota(rs.getBoolean("permiso_cancelar_nota"));
                 lista.add(a);
             }
             return lista;
@@ -162,7 +166,7 @@ public class AsesorDAO {
     /** Buscar un empleado por número. */
     public Asesor buscarPorNumero(int numero) throws SQLException {
         String sql = "SELECT numero_empleado, nombre_completo, fecha_alta, fecha_baja, " +
-                     "       tipo_empleado, status " +
+                     "       tipo_empleado, status, permiso_cancelar_nota " +
                      "FROM Asesor WHERE numero_empleado=?";
         try (Connection cn = Conecta.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql)) {
@@ -178,57 +182,137 @@ public class AsesorDAO {
                 a.setFechaBaja(fb == null ? null : fb.toLocalDate());
                 a.setTipoEmpleado(rs.getString("tipo_empleado"));
                 a.setStatus(rs.getString("status"));
+                a.setPermisoCancelaNota(rs.getBoolean("permiso_cancelar_nota"));
                 return a;
             }
         }
     }
 
-    /** Actualiza nombre, fecha de alta y tipo. No toca status ni fecha_baja. */
+    /** Actualiza nombre, fechas, tipo, status, baja y permiso. */
     public void actualizarBasico(Asesor a) throws SQLException {
-    String sql = "UPDATE Asesor " +
-                 "SET nombre_completo=?, fecha_alta=?, tipo_empleado=?, status=?, fecha_baja=? " +
-                 "WHERE numero_empleado=?";
-    try (Connection cn = Conecta.getConnection();
-         PreparedStatement ps = cn.prepareStatement(sql)) {
+        String sql = "UPDATE Asesor " +
+                     "SET nombre_completo=?, fecha_alta=?, tipo_empleado=?, status=?, fecha_baja=?, " +
+                     "    permiso_cancelar_nota=? " +
+                     "WHERE numero_empleado=?";
+        try (Connection cn = Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
 
-        // 1) Nombre
-        ps.setString(1, a.getNombreCompleto());
+            // 1) Nombre
+            ps.setString(1, a.getNombreCompleto());
 
-        // 2) Fecha de alta (si viene null, uso hoy para no dejarla vacía)
-        LocalDate fa = (a.getFechaAlta() == null) ? LocalDate.now() : a.getFechaAlta();
-        ps.setDate(2, Date.valueOf(fa));
+            // 2) Fecha de alta
+            LocalDate fa = (a.getFechaAlta() == null) ? LocalDate.now() : a.getFechaAlta();
+            ps.setDate(2, Date.valueOf(fa));
 
-        // 3) Tipo de empleado (A / M / MA)
-        ps.setString(3, normalizarTipo(a.getTipoEmpleado()));
+            // 3) Tipo
+            ps.setString(3, normalizarTipo(a.getTipoEmpleado()));
 
-        // 4) Status: solo A o C, cualquier otra cosa la normalizo a A
-        String st = a.getStatus();
-        if (st == null || st.isBlank()) st = "A";
-        st = st.trim().toUpperCase();
-        if (!"C".equals(st)) st = "A";   // si no es C, lo dejo en A
-        ps.setString(4, st);
+            // 4) Status
+            String st = a.getStatus();
+            if (st == null || st.isBlank()) st = "A";
+            st = st.trim().toUpperCase();
+            if (!"C".equals(st)) st = "A";
+            ps.setString(4, st);
 
-        // 5) Fecha de baja:
-        //    - si status = A → siempre NULL en BD
-        //    - si status = C → uso la fecha que venga; si viene null, NO pongo nada (puedes forzar hoy si quieres)
-        LocalDate fb = a.getFechaBaja();
-        if (!"C".equals(st)) {
-            // Activo: fecha_baja debe quedar NULL
-            ps.setNull(5, Types.DATE);
-        } else {
-            if (fb != null) {
-                ps.setDate(5, Date.valueOf(fb));
-            } else {
-                // si quieres que, si no capturan fecha, se guarde hoy, descomenta la siguiente línea:
-                // ps.setDate(5, Date.valueOf(LocalDate.now()));
+            // 5) Fecha baja
+            LocalDate fb = a.getFechaBaja();
+            if (!"C".equals(st)) {
                 ps.setNull(5, Types.DATE);
+            } else {
+                if (fb != null) {
+                    ps.setDate(5, Date.valueOf(fb));
+                } else {
+                    ps.setNull(5, Types.DATE);
+                }
+            }
+
+            // 6) Permiso cancelar nota
+            ps.setBoolean(6, a.isPermisoCancelaNota());
+
+            // 7) WHERE
+            ps.setInt(7, a.getNumeroEmpleado());
+
+            ps.executeUpdate();
+        }
+    }
+
+    // ========== SECCIÓN LOGIN EMPLEADOS ==========
+
+    /** Hash SHA-256 de la contraseña (char[]) a bytes. */
+    private byte[] hashPassword(char[] pass) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = new String(pass).getBytes(StandardCharsets.UTF_8);
+            Arrays.fill(pass, '\0'); // limpiar lo más posible
+            return md.digest(bytes);
+        } catch (Exception e) {
+            throw new IllegalStateException("No se pudo inicializar SHA-256", e);
+        }
+    }
+
+    /** ¿El empleado ya tiene contraseña configurada? */
+    public boolean empleadoTienePassword(int numeroEmpleado) throws SQLException {
+        String sql = "SELECT password_login IS NOT NULL AS tiene " +
+                     "FROM Asesor WHERE numero_empleado=?";
+        try (Connection cn = Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setInt(1, numeroEmpleado);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return false;
+                return rs.getBoolean(1);
             }
         }
-
-        // 6) WHERE
-        ps.setInt(6, a.getNumeroEmpleado());
-
-        ps.executeUpdate();
     }
-}
+
+    /** Establece / cambia la contraseña de un empleado (hash en BD). */
+    public void establecerPasswordEmpleado(int numeroEmpleado, char[] nueva) throws SQLException {
+        byte[] hash = hashPassword(nueva);
+        String sql = "UPDATE Asesor SET password_login=? WHERE numero_empleado=?";
+        try (Connection cn = Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setBytes(1, hash);
+            ps.setInt(2, numeroEmpleado);
+            ps.executeUpdate();
+        }
+    }
+
+    /** Valida la contraseña de un empleado. */
+    public boolean validarPasswordEmpleado(int numeroEmpleado, char[] pass) throws SQLException {
+        String sql = "SELECT password_login FROM Asesor WHERE numero_empleado=?";
+        try (Connection cn = Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setInt(1, numeroEmpleado);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return false;
+                byte[] esperado = rs.getBytes(1);
+                if (esperado == null) return false;
+                byte[] actual = hashPassword(pass);
+                return MessageDigest.isEqual(esperado, actual);
+            }
+        }
+    }
+
+    /** Actualiza solo el permiso de cancelar notas. */
+    public void actualizarPermisoCancelar(int numeroEmpleado, boolean puedeCancelar) throws SQLException {
+        String sql = "UPDATE Asesor SET permiso_cancelar_nota=? WHERE numero_empleado=?";
+        try (Connection cn = Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setBoolean(1, puedeCancelar);
+            ps.setInt(2, numeroEmpleado);
+            ps.executeUpdate();
+        }
+    }
+
+    /** Lee el permiso de cancelar notas para un empleado. */
+    public boolean puedeCancelarNotas(int numeroEmpleado) throws SQLException {
+        String sql = "SELECT permiso_cancelar_nota FROM Asesor WHERE numero_empleado=?";
+        try (Connection cn = Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setInt(1, numeroEmpleado);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return false;
+                return rs.getBoolean(1);
+            }
+        }
+    }
 }

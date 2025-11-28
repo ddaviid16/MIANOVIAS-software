@@ -9,36 +9,26 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.*;
 
-
 import java.awt.*;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
-/**
- * Panel para editar la información de un cliente existente.
- *
- * Flujo:
- * 1) Capturas teléfono 1 y presionas "Cargar".
- * 2) Se llenan todos los campos con los datos actuales del cliente.
- * 3) Editas lo necesario.
- * 4) Al guardar pide doble confirmación y ejecuta UPDATE sobre Clientes.
- */
 public class EditarClientePanel extends JPanel {
 
     private boolean clienteCargado = false;
-    
     private boolean cargandoDatos = false; // cuando estamos haciendo setText() al cargar
     private boolean dirty = false;         // hubo cambios del usuario
-    
-    private String lastTelefonoConsultado = null; // como en VentaContadoPanel
+    private String lastTelefonoConsultado = null;
 
     private JButton btnGuardar;
     private JButton btnCargar;
+
     // Campos de texto
     private JTextField txtTel1, txtTel2, txtNombre, txtApPat, txtApMat;
     private JTextField txtBusto, txtCintura, txtCadera, txtEdad;
+    private JTextField txtParenTel2;   // NUEVO
 
     // Fechas (máscara mexicana DD-MM-YYYY)
     private JFormattedTextField txtFechaEvento, txtPrueba1, txtPrueba2, txtEntrega;
@@ -54,45 +44,55 @@ public class EditarClientePanel extends JPanel {
     private static final DateTimeFormatter SQL = DateTimeFormatter.ISO_LOCAL_DATE; // yyyy-MM-dd
 
     public EditarClientePanel() {
-    setLayout(new BorderLayout());
+        setLayout(new BorderLayout());
 
-    // 1) PRIMERO crear los campos
-    txtTel1 = new JTextField();
-    txtTel2 = new JTextField();
+        // 1) Crear campos
+        txtTel1 = new JTextField();
+        txtTel2 = new JTextField();
+        txtParenTel2 = new JTextField(); // NUEVO
 
-    // 2) Aplicar formato de teléfono (guiones, solo dígitos, etc.)
-    TelefonosUI.instalar(txtTel1, 10);  // máximo 10 dígitos
-    TelefonosUI.instalar(txtTel2, 10);
+        // 2) Formato de teléfono
+        TelefonosUI.instalar(txtTel1, 10);
+        TelefonosUI.instalar(txtTel2, 10);
 
-    // 3) Opcional: tooltips
-    txtTel1.setToolTipText("Teléfono 1 del cliente (PK).");
-    txtTel2.setToolTipText("Teléfono 2 del cliente.");
+        txtTel1.setToolTipText("Teléfono 1 del cliente (PK).");
+        txtTel2.setToolTipText("Teléfono 2 del cliente.");
 
-    // 4) Ya después armas el panel, gridbag, etc.
-    JPanel p = new JPanel(new GridBagLayout());
-    p.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-    GridBagConstraints c = new GridBagConstraints();
-    c.insets = new Insets(6, 6, 6, 6);
-    c.fill = GridBagConstraints.HORIZONTAL;
-    c.weightx = 1.0;
+        // Parentesco: solo letras/espacios
+        ((AbstractDocument) txtParenTel2.getDocument())
+                .setDocumentFilter(new LettersOnlyFilter(40)); // NUEVO
+        txtParenTel2.setToolTipText("Parentesco del contacto de Teléfono 2 (ej. mamá, hermana, amiga).");
 
-    int y = 0;
+        // Panel y layout
+        JPanel p = new JPanel(new GridBagLayout());
+        p.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(6, 6, 6, 6);
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.weightx = 1.0;
 
-    // ===== Teléfono 1 + botón Cargar / Teléfono 2
-    btnCargar = new JButton("Cargar");
-    btnCargar.addActionListener(_e -> cargarCliente());
+        int y = 0;
 
-    // fila: Teléfono1 | campo | Teléfono2 | botón Cargar
-    c.gridx = 0; c.gridy = y; c.gridwidth = 1;
-    p.add(new JLabel("Teléfono 1*:"), c);
-    c.gridx = 1;
-    p.add(txtTel1, c);
-    c.gridx = 2;
-    p.add(new JLabel("Teléfono 2:"), c);
-    c.gridx = 3;
-    p.add(txtTel2, c);
-    y++;
+        // ===== Teléfono 1 + Teléfono 2
+        btnCargar = new JButton("Cargar");
+        btnCargar.addActionListener(_e -> cargarCliente());
 
+        c.gridx = 0; c.gridy = y; c.gridwidth = 1;
+        p.add(new JLabel("Teléfono 1*:"), c);
+        c.gridx = 1;
+        p.add(txtTel1, c);
+        c.gridx = 2;
+        p.add(new JLabel("Teléfono 2:"), c);
+        c.gridx = 3;
+        p.add(txtTel2, c);
+        y++;
+
+        // Fila separada: Parentesco tel. 2 (lado derecho)  // NUEVO
+        c.gridx = 2; c.gridy = y; c.gridwidth = 1;
+        p.add(new JLabel("Parentesco tel. 2:"), c);
+        c.gridx = 3;
+        p.add(txtParenTel2, c);
+        y++;
 
         // ===== Nombre / Apellido paterno
         txtNombre = new JTextField();
@@ -120,7 +120,7 @@ public class EditarClientePanel extends JPanel {
         addRow(p, c, y++, new JLabel("¿Cómo se enteró?"), cbComoSeEntero,
                 new JLabel("Lugar del evento:"), cbLugar);
 
-        // ===== Fechas con formato mexicano (DD-MM-YYYY)
+        // ===== Fechas
         txtFechaEvento = createDateFieldMX();
         addRowFull(p, c, y++, new JLabel("Fecha del evento (DD-MM-YYYY):"), txtFechaEvento);
 
@@ -156,11 +156,10 @@ public class EditarClientePanel extends JPanel {
         // ===== Botones
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         btnGuardar = new JButton("Guardar cambios");
-        btnGuardar.setEnabled(false); // o como se llame tu botón
-
+        btnGuardar.setEnabled(false);
         JButton btnLimpiar = new JButton("Limpiar");
 
-        actions.add(btnCargar);   // también aquí, para tenerlo a la vista
+        actions.add(btnCargar);
         actions.add(btnGuardar);
         actions.add(btnLimpiar);
 
@@ -169,16 +168,11 @@ public class EditarClientePanel extends JPanel {
         btnGuardar.addActionListener(_e -> guardarCambios());
         btnLimpiar.addActionListener(_e -> limpiarTodo());
 
-        // Estado inicial: solo puedo escribir teléfono y darle a Cargar
         setCamposEdicionHabilitados(false);
         btnGuardar.setEnabled(false);
 
         registrarListenersDeCambio();
-            // Hooks automáticos tipo VentaContadoPanel
         cargarClienteAutoHooks();
-
-        // después de construir, colocamos el botón Cargar al lado correcto
-        // (ya está referenciado arriba, no hay extra magia)
     }
 
     // ---------------------- Layout helpers
@@ -204,11 +198,7 @@ public class EditarClientePanel extends JPanel {
     }
 
     // ---------------------- Cargar cliente
-    // ---------------------- Cargar cliente
-
-    private void cargarCliente() {
-        cargarCliente(true);  // por defecto, con mensajes de validación
-    }
+    private void cargarCliente() { cargarCliente(true); }
 
     private void cargarCliente(boolean showMessages) {
         String tel = Utilidades.TelefonosUI.soloDigitos(txtTel1.getText());
@@ -224,17 +214,13 @@ public class EditarClientePanel extends JPanel {
             return;
         }
 
-        // Si ya consultamos este teléfono y no ha cambiado, no vuelvas a pegarle a la BD
-        if (tel.equals(lastTelefonoConsultado)) {
-            return;
-        }
+        if (tel.equals(lastTelefonoConsultado)) return;
 
         try {
             cliente cli = dao.buscarClientePorTelefono1(tel);
             lastTelefonoConsultado = tel;
 
             if (cli == null) {
-                // No se encontró: limpiamos campos y deshabilitamos edición
                 limpiarInfoCliente();
                 if (showMessages) {
                     JOptionPane.showMessageDialog(this,
@@ -244,43 +230,39 @@ public class EditarClientePanel extends JPanel {
                 return;
             }
 
-            // Estamos llenando datos desde BD -> no disparar "dirty"
-            // Estamos llenando datos desde BD -> no disparar "dirty"
-cargandoDatos = true;
-clienteActual = cli;
-clienteCargado = true;
+            cargandoDatos = true;
+            clienteActual = cli;
+            clienteCargado = true;
 
-// Tel1 es la PK -> no se edita
-// txtTel1.setText(cli.getTelefono1());   // <-- QUITA ESTA LÍNEA
-txtTel1.setEditable(false);
+            // Tel1 es PK
+            txtTel1.setEditable(false);
 
-txtTel2.setText(n(cli.getTelefono2()));
-txtNombre.setText(n(cli.getNombre()));
-txtApPat.setText(n(cli.getApellidoPaterno()));
-txtApMat.setText(n(cli.getApellidoMaterno()));
-txtEdad.setText(cli.getEdad() == null ? "" : String.valueOf(cli.getEdad()));
+            txtTel2.setText(n(cli.getTelefono2()));
+            txtParenTel2.setText(n(cli.getParentescoTel2())); // NUEVO
+            txtNombre.setText(n(cli.getNombre()));
+            txtApPat.setText(n(cli.getApellidoPaterno()));
+            txtApMat.setText(n(cli.getApellidoMaterno()));
+            txtEdad.setText(cli.getEdad() == null ? "" : String.valueOf(cli.getEdad()));
 
-setCombo(cbComoSeEntero, cli.getComoSeEntero());
-setCombo(cbLugar, cli.getLugarEvento());
+            setCombo(cbComoSeEntero, cli.getComoSeEntero());
+            setCombo(cbLugar, cli.getLugarEvento());
 
-setDateFromSql(txtFechaEvento, cli.getFechaEvento());
-setDateFromSql(txtPrueba1,    cli.getFechaPrueba1());
-setDateFromSql(txtPrueba2,    cli.getFechaPrueba2());
-setDateFromSql(txtEntrega,    cli.getFechaEntrega());
+            setDateFromSql(txtFechaEvento, cli.getFechaEvento());
+            setDateFromSql(txtPrueba1,    cli.getFechaPrueba1());
+            setDateFromSql(txtPrueba2,    cli.getFechaPrueba2());
+            setDateFromSql(txtEntrega,    cli.getFechaEntrega());
 
-txtBusto.setText(cli.getBusto()   == null ? "" : String.valueOf(cli.getBusto()));
-txtCintura.setText(cli.getCintura()== null ? "" : String.valueOf(cli.getCintura()));
-txtCadera.setText(cli.getCadera() == null ? "" : String.valueOf(cli.getCadera()));
+            txtBusto.setText(cli.getBusto()   == null ? "" : String.valueOf(cli.getBusto()));
+            txtCintura.setText(cli.getCintura()== null ? "" : String.valueOf(cli.getCintura()));
+            txtCadera.setText(cli.getCadera() == null ? "" : String.valueOf(cli.getCadera()));
 
-setCombo(cbStatus,    cli.getStatus());
-setCombo(cbSituacion, cli.getSituacionEvento());
+            setCombo(cbStatus,    cli.getStatus());
+            setCombo(cbSituacion, cli.getSituacionEvento());
 
-setCamposEdicionHabilitados(true);
+            setCamposEdicionHabilitados(true);
 
-// Recién cargado: todavía no hay cambios del usuario
-dirty = false;
-btnGuardar.setEnabled(false);
-
+            dirty = false;
+            btnGuardar.setEnabled(false);
 
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this,
@@ -292,11 +274,8 @@ btnGuardar.setEnabled(false);
     }
 
     private void setCombo(JComboBox<String> cb, String value) {
-        if (value == null || value.isBlank()) {
-            cb.setSelectedIndex(0);
-            return;
-        }
-        cb.setSelectedItem(value);
+        if (value == null || value.isBlank()) cb.setSelectedIndex(0);
+        else cb.setSelectedItem(value);
     }
 
     private void setDateFromSql(JFormattedTextField field, String sqlDate) {
@@ -310,6 +289,7 @@ btnGuardar.setEnabled(false);
 
     private void setCamposEdicionHabilitados(boolean enable) {
         setEditableField(txtTel2, enable);
+        setEditableField(txtParenTel2, enable); // NUEVO
         setEditableField(txtNombre, enable);
         setEditableField(txtApPat, enable);
         setEditableField(txtApMat, enable);
@@ -340,7 +320,7 @@ btnGuardar.setEnabled(false);
 
     private String n(String s) { return s == null ? "" : s; }
 
-    // ---------------------- Guardar cambios (doble confirmación)
+    // ---------------------- Guardar cambios
     private void guardarCambios() {
         if (clienteActual == null) {
             JOptionPane.showMessageDialog(this,
@@ -357,7 +337,6 @@ btnGuardar.setEnabled(false);
             return;
         }
 
-        // Validar fechas
         LocalDate ev  = parseMX(txtFechaEvento.getText());
         LocalDate f1  = parseMX(txtPrueba1.getText());
         LocalDate f2  = parseMX(txtPrueba2.getText());
@@ -373,7 +352,6 @@ btnGuardar.setEnabled(false);
 
         Object[] opts = {"SI", "NO"};
 
-        // Confirmación 1
         int ch1 = JOptionPane.showOptionDialog(this,
                 "¿La información capturada es correcta?",
                 "Confirmación",
@@ -381,7 +359,6 @@ btnGuardar.setEnabled(false);
                 null, opts, opts[0]);
         if (ch1 != JOptionPane.YES_OPTION) return;
 
-        // Confirmación 2 (para evitar manoseos accidentales)
         int ch2 = JOptionPane.showOptionDialog(this,
                 "Esta acción actualizará los datos del cliente en el sistema.\n" +
                 "¿Deseas continuar?",
@@ -392,9 +369,9 @@ btnGuardar.setEnabled(false);
 
         try {
             cliente cli = new cliente();
-            // PK NO se cambia
-            cli.setTelefono1(clienteActual.getTelefono1());
-            cli.setTelefono2(blankToNull(txtTel2));
+            cli.setTelefono1(clienteActual.getTelefono1());      // PK
+            cli.setTelefono2(phoneOrNull(txtTel2));
+            cli.setParentescoTel2(blankToNull(txtParenTel2));    // NUEVO
             cli.setNombre(txtNombre.getText().trim());
             cli.setApellidoPaterno(blankToNull(txtApPat));
             cli.setApellidoMaterno(blankToNull(txtApMat));
@@ -415,25 +392,21 @@ btnGuardar.setEnabled(false);
             cli.setStatus((String) cbStatus.getSelectedItem());
             cli.setSituacionEvento((String) cbSituacion.getSelectedItem());
 
-                        boolean ok = dao.actualizar(cli);
+            boolean ok = dao.actualizar(cli);
             if (ok) {
                 JOptionPane.showMessageDialog(this,
                         "Datos del cliente actualizados correctamente.",
                         "Listo", JOptionPane.INFORMATION_MESSAGE);
 
-                // Dejamos consistente el estado interno
                 clienteActual = cli;
                 dirty = false;
 
-                // Pedido tuyo: después de guardar, limpiar toda la info mostrada
                 limpiarTodo();
-
             } else {
                 JOptionPane.showMessageDialog(this,
                         "No se actualizó ninguna fila. Verifica el teléfono.",
                         "Atención", JOptionPane.WARNING_MESSAGE);
             }
-
 
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this,
@@ -459,6 +432,7 @@ btnGuardar.setEnabled(false);
 
         txtTel1.setText("");
         txtTel2.setText("");
+        txtParenTel2.setText("");  // NUEVO
         txtNombre.setText("");
         txtApPat.setText("");
         txtApMat.setText("");
@@ -484,11 +458,17 @@ btnGuardar.setEnabled(false);
         txtTel1.requestFocus();
     }
 
-    // ---------------------- Utilidades
+    // ---------------------- Utilidades varias
     private String blankToNull(JTextField t) {
         String s = t.getText();
         return (s == null || s.isBlank()) ? null : s.trim();
     }
+    private String phoneOrNull(JTextField t) {
+    String dig = TelefonosUI.soloDigitos(
+            t.getText() == null ? "" : t.getText()
+    );
+    return dig.isBlank() ? null : dig;
+}
 
     private String comboVal(JComboBox<String> cb) {
         String v = (String) cb.getSelectedItem();
@@ -505,7 +485,6 @@ btnGuardar.setEnabled(false);
         return Double.parseDouble(t.getText().trim());
     }
 
-    /** Convierte campo con máscara DD-MM-YYYY a "YYYY-MM-DD" (para MySQL). */
     private String maskMexToSql(JFormattedTextField f) {
         String s = f.getText();
         if (s == null) return null;
@@ -519,10 +498,8 @@ btnGuardar.setEnabled(false);
         }
     }
 
-    // ===== Helpers de fechas (dd-MM-uuuu) =====
     private static final DateTimeFormatter MX_D = DateTimeFormatter.ofPattern("dd-MM-uuuu");
 
-    /** Parsea "dd-MM-uuuu". Devuelve null si está vacío o con guiones bajos. */
     private static LocalDate parseMX(String s) {
         if (s == null) return null;
         s = s.trim();
@@ -530,7 +507,6 @@ btnGuardar.setEnabled(false);
         return LocalDate.parse(s, MX_D);
     }
 
-    /** Devuelve null si todo OK; si hay error, devuelve el mensaje. */
     private static String validarFechas(LocalDate evento, LocalDate p1, LocalDate p2, LocalDate entrega) {
         LocalDate hoy = LocalDate.now();
         if (evento == null) return "La fecha de evento es obligatoria.";
@@ -563,107 +539,127 @@ btnGuardar.setEnabled(false);
                 return "La fecha de entrega debe ser menor a la fecha de evento.";
         }
 
-        return null; // OK
+        return null;
     }
+
     private void registrarListenersDeCambio() {
-    // Todos los campos editables (menos tel1, que es PK)
-    addDirtyListener(txtTel2);
-    addDirtyListener(txtNombre);
-    addDirtyListener(txtApPat);
-    addDirtyListener(txtApMat);
-    addDirtyListener(txtEdad);
+        addDirtyListener(txtTel2);
+        addDirtyListener(txtParenTel2);   // NUEVO
+        addDirtyListener(txtNombre);
+        addDirtyListener(txtApPat);
+        addDirtyListener(txtApMat);
+        addDirtyListener(txtEdad);
 
-    addDirtyListener(txtFechaEvento);
-    addDirtyListener(txtPrueba1);
-    addDirtyListener(txtPrueba2);
-    addDirtyListener(txtEntrega);
+        addDirtyListener(txtFechaEvento);
+        addDirtyListener(txtPrueba1);
+        addDirtyListener(txtPrueba2);
+        addDirtyListener(txtEntrega);
 
-    addDirtyListener(txtBusto);
-    addDirtyListener(txtCintura);
-    addDirtyListener(txtCadera);
+        addDirtyListener(txtBusto);
+        addDirtyListener(txtCintura);
+        addDirtyListener(txtCadera);
 
-    addDirtyListener(cbComoSeEntero);
-    addDirtyListener(cbLugar);
-    addDirtyListener(cbStatus);
-    addDirtyListener(cbSituacion);
-}
-private void addDirtyListener(JTextComponent tc) {
-    tc.getDocument().addDocumentListener(new DocumentListener() {
-        private void changed() { onFieldChanged(); }
-        @Override public void insertUpdate(DocumentEvent e) { changed(); }
-        @Override public void removeUpdate(DocumentEvent e) { changed(); }
-        @Override public void changedUpdate(DocumentEvent e) { changed(); }
-    });
-}
+        addDirtyListener(cbComoSeEntero);
+        addDirtyListener(cbLugar);
+        addDirtyListener(cbStatus);
+        addDirtyListener(cbSituacion);
+    }
 
-private void addDirtyListener(JComboBox<?> cb) {
-    cb.addItemListener(e -> {
-        if (e.getStateChange() == java.awt.event.ItemEvent.SELECTED) {
-            onFieldChanged();
-        }
-    });
-}
+    private void addDirtyListener(JTextComponent tc) {
+        tc.getDocument().addDocumentListener(new DocumentListener() {
+            private void changed() { onFieldChanged(); }
+            @Override public void insertUpdate(DocumentEvent e) { changed(); }
+            @Override public void removeUpdate(DocumentEvent e) { changed(); }
+            @Override public void changedUpdate(DocumentEvent e) { changed(); }
+        });
+    }
 
-private void onFieldChanged() {
-    // Si estamos llenando datos desde la BD, ignorar
-    if (cargandoDatos) return;
-    // Si no hay cliente cargado, no tiene sentido
-    if (!clienteCargado || clienteActual == null) return;
+    private void addDirtyListener(JComboBox<?> cb) {
+        cb.addItemListener(e -> {
+            if (e.getStateChange() == java.awt.event.ItemEvent.SELECTED) {
+                onFieldChanged();
+            }
+        });
+    }
 
-    dirty = true;
-    btnGuardar.setEnabled(true);
-}
+    private void onFieldChanged() {
+        if (cargandoDatos) return;
+        if (!clienteCargado || clienteActual == null) return;
+        dirty = true;
+        btnGuardar.setEnabled(true);
+    }
 
     private JFormattedTextField createDateFieldMX() {
         try {
-            MaskFormatter mf = new MaskFormatter("##-##-####"); // DD-MM-YYYY
+            MaskFormatter mf = new MaskFormatter("##-##-####");
             mf.setPlaceholderCharacter('_');
             JFormattedTextField f = new JFormattedTextFieldFixed(mf);
             f.setColumns(10);
             f.setToolTipText("Formato: DD-MM-YYYY (ej. 15-09-2025)");
             return f;
         } catch (Exception e) {
-            return new JFormattedTextField(); // fallback
+            return new JFormattedTextField();
         }
     }
 
-        // ================== AUTO-CARGA COMO EN VentaContadoPanel ==================
+    private void cargarClienteAutoHooks() {
+        txtTel1.addActionListener(_e -> cargarCliente());
 
-private void cargarClienteAutoHooks() {
-    // Enter en el teléfono -> intentar cargar
-    txtTel1.addActionListener(_e -> cargarCliente());
-
-    // Al ir escribiendo, cuando tenga >= 7 dígitos intenta cargar
-    ((AbstractDocument) txtTel1.getDocument()).addDocumentListener((SimpleDocListener) () -> {
-        String t = txtTel1.getText().trim();
-        if (t.length() >= 7) {
-            if (lastTelefonoConsultado == null || !lastTelefonoConsultado.equals(t)) {
-                cargarCliente(false); // sin mensaje de "no encontrado" para no molestar mientras escribe
-            }
-        } else {
-            // Si borra o está muy corto, limpiamos la info del cliente pero NO el teléfono
-            limpiarInfoCliente();
-            lastTelefonoConsultado = null;
-        }
-    });
-
-    // Al salir del campo, SOLO valida si hay algo escrito
-    txtTel1.addFocusListener(new java.awt.event.FocusAdapter() {
-        @Override public void focusLost(java.awt.event.FocusEvent e) {
+        ((AbstractDocument) txtTel1.getDocument()).addDocumentListener((SimpleDocListener) () -> {
             String t = txtTel1.getText().trim();
-            if (t.isEmpty()) {
-                // si quieres ser más paranoico:
-                // lastTelefonoConsultado = null;
-                return;  // nada que validar, no molestamos al usuario
+            if (t.length() >= 7) {
+                if (lastTelefonoConsultado == null || !lastTelefonoConsultado.equals(t)) {
+                    cargarCliente(false);
+                }
+            } else {
+                limpiarInfoCliente();
+                lastTelefonoConsultado = null;
             }
-            if (!isShowing()) return;    // opcional, por si cambias de panel
-            cargarCliente();             // versión con mensajes
-        }
-    });
-}
+        });
 
-    // ---------------------- DocumentFilters
-    /** Solo dígitos (0-9) con longitud máxima */
+        txtTel1.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override public void focusLost(java.awt.event.FocusEvent e) {
+                String t = txtTel1.getText().trim();
+                if (t.isEmpty()) return;
+                if (!isShowing()) return;
+                cargarCliente();
+            }
+        });
+    }
+
+    private void limpiarInfoCliente() {
+        clienteActual      = null;
+        clienteCargado     = false;
+        cargandoDatos      = false;
+        dirty              = false;
+
+        txtTel2.setText("");
+        txtParenTel2.setText(""); // NUEVO
+        txtNombre.setText("");
+        txtApPat.setText("");
+        txtApMat.setText("");
+        txtEdad.setText("");
+
+        txtFechaEvento.setValue(null);
+        txtPrueba1.setValue(null);
+        txtPrueba2.setValue(null);
+        txtEntrega.setValue(null);
+
+        txtBusto.setText("");
+        txtCintura.setText("");
+        txtCadera.setText("");
+
+        cbComoSeEntero.setSelectedIndex(0);
+        cbLugar.setSelectedIndex(0);
+        cbStatus.setSelectedItem("A");
+        cbSituacion.setSelectedItem("NORMAL");
+
+        setCamposEdicionHabilitados(false);
+        btnGuardar.setEnabled(false);
+        txtTel1.setEditable(true);
+    }
+
+    // DocumentFilters
     static class DigitsOnlyFilter extends DocumentFilter {
         private final int maxLen;
         DigitsOnlyFilter(int maxLen) { this.maxLen = maxLen; }
@@ -687,7 +683,6 @@ private void cargarClienteAutoHooks() {
                 throws BadLocationException { replace(fb, offset, 0, text, attr); }
     }
 
-    /** Solo letras (incluye tildes y espacios) con longitud máxima */
     static class LettersOnlyFilter extends DocumentFilter {
         private final int maxLen;
         LettersOnlyFilter(int maxLen) { this.maxLen = maxLen; }
@@ -708,41 +703,7 @@ private void cargarClienteAutoHooks() {
         @Override public void insertString(FilterBypass fb, int offset, String text, AttributeSet attr)
                 throws BadLocationException { replace(fb, offset, 0, text, attr); }
     }
-    /** Limpia los datos del cliente pero NO borra el teléfono, ni el foco. */
-    private void limpiarInfoCliente() {
-        clienteActual      = null;
-        clienteCargado     = false;
-        cargandoDatos      = false;
-        dirty              = false;
 
-        txtTel2.setText("");
-        txtNombre.setText("");
-        txtApPat.setText("");
-        txtApMat.setText("");
-        txtEdad.setText("");
-
-        txtFechaEvento.setValue(null);
-        txtPrueba1.setValue(null);
-        txtPrueba2.setValue(null);
-        txtEntrega.setValue(null);
-
-        txtBusto.setText("");
-        txtCintura.setText("");
-        txtCadera.setText("");
-
-        cbComoSeEntero.setSelectedIndex(0);
-        cbLugar.setSelectedIndex(0);
-        cbStatus.setSelectedItem("A");
-        cbSituacion.setSelectedItem("NORMAL");
-
-        setCamposEdicionHabilitados(false);
-        btnGuardar.setEnabled(false);
-
-        // Tel1 se queda editable mientras no haya cliente cargado
-        txtTel1.setEditable(true);
-    }
-
-    /** Decimal: dígitos + un solo punto, con longitud máxima */
     static class DecimalFilter extends DocumentFilter {
         private final int maxLen;
         DecimalFilter(int maxLen) { this.maxLen = maxLen; }
@@ -769,7 +730,6 @@ private void cargarClienteAutoHooks() {
                 throws BadLocationException { replace(fb, offset, 0, text, attr); }
     }
 
-    /** Arreglo a problemas de borrado con MaskFormatter */
     static class JFormattedTextFieldFixed extends JFormattedTextField {
         public JFormattedTextFieldFixed(AbstractFormatter formatter) { super(formatter); }
         @Override public void processKeyEvent(java.awt.event.KeyEvent e) {
@@ -777,12 +737,12 @@ private void cargarClienteAutoHooks() {
             this.setCaretPosition(Math.min(getCaretPosition(), getText().length()));
         }
     }
-        @FunctionalInterface
+
+    @FunctionalInterface
     interface SimpleDocListener extends DocumentListener {
         void on();
         @Override default void insertUpdate(DocumentEvent e) { on(); }
         @Override default void removeUpdate(DocumentEvent e) { on(); }
         @Override default void changedUpdate(DocumentEvent e) { on(); }
     }
-
 }

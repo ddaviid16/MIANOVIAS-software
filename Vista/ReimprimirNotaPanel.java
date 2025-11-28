@@ -2,6 +2,7 @@ package Vista;
 
 import Controlador.NotasDAO;
 import Modelo.NotaDetalle;
+import Modelo.Nota;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -18,13 +19,13 @@ import java.io.ByteArrayInputStream;
 import java.sql.SQLException;
 import java.text.Normalizer;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
 
 // === imports de tus modelos/daos usados por las utilidades de impresión ===
 import Controlador.EmpresaDAO;
 import Modelo.Empresa;
-import Modelo.Nota;
 import Modelo.PagoFormas;
 import Utilidades.TelefonosUI;
 
@@ -74,6 +75,7 @@ public class ReimprimirNotaPanel extends JPanel {
     private final JTable tbDetalle = new JTable(modelDet);
 
     private final JButton btReimprimir = new JButton("Re-imprimir");
+    private final JButton btReimprimirTarjetas = new JButton("Re-imprimir tarjetas");
 
     /** Callback opcional: (numeroNota, tipo) -> imprimir */
     private final BiConsumer<Integer, String> onReimprimir;
@@ -129,6 +131,7 @@ public class ReimprimirNotaPanel extends JPanel {
         // Botonera inferior
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         south.add(btReimprimir);
+        south.add(btReimprimirTarjetas);
         add(south, BorderLayout.SOUTH);
     }
 
@@ -157,6 +160,17 @@ public class ReimprimirNotaPanel extends JPanel {
                         "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
+        // <<< NUEVO: reimprimir tarjetas >>>
+        btReimprimirTarjetas.addActionListener(_e -> {
+            try {
+                reimprimirTarjetasSeleccionada();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Error al re-imprimir tarjetas: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        
     }
 
     private void cargarNotas() {
@@ -224,30 +238,318 @@ public class ReimprimirNotaPanel extends JPanel {
     /* ===================================================================
      * ===============  PEGAMENTO DE REIMPRESIÓN (integrado)  =============
      * =================================================================== */
+    // ===== Tarjetas por artículo (¼ de hoja carta) – reimpresión =====
+    private static class TarjetaVentaData {
+        String razonSocial;
+        String cliente;
+        String fechaEvento;
+        String fechaCompra;
+        String asesor;
+        String codigoArticulo;
+        String articulo;
+        String marca;
+        String modelo;
+        String talla;
+        String color;
+        String obsequios;
+        String observaciones;
+    }
 
-    private void reimprimirDesdeUI(Integer numeroNota, String tipoRaw) {
+    private static class TarjetasVentaPrinter implements Printable {
+
+        private final java.util.List<TarjetaVentaData> tarjetas;
+
+        TarjetasVentaPrinter(java.util.List<TarjetaVentaData> tarjetas) {
+            this.tarjetas = tarjetas;
+        }
+
+        @Override
+        public int print(Graphics g, PageFormat pf, int pageIndex) throws PrinterException {
+            int tarjetasPorPagina = 4; // 2 x 2
+            int start = pageIndex * tarjetasPorPagina;
+            if (start >= tarjetas.size()) {
+                return NO_SUCH_PAGE;
+            }
+
+            Graphics2D g2 = (Graphics2D) g;
+            g2.setRenderingHint(
+                    java.awt.RenderingHints.KEY_TEXT_ANTIALIASING,
+                    java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON
+            );
+
+            double iw = pf.getImageableWidth();
+            double ih = pf.getImageableHeight();
+            double ix = pf.getImageableX();
+            double iy = pf.getImageableY();
+
+            double cardW = iw / 2.0;
+            double cardH = ih / 2.0;
+
+            for (int i = 0; i < tarjetasPorPagina; i++) {
+                int idx = start + i;
+                if (idx >= tarjetas.size()) break;
+
+                TarjetaVentaData t = tarjetas.get(idx);
+                int row = i / 2;
+                int col = i % 2;
+                double x = ix + col * cardW;
+                double y = iy + row * cardH;
+
+                dibujarTarjeta(g2, t, x, y, cardW, cardH);
+            }
+
+            return PAGE_EXISTS;
+        }
+
+        private void dibujarTarjeta(Graphics2D g2, TarjetaVentaData t,
+                                    double x, double y, double w, double h) {
+
+            int ix = (int) Math.round(x);
+            int iy = (int) Math.round(y);
+            int iw = (int) Math.round(w);
+            int ih = (int) Math.round(h);
+
+            // Marco
+            g2.drawRect(ix, iy, iw, ih);
+
+            int margin = 10;
+            int lineH  = 12;
+
+            Font base = g2.getFont();
+            Font titleFont = base.deriveFont(Font.BOLD, 12f);
+            Font textFont  = base.deriveFont(10f);
+
+            // RAZÓN SOCIAL centrada
+            g2.setFont(titleFont);
+            String rs = safe(t.razonSocial);
+            java.awt.FontMetrics fm = g2.getFontMetrics();
+            int titleX = ix + (iw - fm.stringWidth(rs)) / 2;
+            int yCursor = iy + margin + fm.getAscent();
+            g2.drawString(rs, titleX, yCursor);
+
+            // Resto de texto
+            g2.setFont(textFont);
+            yCursor += lineH * 2;
+            int textX = ix + margin;
+
+            g2.drawString("Cliente: " + safe(t.cliente), textX, yCursor);          yCursor += lineH;
+            g2.drawString("Fecha Evento: " + safe(t.fechaEvento), textX, yCursor); yCursor += lineH;
+            g2.drawString("Fecha Compra: " + safe(t.fechaCompra), textX, yCursor); yCursor += lineH;
+            g2.drawString("Asesor: " + safe(t.asesor), textX, yCursor);            yCursor += lineH;
+
+            yCursor += lineH / 2;
+            g2.drawString("Código Artículo: " + safe(t.codigoArticulo), textX, yCursor); yCursor += lineH;
+            g2.drawString("Artículo: " + safe(t.articulo), textX, yCursor);               yCursor += lineH;
+            g2.drawString("Marca: " + safe(t.marca), textX, yCursor);                     yCursor += lineH;
+            g2.drawString("Modelo: " + safe(t.modelo), textX, yCursor);                   yCursor += lineH;
+            g2.drawString("Talla: " + safe(t.talla) + "   Color: " + safe(t.color),
+                          textX, yCursor);
+            yCursor += lineH * 2;
+
+            // Obsequios
+g2.drawString("Obsequios:", textX, yCursor);
+yCursor += lineH;
+
+String ob = safe(t.obsequios);
+if (!ob.isEmpty()) {
+    String[] lineas = ob.split("\\r?\\n");
+    for (String linea : lineas) {
+        linea = linea.trim();
+        if (linea.isEmpty()) continue;
+
+        // igual que el formato original: indentado y una línea por obsequio
+        g2.drawString("    " + linea, textX, yCursor);
+        yCursor += lineH;
+    }
+} else {
+    yCursor += lineH;
+}
+
+
+            // Observaciones
+            yCursor += lineH / 2;
+            g2.drawString("Observaciones:", textX, yCursor);
+            yCursor += lineH;
+            String obs = safe(t.observaciones);
+            if (!obs.isEmpty()) {
+                yCursor = drawWrappedSimple(g2, obs, textX + 10, yCursor, iw - 2 * margin - 10);
+            }
+        }
+
+        private static String safe(String s) {
+            return (s == null) ? "" : s;
+        }
+
+        static void imprimir(Component parent, java.util.List<TarjetaVentaData> tarjetas) throws PrinterException {
+            if (tarjetas == null || tarjetas.isEmpty()) return;
+            PrinterJob job = PrinterJob.getPrinterJob();
+            job.setPrintable(new TarjetasVentaPrinter(tarjetas));
+            if (!job.printDialog()) return;
+            job.print();
+        }
+    }
+
+    /** Wrap simple para tarjetas. */
+    private static int drawWrappedSimple(Graphics2D g2, String text, int x, int y, int maxWidth) {
+        if (text == null) return y;
+        text = text.trim();
+        if (text.isEmpty()) return y;
+
+        java.awt.FontMetrics fm = g2.getFontMetrics();
+        String[] words = text.split("\\s+");
+        StringBuilder line = new StringBuilder();
+        int yy = y;
+
+        for (String w : words) {
+            String tryLine = (line.length() == 0 ? w : line + " " + w);
+            if (fm.stringWidth(tryLine) <= maxWidth) {
+                line.setLength(0);
+                line.append(tryLine);
+            } else {
+                g2.drawString(line.toString(), x, yy);
+                yy += fm.getHeight();
+                line.setLength(0);
+                line.append(w);
+            }
+        }
+        if (line.length() > 0) {
+            g2.drawString(line.toString(), x, yy);
+            yy += fm.getHeight();
+        }
+        return yy;
+    }
+
+    // ¿Este artículo cuenta como "Vestido"?
+    private boolean esArticuloVestido(String articulo) {
+        if (articulo == null) return false;
+        String s = articulo.toLowerCase();
+        return s.contains("vestido");
+    }
+
+    private java.util.List<TarjetaVentaData> construirTarjetasVenta(
+            EmpresaInfo emp,
+            String clienteNombre,
+            LocalDate fechaEvento,
+            LocalDate fechaCompra,
+            String asesorNombre,
+            java.util.List<NotaDetalle> detsPrint,
+            java.util.List<String> obsequiosCodigos,
+            String observaciones) {
+
+        java.util.List<TarjetaVentaData> tarjetas = new java.util.ArrayList<>();
+
+        String razon = (emp.razonSocial != null && !emp.razonSocial.isBlank())
+                ? emp.razonSocial
+                : (emp.nombreFiscal != null ? emp.nombreFiscal : "");
+
+        java.time.format.DateTimeFormatter MX =
+                java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+        String fechaEventoStr = (fechaEvento == null) ? "" : fechaEvento.format(MX);
+        String fechaCompraStr = (fechaCompra == null) ? "" : fechaCompra.format(MX);
+
+        // ======================== O B S E Q U I O S ========================
+String obsequiosTexto = "";
+if (obsequiosCodigos != null && !obsequiosCodigos.isEmpty()) {
+    StringBuilder sb = new StringBuilder();
+
+    // Cada elemento de la lista es UNA línea tal como quieres verla en la tarjeta
+    for (String raw : obsequiosCodigos) {
+        if (raw == null) continue;
+        String linea = raw.trim();
+        if (linea.isEmpty()) continue;
+
+        if (sb.length() > 0) {
+            sb.append('\n');      // salto de línea entre obsequios
+        }
+        sb.append(linea);        // ya viene en formato "COD - desc talla color"
+    }
+
+    obsequiosTexto = sb.toString();
+}
+// ==================== FIN OBSEQUIOS =====================
+
+
+
+        String obs = (observaciones == null) ? "" : observaciones;
+
+        for (NotaDetalle d : detsPrint) {
+            String art = d.getArticulo();
+            int repeticiones = esArticuloVestido(art) ? 2 : 1;   // 2 tarjetas si es Vestido, 1 si no
+
+            for (int i = 0; i < repeticiones; i++) {
+                TarjetaVentaData t = new TarjetaVentaData();
+                t.razonSocial    = razon;
+                t.cliente        = clienteNombre == null ? "" : clienteNombre;
+                t.fechaEvento    = fechaEventoStr;
+                t.fechaCompra    = fechaCompraStr;
+                t.asesor         = asesorNombre == null ? "" : asesorNombre;
+                t.codigoArticulo = d.getCodigoArticulo() == null ? "" : d.getCodigoArticulo();
+                t.articulo       = art == null ? "" : art;
+                t.marca          = d.getMarca() == null ? "" : d.getMarca();
+                t.modelo         = d.getModelo() == null ? "" : d.getModelo();
+                t.talla          = d.getTalla() == null ? "" : d.getTalla();
+                t.color          = d.getColor() == null ? "" : d.getColor();
+                t.obsequios      = obsequiosTexto;   // aquí ya va "COD - DESC" por línea
+                t.observaciones  = obs;
+                tarjetas.add(t);
+            }
+        }
+
+        return tarjetas;
+    }
+
+    private void imprimirTarjetasVenta(
+            EmpresaInfo emp,
+            String clienteNombre,
+            LocalDate fechaEvento,
+            LocalDate fechaCompra,
+            String asesorNombre,
+            java.util.List<NotaDetalle> detsPrint,
+            java.util.List<String> obsequiosCodigos,
+            String observaciones) {
+
+        java.util.List<TarjetaVentaData> tarjetas = construirTarjetasVenta(
+                emp, clienteNombre, fechaEvento, fechaCompra,
+                asesorNombre, detsPrint, obsequiosCodigos, observaciones
+        );
+
+        if (tarjetas.isEmpty()) return;
+
+        try {
+            TarjetasVentaPrinter.imprimir(this, tarjetas);
+        } catch (PrinterException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Las tarjetas no se pudieron imprimir: " + ex.getMessage(),
+                    "Impresión de tarjetas", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+
+private void reimprimirDesdeUI(Integer numeroNota, String tipoRaw) {
     int row = tbNotas.getSelectedRow();
     if (row < 0) {
-        JOptionPane.showMessageDialog(this, "Selecciona una nota.", "Atención", JOptionPane.WARNING_MESSAGE);
+        JOptionPane.showMessageDialog(this, "Selecciona una nota.", "Atención",
+                JOptionPane.WARNING_MESSAGE);
         return;
     }
     int modelRow = tbNotas.convertRowIndexToModel(row);
 
-    String folio = String.valueOf(modelNotas.getValueAt(modelRow, 2));
-    Double total = asDouble(modelNotas.getValueAt(modelRow, 4));
-    Double saldo = asDouble(modelNotas.getValueAt(modelRow, 5));
+    String folio   = String.valueOf(modelNotas.getValueAt(modelRow, 2));
+    Double total   = asDouble(modelNotas.getValueAt(modelRow, 4));
+    Double saldo   = asDouble(modelNotas.getValueAt(modelRow, 5));
     String tipoCelda = (String) modelNotas.getValueAt(modelRow, 1);
 
-    // 1) Inferir tipo por texto/heurística existente
+    // 1) Inferimos tipo de nota a partir de la columna "Tipo" y total/saldo
     TipoNota tipo = inferirTipoDesdeFila(tipoCelda, total, saldo);
 
-    // 2) Fallback adicional: si el folio inicia con D => devolución (ej. D0007)
-    String folioU = folio == null ? "" : folio.trim().toUpperCase();
+    // 2) Fallback extra: si el folio empieza con "D", la tratamos como devolución
+    String folioU = (folio == null) ? "" : folio.trim().toUpperCase();
     if (folioU.startsWith("D")) {
         tipo = TipoNota.DEVOLUCION;
     }
 
-    // 3) Cargar detalle
+    // 3) Cargar detalle de la nota seleccionada
     List<NotaDetalle> dets;
     try {
         dets = new NotasDAO().listarDetalleDeNota(numeroNota);
@@ -257,166 +559,357 @@ public class ReimprimirNotaPanel extends JPanel {
         return;
     }
 
-    // 4) Reconstruir Nota mínima
-    Nota nota = new Nota();
-    try { nota.getClass().getMethod("setNumero", Integer.class).invoke(nota, numeroNota); } catch (Exception ignore) {}
-    try { nota.getClass().getMethod("setTotal",  Double.class).invoke(nota, total);       } catch (Exception ignore) {}
-    try { nota.getClass().getMethod("setSaldo",  Double.class).invoke(nota, saldo);       } catch (Exception ignore) {}
-    try { nota.getClass().getMethod("setTelefono", String.class).invoke(nota, txtTelefono.getText().trim()); } catch (Exception ignore) {}
+    // 4) Armar la cabecera Nota:
+    //    Intentamos leerla completa desde BD usando el folio.
+    //    Si no se puede, construimos una mínima con los datos de la tabla.
+    String tel = TelefonosUI.soloDigitos(txtTelefono.getText());
+    Nota nota = null;
+    try {
+        if (!folioU.isEmpty()) {
+            NotasDAO dao = new NotasDAO();
+            Nota nDb = dao.buscarNotaPorFolio(folio);
+            if (nDb != null) {
+                nota = nDb;
+            }
+        }
+    } catch (SQLException ex) {
+        // Si truena, seguimos con una nota mínima
+    }
+    if (nota == null) {
+        nota = new Nota();
+        nota.setNumeroNota(numeroNota);
+        nota.setTotal(total);
+        nota.setSaldo(saldo);
+        nota.setTelefono(tel);
+    }
 
-    // === Cargar observaciones de la nota, si existen ===
-String observacionesTexto = "";
-try {
-    Controlador.NotasObservacionesDAO obsDAO = new Controlador.NotasObservacionesDAO();
-    observacionesTexto = obsDAO.getByNota(numeroNota);
-} catch (SQLException ex) {
-    observacionesTexto = "";
-}
+    // 5) Cargar observaciones (si existe la tabla/DAO NotasObservaciones)
+    String observacionesTexto = "";
+    try {
+        Controlador.NotasObservacionesDAO obsDAO = new Controlador.NotasObservacionesDAO();
+        observacionesTexto = obsDAO.getByNota(numeroNota);
+    } catch (Exception ex) {
+        observacionesTexto = "";
+    }
 
-    // 5) Pagos aproximados para reimpresión (no afecta devolución)
+    // 6) Pagos aproximados según tipo de nota (solo para que los formatos no exploten)
     String tipoStrParaPagos = switch (tipo) {
-        case ABONO -> "ABONO";
-        case ANTICIPO -> "ANTICIPO";
+        case ABONO      -> "ABONO";
+        case ANTICIPO   -> "ANTICIPO";
         case DEVOLUCION -> "DEVOLUCION";
-        default -> "CONTADO";
+        default         -> "CONTADO";
     };
     PagoFormas pagos = crearPagoFormasParaReimpresion(total, saldo, tipoStrParaPagos);
 
-    // 6) Empresa
+    // 7) Datos de empresa
     EmpresaInfo emp = cargarEmpresaInfo();
 
-    // 7) Elegir formato correcto (AQUÍ ajustamos DEVOLUCIÓN)
+    
+
+    // 8) Elegir el formato correcto según el tipo
     Printable printable;
 
-switch (tipo) {
-    case DEVOLUCION: {
-        // 1) Recalcular monto DV desde el detalle
-        double montoDV = 0d;
-        if (dets != null) {
-            for (NotaDetalle d : dets) {
-                montoDV += (d.getSubtotal() == null ? 0d : d.getSubtotal());
+    switch (tipo) {
+
+        case DEVOLUCION: {
+            // Recalcular monto devuelto sumando subtotales del detalle
+            double montoDV = 0d;
+            if (dets != null) {
+                for (NotaDetalle d : dets) {
+                    montoDV += (d.getSubtotal() == null ? 0d : d.getSubtotal());
+                }
             }
-        }
-        montoDV = Math.round(montoDV * 100.0) / 100.0;
+            montoDV = Math.round(montoDV * 100.0) / 100.0;
 
-        // 2) Por defecto (CN) el saldo a favor es el monto devuelto
-        double saldoAFavor = montoDV;
+            double saldoAFavor = montoDV;
 
-        // 3) Si la venta origen fue CR, limitar a lo efectivamente pagado
-        Integer origen = leerNotaOrigenPorDV(numeroNota);
-        if (origen != null) {
-            NotaHead oh = leerNotaHead(origen);
-            if (oh != null && "CR".equalsIgnoreCase(oh.tipo)) {
-                double pagadoActual = Math.max(0d, oh.total - oh.saldo);
-                saldoAFavor = Math.min(montoDV, pagadoActual);
+            // Si viene de una venta CR, limitamos al monto efectivamente pagado
+            Integer origen = leerNotaOrigenPorDV(numeroNota);
+            if (origen != null) {
+                NotaHead oh = leerNotaHead(origen);
+                if (oh != null && "CR".equalsIgnoreCase(oh.tipo)) {
+                    double pagadoActual = Math.max(0d, oh.total - oh.saldo);
+                    saldoAFavor = Math.min(montoDV, pagadoActual);
+                }
             }
+
+            // Inyectamos saldo a favor en la nota para que el formato lo imprima
+            setNotaTotalSeguro(nota, saldoAFavor);
+
+            printable = construirPrintableDevolucion(emp, nota, dets, folio);
+            break;
         }
 
+        case ABONO: {
+            // Total de la fila de ABONO = monto abonado
+            double abonoReal  = (total == null ? 0d : total);
+            double saldoAbono = (saldo == null ? 0d : saldo);
 
+            // 1) Buscar la venta de origen (CR) ligada a este abono
+            Integer notaOrigen = null;
+            try (java.sql.Connection cn = Conexion.Conecta.getConnection();
+                 java.sql.PreparedStatement ps = cn.prepareStatement(
+                         "SELECT nota_relacionada FROM Notas WHERE numero_nota = ?")) {
+                ps.setInt(1, numeroNota);
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        int v = rs.getInt(1);
+                        if (!rs.wasNull()) notaOrigen = v;
+                    }
+                }
+            } catch (Exception ignore) { }
 
-        // 4) Inyectar el saldo a favor en la Nota para que el formato lo imprima
-        setNotaTotalSeguro(nota, saldoAFavor);
-
-        printable = construirPrintableDevolucion(emp, nota, dets, folio);
-        break;
-    }
-
-case ABONO: {
-    // Total y saldo que trae la fila del ABONO (la que está seleccionada en la tabla)
-    double abonoReal   = (total == null ? 0d : total);
-    double saldoAbono  = (saldo == null ? 0d : saldo);
-
-    // 1. Dame la venta ligada a este abono (Notas.nota_relacionada)
-    Integer notaOrigen = null;
-    try (java.sql.Connection cn = Conexion.Conecta.getConnection();
-         java.sql.PreparedStatement ps = cn.prepareStatement(
-                 "SELECT nota_relacionada FROM Notas WHERE numero_nota = ?")) {
-        ps.setInt(1, numeroNota);
-        try (java.sql.ResultSet rs = ps.executeQuery()) {
-            if (rs.next()) {
-                int v = rs.getInt(1);
-                if (!rs.wasNull()) notaOrigen = v;
+            // 2) Detalle de la nota de crédito original
+            List<NotaDetalle> detsOrigen = java.util.Collections.emptyList();
+            NotaHead headOrigen = null;
+            if (notaOrigen != null) {
+                try {
+                    detsOrigen = new NotasDAO().listarDetalleDeNota(notaOrigen);
+                } catch (SQLException ex) {
+                    detsOrigen = java.util.Collections.emptyList();
+                }
+                headOrigen = leerNotaHead(notaOrigen);
             }
+
+            // 3) Observaciones de la venta original
+            String observacionesOriginal = "";
+            if (notaOrigen != null) {
+                try {
+                    Controlador.NotasObservacionesDAO obsDAO = new Controlador.NotasObservacionesDAO();
+                    observacionesOriginal = obsDAO.getByNota(notaOrigen);
+                } catch (Exception ignore) { }
+            }
+
+            // 4) Usar total/saldo de la venta original como base del recibo de abono
+            double saldoPosterior;
+            if (headOrigen != null) {
+                setNotaTotalSeguro(nota, headOrigen.total); // total de la venta CR
+                saldoPosterior = headOrigen.saldo;          // saldo actual después del abono
+            } else {
+                // Fallback si no encontramos la venta original
+                saldoPosterior = saldoAbono;
+            }
+
+            // 5) Desglose de pagos: todo el abono en efectivo
+            PagoFormas pagosAbono =
+                    crearPagoFormasParaReimpresion(abonoReal, saldoPosterior, "ABONO");
+
+            printable = construirPrintableAbono(
+                    emp,
+                    nota,            // con total de la venta original (si se pudo)
+                    detsOrigen,      // detalle de la venta original
+                    pagosAbono,      // abono en "pagos"
+                    abonoReal,       // Abono: $...
+                    saldoPosterior,  // Saldo restante
+                    folio,
+                    observacionesOriginal
+            );
+            break;
         }
-    } catch (Exception ignore) { }
 
-    // 2. Cargar detalle EXACTO de esa venta origen (como ya hacías)
-    java.util.List<NotaDetalle> detsOrigen = java.util.Collections.emptyList();
-    NotaHead headOrigen = null;
-    if (notaOrigen != null) {
-        try {
-            detsOrigen = new NotasDAO().listarDetalleDeNota(notaOrigen);
-        } catch (SQLException ex) {
-            detsOrigen = java.util.Collections.emptyList();
+        case ANTICIPO: {
+            LocalDate fEntrega = null, fEvento = null;
+            String asesor = "";
+            printable = construirPrintableCreditoEmpresarial(
+                    emp, nota, dets, pagos,
+                    fEntrega, fEvento, asesor,
+                    folio,
+                    "", "",                      // nombre/tel2 fallback
+                    observacionesTexto
+            );
+            break;
         }
-        // Cabecera real de la nota de crédito (total y saldo actuales)
-        headOrigen = leerNotaHead(notaOrigen);
+
+        case CONTADO:
+        default: {
+            LocalDate fEntrega = null, fEvento = null;
+            String asesor = "";
+            printable = construirPrintableContadoEmpresarial(
+                    emp, nota, dets, pagos,
+                    fEntrega, fEvento, asesor,
+                    folio,
+                    "", "",                      // nombre/tel2 fallback
+                    observacionesTexto
+            );
+            break;
+        }
     }
 
-    // 3. Observaciones de la venta original
-    String observacionesOriginal = "";
-    if (notaOrigen != null) {
-        try {
-            Controlador.NotasObservacionesDAO obsDAO = new Controlador.NotasObservacionesDAO();
-            observacionesOriginal = obsDAO.getByNota(notaOrigen);
-        } catch (Exception ignore) {}
-    }
-
-    // 4. Ajustar la nota "base" para el formato:
-    //    TOTAL debe ser el de la venta original (CR), no el del abono.
-    double saldoPosterior;
-    if (headOrigen != null) {
-        // ahora notaBase.getTotal() = total de la venta original
-        setNotaTotalSeguro(nota, headOrigen.total);
-        // el formato usa saldoPosterior para "SALDO RESTANTE"
-        saldoPosterior = headOrigen.saldo;
-    } else {
-        // fallback por si no se pudo leer la nota origen
-        saldoPosterior = saldoAbono;
-    }
-
-    // 5. El desglose de pagos para reimpresión: todo el abono como un solo pago (efectivo)
-    Modelo.PagoFormas pagosAbono =
-            crearPagoFormasParaReimpresion(abonoReal, saldoPosterior, "ABONO");
-
-    // 6. Construir el mismo formato de "RECIBO DE ABONO" que usas al registrar
-    printable = construirPrintableAbono(
-            emp,
-            nota,           // ahora con TOTAL de la venta original
-            detsOrigen,     // detalle de la venta, no del abono
-            pagosAbono,     // abono en "pagos"
-            abonoReal,      // "Abono: $..."
-            saldoPosterior, // "Saldo restante: $..."
-            folio,          // folio del abono
-            observacionesOriginal
-    );
-    break;
-}
-case ANTICIPO: {
-        LocalDate fEntrega = null, fEvento = null; String asesor = "";
-        printable = construirPrintableCreditoEmpresarial(
-                emp, nota, dets, pagos, fEntrega, fEvento, asesor, folio, "", "", observacionesTexto);
-        break;
-    }
-
-    case CONTADO:
-    default: {
-        LocalDate fEntrega = null, fEvento = null; String asesor = "";
-        printable = construirPrintableContadoEmpresarial(
-                emp, nota, dets, pagos, fEntrega, fEvento, asesor, folio, "", "", observacionesTexto);
-        break;
-    }
-}
-
-
-    // 8) Imprimir
+    // 9) Lanzar impresión
     imprimirYConfirmarAsync(
             printable,
-            () -> JOptionPane.showMessageDialog(this, "Re-impresión completada.", "Listo", JOptionPane.INFORMATION_MESSAGE),
-            () -> JOptionPane.showMessageDialog(this, "Impresión cancelada o fallida.", "Aviso", JOptionPane.WARNING_MESSAGE)
+            () -> JOptionPane.showMessageDialog(this, "Re-impresión completada.",
+                    "Listo", JOptionPane.INFORMATION_MESSAGE),
+            () -> JOptionPane.showMessageDialog(this, "Impresión cancelada o fallida.",
+                    "Aviso", JOptionPane.WARNING_MESSAGE)
     );
 }
 
+    /** Re-imprime tarjetas de la nota seleccionada (solo CONTADO / CRÉDITO). */
+    private void reimprimirTarjetasSeleccionada() {
+        int row = tbNotas.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Selecciona una nota.", "Atención",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        int modelRow = tbNotas.convertRowIndexToModel(row);
+
+        // Datos básicos de la fila seleccionada
+        Integer numero   = (Integer) modelNotas.getValueAt(modelRow, 0);  // numero_nota
+        String  tipoCelda = (String) modelNotas.getValueAt(modelRow, 1);  // tipo
+        String  folio     = String.valueOf(modelNotas.getValueAt(modelRow, 2));
+        Double  total     = asDouble(modelNotas.getValueAt(modelRow, 4));
+        Double  saldo     = asDouble(modelNotas.getValueAt(modelRow, 5));
+
+        // 1) Determinar tipo de nota
+        TipoNota tipo = inferirTipoDesdeFila(tipoCelda, total, saldo);
+        String folioU = (folio == null) ? "" : folio.trim().toUpperCase();
+        if (folioU.startsWith("D")) {
+            tipo = TipoNota.DEVOLUCION;
+        }
+
+        // Tarjetas solo tienen sentido para ventas (CONTADO / ANTICIPO-CRÉDITO)
+        if (tipo != TipoNota.CONTADO && tipo != TipoNota.ANTICIPO) {
+            JOptionPane.showMessageDialog(this,
+                    "Las tarjetas solo aplican a notas de venta (contado o crédito).",
+                    "No aplica",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        NotasDAO dao = new NotasDAO();
+
+        // 2) Detalle de la nota
+        java.util.List<NotaDetalle> dets;
+        try {
+            dets = dao.listarDetalleDeNota(numero);
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error cargando detalle: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        if (dets == null || dets.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "La nota no tiene detalle para generar tarjetas.",
+                    "Sin datos", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // 3) Empresa
+        EmpresaInfo emp = cargarEmpresaInfo();
+
+        // 4) Cliente (por teléfono del filtro)
+        String tel = TelefonosUI.soloDigitos(txtTelefono.getText());
+        String clienteNombre = "";
+        try {
+            Controlador.clienteDAO cdao = new Controlador.clienteDAO();
+            Modelo.ClienteResumen cr = cdao.buscarResumenPorTelefono(tel);
+            if (cr != null && cr.getNombreCompleto() != null &&
+                    !cr.getNombreCompleto().isBlank()) {
+                clienteNombre = cr.getNombreCompleto();
+            }
+        } catch (Exception ignore) { }
+
+        // 5) Observaciones de la nota
+        String observaciones = "";
+        try {
+            observaciones = dao.obtenerObservacionesDeNota(numero);
+            if (observaciones == null) observaciones = "";
+        } catch (Exception ignore) { }
+
+        // 6) Fecha de evento de la nota (si la tienes guardada)
+        LocalDate fechaEvento = null;
+        try {
+            fechaEvento = dao.obtenerFechaEventoDeNota(numero);
+        } catch (Exception ignore) { }
+
+        // Fecha de compra: en tus ventas usas "hoy"
+        LocalDate fechaCompra = LocalDate.now();
+
+                // 7) Asesor: intentamos por folio y, si no sale, por número de nota
+        String asesorNombre = "";
+        try {
+            Integer asesorId = null;  // ID numérico del asesor
+
+            // 7.1 si hay folio, intenta obtener la nota por folio
+            if (folio != null && !folio.trim().isEmpty()) {
+                Nota notaPorFolio = dao.buscarNotaPorFolio(folio.trim());
+                if (notaPorFolio != null && notaPorFolio.getAsesor() != null) {
+                    asesorId = notaPorFolio.getAsesor();   // Integer
+                }
+            }
+
+            // 7.2 si no hay folio o no se obtuvo asesor, intenta leer el asesor directo de la tabla Notas
+            if (asesorId == null) {
+                try (java.sql.Connection cn = Conexion.Conecta.getConnection();
+                     java.sql.PreparedStatement ps = cn.prepareStatement(
+                             "SELECT asesor FROM Notas WHERE numero_nota = ?")) {
+
+                    ps.setInt(1, numero);   // numero = Integer
+
+                    try (java.sql.ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            int v = rs.getInt(1);
+                            if (!rs.wasNull()) {
+                                asesorId = v;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 7.3 traducir id de asesor a NOMBRE usando tu método de NotasDAO
+            if (asesorId != null) {
+                String nom = dao.obtenerNombreAsesor(asesorId); // método espera int
+                if (nom != null && !nom.isBlank()) {
+                    asesorNombre = nom;
+                } else {
+                    // Fallback: al menos imprime el ID si no hay nombre
+                    asesorNombre = "ID " + asesorId;
+                }
+            }
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+
+
+                // 8) Obsequios guardados para esa nota
+        List<String> obsequiosCodigos;
+        try {
+            String textoObsequios = dao.obtenerObsequiosDeNota(numero); // <<-- devuelve String
+
+            obsequiosCodigos = new ArrayList<>();
+
+            if (textoObsequios != null && !textoObsequios.isBlank()) {
+                // Si el texto viene con saltos de línea, lo partimos por líneas
+                for (String linea : textoObsequios.split("\\r?\\n")) {
+                    if (!linea.isBlank()) {
+                        obsequiosCodigos.add(linea.trim());
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            obsequiosCodigos = java.util.Collections.emptyList();
+        }
+
+        // 9) Mandar todo al motor de tarjetas
+        imprimirTarjetasVenta(
+                emp,
+                clienteNombre,
+                fechaEvento,
+                fechaCompra,
+                asesorNombre,
+                dets,
+                obsequiosCodigos,   // <<-- ahora es List<String>
+                observaciones
+        );
+
+    }
 
 
 
@@ -427,6 +920,22 @@ case ANTICIPO: {
         try { return Double.parseDouble(String.valueOf(v)); } catch (Exception e) { return 0d; }
     }
     private enum TipoNota { CONTADO, ANTICIPO, ABONO, DEVOLUCION }
+/** Lee el nombre del asesor asociado a una nota usando el folio. */
+private String leerAsesorNombre(NotasDAO dao, String folio) {
+    if (dao == null) return "";
+    String folioU = (folio == null) ? "" : folio.trim();
+    if (folioU.isEmpty()) return "";
+
+    try {
+        Nota nota = dao.buscarNotaPorFolio(folioU);   // ya existe este método en tu DAO
+        if (nota != null && nota.getAsesor() != null) {
+            String nom = dao.obtenerNombreAsesor(nota.getAsesor());
+            return (nom == null) ? "" : nom;
+        }
+    } catch (Exception ignore) {
+    }
+    return "";
+}
 
 private TipoNota inferirTipoDesdeFila(String tipoCelda, Double total, Double saldo) {
     String t = normaliza(tipoCelda); // mayúsculas, sin acentos
@@ -801,7 +1310,7 @@ private void setNotaTotalSeguro(Object nota, double valor) {
                 int afterTail = y + usedHeader;
 
                 g2.setFont(fTitle);
-                center(g2, "NOTA DE VENTA", x, w, afterTail + 14);
+                center(g2, "NOTA DE VENTA CONTADO", x, w, afterTail + 14);
                 y = afterTail + 32;
 
                 g2.setFont(fSection);
@@ -1288,7 +1797,7 @@ if (observacionesTexto != null && !observacionesTexto.isBlank()) {
                 int afterTail   = y + usedHeader;
 
                 g2.setFont(fTitle);
-                center(g2, "NOTA DE ANTICIPO", x, w, afterTail + 14);
+                center(g2, "NOTA DE VENTA CRÉDITO", x, w, afterTail + 14);
                 y = afterTail + 32;
 
                 g2.setFont(fSection);

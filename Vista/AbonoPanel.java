@@ -1,24 +1,21 @@
 package Vista;
 
-import Controlador.NotasDAO;
-import Controlador.AbonoService;
-import Controlador.EmpresaDAO;
-import Controlador.clienteDAO;
-
-import Utilidades.TelefonosUI;
-
-
-import Modelo.ClienteResumen;
-import Modelo.Empresa;
-import Modelo.Nota;
-import Modelo.NotaDetalle;
-import Modelo.PagoFormas;
-
-import javax.imageio.ImageIO;
-import javax.swing.*;
-import javax.swing.text.AbstractDocument;
-import javax.swing.text.DocumentFilter;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dialog;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.awt.image.BufferedImage;
+// ===== IMPRESIÓN =====
+import java.awt.print.PageFormat;
+import java.awt.print.Printable;
+import java.awt.print.PrinterException;
+import java.awt.print.PrinterJob;
 import java.io.ByteArrayInputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -29,12 +26,38 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-// ===== IMPRESIÓN =====
-import java.awt.print.PageFormat;
-import java.awt.print.Printable;
-import java.awt.print.PrinterException;
-import java.awt.print.PrinterJob;
-import java.awt.image.BufferedImage;
+
+import javax.imageio.ImageIO;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.JDialog;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+import javax.swing.WindowConstants;
+import javax.swing.text.AbstractDocument;
+import javax.swing.text.DocumentFilter;
+
+import Controlador.AbonoService;
+import Controlador.EmpresaDAO;
+import Controlador.NotasDAO;
+import Controlador.clienteDAO;
+import Modelo.ClienteResumen;
+import Modelo.Empresa;
+import Modelo.Nota;
+import Modelo.NotaDetalle;
+import Modelo.PagoFormas;
+import Utilidades.TelefonosUI;
 
 
 public class AbonoPanel extends JPanel {
@@ -51,7 +74,13 @@ public class AbonoPanel extends JPanel {
 
 
     private String lastTel = null;
+    private Integer cajeraCodigo;
+    private String  cajeraNombre;
 
+    public void setCajeraActual(int codigoEmpleado, String nombreCompleto) {
+        this.cajeraCodigo = codigoEmpleado;
+        this.cajeraNombre = nombreCompleto;
+    }
 
     public AbonoPanel() {
     setLayout(new BorderLayout());
@@ -310,142 +339,37 @@ private void guardarAbono() {
         List<NotaDetalle> dets = new NotasDAO().listarDetalleDeNota(sel.getNumeroNota());
         String folioPrint = (res.folio == null || res.folio.isBlank()) ? "—" : res.folio;
 
-        Printable prn = construirPrintableAbono(emp, sel, dets, p, abono, res.saldoNuevo, folioPrint);
+                Printable prn = construirPrintableAbono(emp, sel, dets, p, abono, res.saldoNuevo, folioPrint, cajeraCodigo, cajeraNombre);
 
         if (Math.abs(res.saldoNuevo) <= 0.005) {
             // --- LIQUIDADO ---
-            // 1. Obtenemos el texto FINAL de las cláusulas (ya personalizado para esta nota)
-            String memo = obtenerOModificarCondiciones(sel.getNumeroNota(), cn);
-            if (memo == null || memo.isBlank()) {
-                throw new SQLException("Formato de condiciones cancelado o vacío.");
-            }
-
-            // 2. Obtenemos el MAPA con los datos de la nota (para tokens que hayan quedado)
-            Map<String, String> vars = construirVarsDesdeNota(sel.getNumeroNota());
-
-            // 3. Usamos el memo final como base para impresión
-            final String clausulasTexto = memo;
-
-            
-            // 4. Definimos los textos estáticos del formulario
-            final String P1_INTRO = "En MIANOVIAS, ¡te damos la bienvenida a vivir esta gran experiencia!";
-            final String P5_ACUERDO = "ESTOY DE ACUERDO:";
-            final String P6_FIRMA = "NOMBRE Y FIRMA DEL CLIENTE";
-
-            // 5. Creamos el NUEVO Printable para las condiciones
-            Printable prnCondiciones = (g, pf, pageIndex) -> {
-                if (pageIndex > 0) return Printable.NO_SUCH_PAGE;
-                Graphics2D g2 = (Graphics2D) g;
-                g2.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING,
-                                    java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-
-                final int M = 70;
-                int x = (int) pf.getImageableX() + M;
-                int y = (int) pf.getImageableY() + M;
-                int w = (int) pf.getImageableWidth() - (M * 2);
-
-                Font bodyFont = new Font("Arial", Font.PLAIN, 11);
-                Font labelFont = new Font("Arial", Font.BOLD, 10);
-                
-                g2.setFont(bodyFont);
-                
-                y = drawWrappedSimple(g2, P1_INTRO, x, y, w);
-                y += 18;
-
-                g2.setFont(labelFont);
-
-                // Extraer datos del mapa 'vars'
-                String vNombre = vars.getOrDefault("cliente_nombre", "");
-                String vCompra = vars.getOrDefault("fecha_compra", "");
-                String vEvento = vars.getOrDefault("fecha_evento", "");
-                String vEntrega = vars.getOrDefault("fecha_en_tienda", "");
-                String vAsesora = vars.getOrDefault("asesora", "");
-                String vBusto = vars.getOrDefault("busto", "");
-                String vCintura = vars.getOrDefault("cintura", "");
-                String vCadera = vars.getOrDefault("cadera", "");
-                
-                // Extraer datos del vestido (ahora SÍ vienen en 'vars')
-                String vModelo = vars.getOrDefault("modelo", "");
-                String vTalla  = vars.getOrDefault("talla", "");
-                String vColor  = vars.getOrDefault("color", "");
-                String vMarca  = vars.getOrDefault("marca", "");
-                String vCodigo = vars.getOrDefault("codigo", "");
-                String vPrecio = vars.getOrDefault("precio", "0.00");
-                String vDesc = vars.getOrDefault("descuento_pct", "0.00");
-                String vPagar = vars.getOrDefault("precio_pagar", "0.00");
-
-                // Dibujar los campos
-                y = drawFieldLine(g2, x, y, w, "NOMBRE DE LA NOVIA:", vNombre);
-                y = drawTwoColsLine(g2, x, y, w, "FECHA DE COMPRA:", vCompra, "FECHA DE EVENTO:", vEvento);
-
-                y = drawThreeColsLine(g2, x, y, w, 
-                    "MODELO SELECCIONADO:", vModelo, 
-                    "TALLA:", vTalla, 
-                    "COLOR:", vColor);
-                y = drawFieldLine(g2, x, y, w, "DE LA MARCA:", vMarca);
-                y = drawFieldLine(g2, x, y, w, "TU ASESORA:", vAsesora);
-                y = drawTwoColsLine(g2, x, y, w, "CÓDIGO:", vCodigo, "TU VESTIDO ESTARÁ EN TIENDA EL DIA:", vEntrega);
-                y = drawFieldLine(g2, x, y, w, "PRECIO:", "$" + vPrecio);
-                y = drawFieldLine(g2,x,y,w,"APLICANDO UN DESCUENTO DEL:", vDesc + "%");
-                y = drawFieldLine(g2,x,y,w,"PRECIO A PAGAR:", "$" + vPagar);
-                
-                y += 6;
-                g2.drawString("MEDIDAS CORPORALES AL DIA DE HOY:", x, y + g2.getFontMetrics().getAscent());
-                y += 18;
-                y = drawThreeColsLine(g2, x, y, w, "C.BUSTO:", vBusto, "C.CINTURA:", vCintura, "C.CADERA:", vCadera);
-                y += 18;
-
-                g2.setFont(bodyFont);
-                final String clausulasRenderizadas = renderMemo(clausulasTexto, vars);
-                String[] parrafos = clausulasRenderizadas.split("\n");
-                for (String paragraph : parrafos) {
-                    if (paragraph.trim().isEmpty()) continue;
-                    y = drawWrappedSimple(g2, paragraph.trim(), x, y, w);
-                    y += 6;
-                }
-                y += 36;
-
-                // === 4. Firma ===
-                g2.setFont(labelFont);
-                
-                // Dibuja "ESTOY DE ACUERDO" SIN línea
-                g2.drawString(P5_ACUERDO, x, y + g2.getFontMetrics().getAscent());
-                y += 18; // Avanza una línea
-                
-                y += 36; // Espacio grande antes de la firma
-                
-                // Dibuja "NOMBRE Y FIRMA" CON línea
-                y = drawFieldLine(g2, x, y, w, P6_FIRMA, "");   // NOMBRE Y FIRMA
-                        
-                return Printable.PAGE_EXISTS;
-            };
-
-            Printable combinado = combinarEnDosPaginas(prn, prnCondiciones);
+            // Ahora SOLO se imprime el recibo de abono, sin hoja de condiciones
             imprimirYConfirmarAsync(
-                combinado,
-                () -> JOptionPane.showMessageDialog(this, 
-                    "Abono final registrado e impreso con condiciones.\nSaldo liquidado."),
-                () -> JOptionPane.showMessageDialog(this, 
-                    "Abono registrado pero impresión no confirmada.")
+                    prn,
+                    () -> JOptionPane.showMessageDialog(this,
+                            "Abono final registrado e impreso.\nSaldo liquidado.\nFolio: " + folioPrint),
+                    () -> JOptionPane.showMessageDialog(this,
+                            "Abono final registrado pero la impresión no se confirmó.\nSaldo liquidado.",
+                            "Aviso", JOptionPane.WARNING_MESSAGE)
             );
             // Notificar a Corte de Caja que hubo una operación completada
             try {
                 Utilidades.EventBus.notificarOperacionFinalizada();
             } catch (Exception ignore) {}
 
-
-             
         } else {
             // --- NORMAL ---
-            imprimirYConfirmarAsync(prn,
-                    () -> JOptionPane.showMessageDialog(this, "Abono registrado e impreso.\nFolio: " + folioPrint),
-                    () -> JOptionPane.showMessageDialog(this, "Abono registrado pero impresión no confirmada.")
+            imprimirYConfirmarAsync(
+                    prn,
+                    () -> JOptionPane.showMessageDialog(this,
+                            "Abono registrado e impreso.\nFolio: " + folioPrint),
+                    () -> JOptionPane.showMessageDialog(this,
+                            "Abono registrado pero impresión no confirmada.")
             );
             // Notificar a Corte de Caja que hubo una operación completada
             try {
                 Utilidades.EventBus.notificarOperacionFinalizada();
             } catch (Exception ignore) {}
-
         }
 
         cn.commit();
@@ -1173,7 +1097,9 @@ private Printable construirPrintableAbono(
         PagoFormas p,              // lo que se abonó por forma
         double abonoRealizado,         // suma de pagos capturados
         double saldoRestante,          // nuevo saldo después del abono
-        String folioTxt) {
+        String folioTxt,
+        int cajeraCodigo, 
+        String cajeraNombre) {
 
     final DateTimeFormatter MX = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     final String tel1     = (notaBase.getTelefono() == null) ? "" : notaBase.getTelefono();
@@ -1186,7 +1112,6 @@ private Printable construirPrintableAbono(
     final double tr = p.getTransferencia()    == null ? 0d : p.getTransferencia();
     final double dp = p.getDeposito()         == null ? 0d : p.getDeposito();
     final double ef = p.getEfectivo()         == null ? 0d : p.getEfectivo();
-
 
     // Cliente (nombre/tel2 y pruebas si existen)
     String cliNombre  = "";
@@ -1202,29 +1127,12 @@ private Printable construirPrintableAbono(
             if (cr.getFechaPrueba2()!=null) cliPrueba2 = cr.getFechaPrueba2().format(MX);
         }
     } catch (Exception ignore) { }
-    // Medidas (si existen columnas)
-    String medBusto = "", medCintura = "", medCadera = "";
-    try {
-        clienteDAO cdao = new clienteDAO();
-        java.util.Map<String,String> raw = cdao.detalleGenericoPorTelefono(tel1);
-        if (raw != null) {
-            for (java.util.Map.Entry<String,String> e : raw.entrySet()) {
-                String k = e.getKey() == null ? "" : e.getKey().toLowerCase();
-                String v = e.getValue() == null ? "" : e.getValue();
-                if (k.equals("busto"))      medBusto   = v;
-                else if (k.equals("cintura")) medCintura = v;
-                else if (k.equals("cadera"))  medCadera  = v;
-            }
-        }
-    } catch (Exception ignore) { }
 
-    StringBuilder _med = new StringBuilder();
-    if (!medBusto.isBlank())   { _med.append("Busto: ").append(medBusto); }
-    if (!medCintura.isBlank()){ if (_med.length()>0) _med.append("   "); _med.append("Cintura: ").append(medCintura); }
-    if (!medCadera.isBlank())  { if (_med.length()>0) _med.append("   "); _med.append("Cadera: ").append(medCadera); }
-    final String medidasFmt = _med.toString();
 
     final String folio = (folioTxt == null || folioTxt.isBlank()) ? "—" : folioTxt;
+    final String fCajeraCodigo = (cajeraCodigo == 0 ? "" : String.valueOf(cajeraCodigo).trim());
+    
+    final String fCajeraNombre = (cajeraNombre == null ? "" : cajeraNombre.trim());
     final String fCliNombre = cliNombre, fCliTel2 = cliTel2, fCliPrueba1 = cliPrueba1, fCliPrueba2 = cliPrueba2;
 
     return new Printable() {
@@ -1310,7 +1218,7 @@ private Printable construirPrintableAbono(
 
             // Título
             g2.setFont(fTitle);
-            center(g2, "RECIBO DE ABONO", x, w, afterTail + 14);
+            center(g2, "NOTA DE ABONO", x, w, afterTail + 14);
             y = afterTail + 32;
 
             // ===== Datos del cliente (2 columnas) =====
@@ -1330,15 +1238,14 @@ private Printable construirPrintableAbono(
             yLeft  = drawWrapped(g2, joinNonBlank("   ",
                     labelIf("Teléfono: ", safe(tel1)),
                     labelIf("Teléfono 2: ", safe(fCliTel2))), x, yLeft + 2, leftW);
-            if (!medidasFmt.isBlank()) {
-                yLeft = drawWrapped(g2, medidasFmt, x, yLeft + 2, leftW);
-            }
 
             yRight = drawWrapped(g2, labelIf("Fecha de abono: ", fechaHoy), x + leftW + gapCols, yRight, rightW);
             if (!fCliPrueba1.isBlank())
                 yRight = drawWrapped(g2, labelIf("Fecha de prueba 1: ", fCliPrueba1), x + leftW + gapCols, yRight + 2, rightW);
             if (!fCliPrueba2.isBlank())
                 yRight = drawWrapped(g2, labelIf("Fecha de prueba 2: ", fCliPrueba2), x + leftW + gapCols, yRight + 2, rightW);
+
+            
 
             y = Math.max(yLeft, yRight) + 10;
 
@@ -1440,6 +1347,18 @@ try {
             yPRight = drawWrapped(g2, "Transferencia: $" + fmt2(tr), x + leftW + gapCols, yPRight + 2, rightW);
             yPRight = drawWrapped(g2, "Efectivo: $"     + fmt2(ef), x + leftW + gapCols, yPRight + 2, rightW);
 
+            // Terminamos la sección de pagos: bajar y hasta lo más grande entre izquierda y derecha
+            y = Math.max(yPLeft, yPRight) + 10;
+            // ===== Cajera (pie de página) =====
+            String cajeraLinea = "Cajera: " + safe(fCajeraCodigo);
+            if (!fCajeraNombre.isEmpty()) {
+                cajeraLinea += " - " + fCajeraNombre;
+            }
+            y += 16;
+            g2.drawLine(x, y, x + w, y);
+            y += 14;
+            g2.setFont(fText);
+            g2.drawString(cajeraLinea, x, y);
             return PAGE_EXISTS;
         }
 

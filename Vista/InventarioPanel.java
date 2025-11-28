@@ -54,14 +54,21 @@ public class InventarioPanel extends JPanel {
         add(top, BorderLayout.NORTH);
 
         // ---- Tabla ----
-        String[] cols = {"Código", "Artículo", "Marca", "Modelo", "Talla", "Color",
-                "Precio", "Desc.%", "Precio final", "Exist.", "Status", "Registro", "Modificar"};
+        String[] cols = {
+                "Código", "Artículo", "Desc. 1", "Desc. 2",
+                "Marca", "Modelo", "Talla", "Color",
+                "Precio", "Costo c/IVA", "Desc.%", "Precio final",
+                "Exist.", "Conteo", "Status", "Registro",
+                "Remisión", "Factura", "F. pago",
+                "Modificar"
+        };
         modeloTabla = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int row, int column) {
-                return column == 12; // sólo la columna del botón
+                return column == 19; // solo la columna del botón "Modificar"
             }
         };
         tabla = new JTable(modeloTabla);
+
         tabla.setRowHeight(26);
         tabla.setAutoCreateRowSorter(true);
         tabla.getTableHeader().setReorderingAllowed(false);
@@ -69,20 +76,23 @@ public class InventarioPanel extends JPanel {
         // Render numérico alineado a la derecha
         DefaultTableCellRenderer rightRenderer = new DefaultTableCellRenderer();
         rightRenderer.setHorizontalAlignment(SwingConstants.RIGHT);
-        tabla.getColumnModel().getColumn(6).setCellRenderer(rightRenderer);
-        tabla.getColumnModel().getColumn(7).setCellRenderer(rightRenderer);
-        tabla.getColumnModel().getColumn(8).setCellRenderer(rightRenderer);
-        tabla.getColumnModel().getColumn(9).setCellRenderer(rightRenderer);
+        tabla.getColumnModel().getColumn(8).setCellRenderer(rightRenderer);  // Precio
+        tabla.getColumnModel().getColumn(9).setCellRenderer(rightRenderer);  // Costo c/IVA
+        tabla.getColumnModel().getColumn(10).setCellRenderer(rightRenderer); // Desc.%
+        tabla.getColumnModel().getColumn(11).setCellRenderer(rightRenderer); // Precio final
+        tabla.getColumnModel().getColumn(12).setCellRenderer(rightRenderer); // Exist.
+        tabla.getColumnModel().getColumn(13).setCellRenderer(rightRenderer); // Conteo
 
-        // Columna "Modificar" con botón
+
         new ButtonColumn(tabla, new AbstractAction("Modificar") {
-            @Override public void actionPerformed(ActionEvent e) {
-                int row = Integer.parseInt(e.getActionCommand());
-                int modelRow = tabla.convertRowIndexToModel(row);
-                String codigo = (String) modeloTabla.getValueAt(modelRow, 0);
-                abrirDialogoModificar(codigo);
-            }
-        }, 12);
+        @Override public void actionPerformed(ActionEvent e) {
+            int row = Integer.parseInt(e.getActionCommand());
+            int modelRow = tabla.convertRowIndexToModel(row);
+            String codigo = (String) modeloTabla.getValueAt(modelRow, 0);
+            abrirDialogoModificar(codigo);
+        }
+    }, 19);   // <-- índice nuevo de "Modificar"
+
 
         add(new JScrollPane(tabla), BorderLayout.CENTER);
 
@@ -105,22 +115,32 @@ public class InventarioPanel extends JPanel {
                 Double desc   = i.getDescuento();
                 Double finalP = (precio == null) ? null :
                         precio * (1.0 - ((desc == null ? 0.0 : desc) / 100.0));
+                Double costoIva = i.getCostoIva();          // nuevo campo
+                Integer conteo  = i.getInventarioConteo();  // nuevo campo
 
                 Object[] row = {
-                        i.getCodigoArticulo(),
-                        i.getArticulo(),
-                        n(i.getMarca()),
-                        n(i.getModelo()),
-                        n(i.getTalla()),
-                        n(i.getColor()),
-                        precio == null ? null : String.format("%.2f", precio),
-                        desc   == null ? null : String.format("%.2f", desc),
-                        finalP == null ? null : String.format("%.2f", finalP),
-                        i.getExistencia(),
-                        i.getStatus(),
-                        i.getFechaRegistro() == null ? "" : i.getFechaRegistro().toString(),
-                        "Modificar"
-                };
+                    i.getCodigoArticulo(),                         // 0
+                    i.getArticulo(),                               // 1
+                    n(i.getDescripcion1()),                        // 2
+                    n(i.getDescripcion2()),                        // 3
+                    n(i.getMarca()),                               // 4
+                    n(i.getModelo()),                              // 5
+                    n(i.getTalla()),                               // 6
+                    n(i.getColor()),                               // 7
+                    precio   == null ? null : String.format("%.2f", precio),     // 8
+                    costoIva == null ? null : String.format("%.2f", costoIva),   // 9
+                    desc     == null ? null : String.format("%.2f", desc),       // 10
+                    finalP   == null ? null : String.format("%.2f", finalP),     // 11
+                    i.getExistencia(),                                             // 12
+                    conteo == null ? 0 : conteo,                                   // 13
+                    i.getStatus(),                                                 // 14
+                    i.getFechaRegistro() == null ? "" : i.getFechaRegistro().toString(), // 15
+                    n(i.getRemision()),                                            // 16
+                    n(i.getFactura()),                                             // 17
+                    i.getFechaPago() == null ? "" : i.getFechaPago().toString(),   // 18
+                    "Modificar"                                                    // 19
+            };
+
                 modeloTabla.addRow(row);
             }
         } catch (SQLException ex) {

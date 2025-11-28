@@ -54,11 +54,11 @@ public class CancelacionService {
                                 "SET existencia = COALESCE(existencia,0) + ? " +
                                 "WHERE codigo_articulo=?")) {
                             while (rs.next()) {
-                                Integer cod = (Integer) rs.getObject("codigo_articulo");
+                                String cod = (String) rs.getObject("codigo_articulo");
                                 int piezas = rs.getInt("piezas");
                                 if (cod == null || piezas <= 0) continue;
                                 up.setInt(1, piezas);
-                                up.setInt(2, cod);
+                                up.setString(2, cod);
                                 up.addBatch();
                             }
                             up.executeBatch();
@@ -79,9 +79,9 @@ public class CancelacionService {
                                     "SET existencia = COALESCE(existencia,0) + 1 " +
                                     "WHERE codigo_articulo=?")) {
                                 for (int i = 1; i <= 5; i++) {
-                                    Integer cod = (Integer) rs.getObject("obsequio" + i + "_cod");
+                                    String cod = (String) rs.getObject("obsequio" + i + "_cod");
                                     if (cod != null) {
-                                        up.setInt(1, cod);
+                                        up.setString(1, cod);
                                         up.addBatch();
                                     }
                                 }

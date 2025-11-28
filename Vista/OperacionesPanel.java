@@ -10,7 +10,7 @@ public class OperacionesPanel extends JPanel {
 
     
     private static final String CARD_VENTA_CONTADO   = "Venta de contado";
-    private static final String CARD_VENTA_CREDITO   = "Venta a crédito";
+    private static final String CARD_VENTA_CREDITO   = "Venta de crédito";
     private static final String CARD_ABONO           = "Abono";
     private static final String CARD_DEVOLUCION      = "Devoluciones";
     private static final String CARD_CANCELACION     = "Cancelación de notas";

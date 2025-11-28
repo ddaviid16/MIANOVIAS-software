@@ -24,7 +24,7 @@ public class ReporteObsequiosPanel extends JPanel {
     private YearMonth selectedYM = YearMonth.now();
     // Tabla superior: ventas
     private final DefaultTableModel modelVentas = new DefaultTableModel(
-            new String[]{"Nota", "Folio", "Teléfono", "Fecha"}, 0) {
+            new String[]{"Nota","Folio", "Teléfono", "Fecha"}, 0) {
         @Override public boolean isCellEditable(int r, int c) { return false; }
     };
     private final JTable tbVentas = new JTable(modelVentas);
@@ -52,6 +52,12 @@ public class ReporteObsequiosPanel extends JPanel {
     tbVentas.setRowHeight(22);
     tbObs.setRowHeight(22);
     tbObs.setFillsViewportHeight(true);
+    var colNota = tbVentas.getColumnModel().getColumn(0);
+    colNota.setMinWidth(0);
+    colNota.setMaxWidth(0);
+    colNota.setPreferredWidth(0);
+    colNota.setWidth(0);
+    colNota.setResizable(false);
 
     // Armado del card inferior (tabla / mensaje)
     JPanel msgPanel = new JPanel(new BorderLayout());

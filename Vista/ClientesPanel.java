@@ -18,6 +18,7 @@ public class ClientesPanel extends JPanel {
     // Campos de texto
     private JTextField txtTel1, txtTel2, txtNombre, txtApPat, txtApMat;
     private JTextField txtBusto, txtCintura, txtCadera, txtEdad;
+    private JTextField txtParenTel2;
 
     // Fechas (máscara mexicana DD-MM-YYYY)
     private JFormattedTextField txtFechaEvento, txtPrueba1, txtPrueba2, txtEntrega;
@@ -43,23 +44,39 @@ public class ClientesPanel extends JPanel {
 
         int y = 0;
 
-        // ===== Teléfonos (solo números)
         // ===== Teléfonos (con formato TelefonosUI)
         txtTel1 = new JTextField();
         txtTel2 = new JTextField();
+        txtParenTel2 = new JTextField();   // NUEVO
 
-        // Aplica el mismo formato que en los otros paneles (10 dígitos)
+        // Aplica formato de teléfono
         TelefonosUI.instalar(txtTel1, 10);
         TelefonosUI.instalar(txtTel2, 10);
 
         txtTel1.setToolTipText("Teléfono (10 dígitos).");
         txtTel2.setToolTipText("Teléfono (10 dígitos).");
 
+        // Parentesco sólo letras
+        applyLettersOnly(txtParenTel2, 40);
+        txtParenTel2.setToolTipText("Parentesco del contacto de Teléfono 2 (ej. mamá, hermana, amiga).");
+
+        // Fila 0: Teléfono 1 y Teléfono 2 (igual que antes)
         addRow(p, c, y++, new JLabel("Teléfono 1*:"), txtTel1,
                 new JLabel("Teléfono 2:"), txtTel2);
 
+        // Fila 1: sólo lado derecho → Parentesco tel. 2
+        c.gridx = 2; c.gridy = y; c.gridwidth = 1;
+        p.add(new JLabel("Parentesco tel. 2:"), c);
+
+        c.gridx = 3;
+        p.add(txtParenTel2, c);
+
+        y++;  // pasamos a la siguiente fila
+
+        // A partir de aquí DEJAS todo COMO LO TENÍAS:
         // ===== Nombre (izq) | Apellido paterno (der)
         txtNombre = new JTextField();
+
         applyLettersOnly(txtNombre, 60);
         txtNombre.setToolTipText("Solo letras y espacios.");
 
@@ -188,6 +205,7 @@ public class ClientesPanel extends JPanel {
     private void limpiar() {
         txtTel1.setText("");
         txtTel2.setText("");
+        txtParenTel2.setText("");
         txtNombre.setText("");
         txtApPat.setText("");
         txtApMat.setText("");
@@ -268,6 +286,7 @@ public class ClientesPanel extends JPanel {
             cli.setApellidoPaterno(blankToNull(txtApPat));
             cli.setApellidoMaterno(blankToNull(txtApMat));
             cli.setEdad(parseNullableInt(txtEdad));
+            cli.setParentescoTel2(blankToNull(txtParenTel2));
 
             cli.setComoSeEntero(comboVal(cbComoSeEntero)); // ENUM o null
             cli.setLugarEvento(comboVal(cbLugar));          // ENUM o null

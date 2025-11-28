@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -28,7 +29,8 @@ import java.util.Map;
  * Solo permite imprimir para notas liquidadas (saldo = 0).
  */
 public class HojaEntregaPanel extends JPanel {
-
+    
+    private static final Locale ES_MX = Locale.of("es", "MX");
     private final NotasDAO notasDAO = new NotasDAO();
     private final clienteDAO clienteDAO = new clienteDAO();
     private final EmpresaDAO empresaDAO = new EmpresaDAO();
@@ -64,6 +66,7 @@ public class HojaEntregaPanel extends JPanel {
 
     private final DateTimeFormatter FECHA_CORTA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private final DateTimeFormatter FECHA_DOC = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private final DateTimeFormatter FECHA_LARGA = DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy", ES_MX);
 
     public HojaEntregaPanel() {
         setLayout(new BorderLayout(10,10));
@@ -411,8 +414,8 @@ public class HojaEntregaPanel extends JPanel {
         // Copia local de los datos para congelarlos al momento de imprimir
         final Empresa emp = empresaActual;
 
-        final String numeroNota = txtNumeroNota.getText();
         final String cliente = txtCliente.getText();
+        final String folio      = txtFolio.getText() == null ? "" : txtFolio.getText().trim();
         final String modelo = txtModelo.getText();
         final String talla = txtTalla.getText();
         final String color = txtColor.getText();
@@ -420,6 +423,7 @@ public class HojaEntregaPanel extends JPanel {
         final String fechaEvento = txtFechaEvento.getText();
         final String fechaDoc = txtFechaDocumento.getText();
         final String otros = txtOtrosProductos.getText();
+        final String fechaDocLarga = aFechaLarga(fechaDoc);
 
         return (graphics, pageFormat, pageIndex) -> {
             if (pageIndex > 0) return Printable.NO_SUCH_PAGE;
@@ -463,7 +467,7 @@ public class HojaEntregaPanel extends JPanel {
 
             // Nota ref a la derecha
             g.setFont(new Font("SansSerif", Font.PLAIN, 11));
-            String ref = "NOTA REF.: " + (numeroNota.isBlank() ? "-" : numeroNota);
+            String ref = "FOLIO REF.: " + (folio.isBlank() ? "-" : folio);
             int refWidth = g.getFontMetrics().stringWidth(ref);
             g.drawString(ref, xRight - refWidth, y - 16);
 
@@ -495,14 +499,31 @@ public class HojaEntregaPanel extends JPanel {
             y += 30;
 
             // Fechas
-            g.drawString("FECHA DEL APARTADO:", xLeft, y);
-            g.drawRect(xLeft + 150, y - 12, 120, 18);
-            g.drawString(fechaApartado, xLeft + 155, y + 2);
+            // ===== FECHAS (alineadas dentro de los márgenes) =====
+            int anchoCampoFecha = 120;
 
-            g.drawString("FECHA DEL EVENTO:", xLeft + 290, y);
-            g.drawRect(xLeft + 420, y - 12, 120, 18);
-            g.drawString(fechaEvento, xLeft + 425, y + 2);
+            // Campo "FECHA DEL APARTADO" a la izquierda
+            g.drawString("FECHA DEL APARTADO:", xLeft, y);
+            int xCajaApartado = xLeft + 150;
+            if (xCajaApartado + anchoCampoFecha > xRight) {
+                // por si algún día cambias márgenes / tamaño de página
+                xCajaApartado = xRight - anchoCampoFecha;
+            }
+            g.drawRect(xCajaApartado, y - 12, anchoCampoFecha, 18);
+            g.drawString(fechaApartado, xCajaApartado + 5, y + 2);
+
+            // Campo "FECHA DEL EVENTO" pegado al margen derecho
+            String lblEvento = "FECHA DEL EVENTO:";
+            int wLblEvento   = g.getFontMetrics().stringWidth(lblEvento + " ");
+            int xCajaEvento  = xRight - anchoCampoFecha;
+            int xLblEvento   = xCajaEvento - wLblEvento;
+
+            g.drawString(lblEvento, xLblEvento, y);
+            g.drawRect(xCajaEvento, y - 12, anchoCampoFecha, 18);
+            g.drawString(fechaEvento, xCajaEvento + 5, y + 2);
+
             y += 30;
+
 
             // Otros productos
             g.drawString("OTROS PRODUCTOS ENTREGADOS:", xLeft, y);
@@ -514,30 +535,58 @@ public class HojaEntregaPanel extends JPanel {
 
             // Párrafo
             String parrafo = "HE RECIBIDO EL VESTIDO AQUÍ DESCRITO, EL CUAL SE ME ESTÁ ENTREGANDO EN " +
-                    "TIEMPO Y FORMA EN PERFECTAS CONDICIONES, AJUSTADA A MI DESEO, LIMPIO Y PLANCHADO. " +
+                    "TIEMPO Y FORMA EN PERFECTAS CONDICIONES, AJUSTADA A MI DESEO, LIMPIO Y PLANCHADO, " +
                     "EL CUAL HE REVISADO Y ME HE CERCIORADO QUE CUMPLE CON LAS CONDICIONES ESPECIFICADAS.";
             drawTextMultiline(g, parrafo, xLeft, y, xRight - xLeft, 14);
             y += 60;
 
             // Firma de cliente
-            g.drawString("RECIBÍ DE CONFORMIDAD", xLeft + 160, y);
+            g.drawString("RECIBÍ DE CONFORMIDAD", xLeft + 180, y);
             y += 45;
             int lineaAncho = 280;
             int lineaX = xLeft + 120;
             g.drawLine(lineaX, y, lineaX + lineaAncho, y);
-            g.drawString(cliente, lineaX + 10, y + 12);
+            g.drawString(cliente, lineaX + 65, y + 12);
             g.drawString("FIRMA Y NOMBRE", lineaX + 80, y + 24);
             y += 50;
+            // Fecha y lugar de entrega + asesora
+            String ciudad = "";
+            String estado = "";
+            if (emp != null) {
+                ciudad = n(emp.getCiudad());
+                estado = n(emp.getEstado());
+            }
 
-            // Fecha y asesora
-            g.drawString("EN ________________________ A:", xLeft, y);
-            g.drawRect(xLeft + 180, y - 12, 120, 18);
-            g.drawString(fechaDoc, xLeft + 185, y + 2);
+            String lugar;
+            if (!ciudad.isEmpty() && !estado.isEmpty()) {
+                lugar = ciudad + ", " + estado;
+            } else if (!ciudad.isEmpty()) {
+                lugar = ciudad;
+            } else if (!estado.isEmpty()) {
+                lugar = estado;
+            } else {
+                lugar = "";
+            }
+
+            String textoEntregado = "ENTREGADO EN " + lugar + " A:";
+            g.drawString(textoEntregado, xLeft, y);
+
+            // Alinear el recuadro justo después del texto y hasta el margen derecho
+            int anchoTexto = g.getFontMetrics().stringWidth(textoEntregado + " ");
+            int xCajaFecha = xLeft + anchoTexto + 4;
+            if (xCajaFecha > xRight - 80) {
+                xCajaFecha = xRight - 80;          // que no se salga del área imprimible
+            }
+            int anchoCajaFecha = xRight - xCajaFecha;
+
+            g.drawRect(xCajaFecha, y - 12, anchoCajaFecha, 18);
+            g.drawString(fechaDocLarga, xCajaFecha + 4, y + 2);
             y += 40;
 
-            int xLineaAsesora = xLeft + 360;
-            g.drawLine(xLineaAsesora, y, xLineaAsesora + 180, y);
-            g.drawString("ENTREGADO POR ASESORA", xLineaAsesora + 20, y + 14);
+            int xLineaAsesora = xLeft + 300;
+            g.drawLine(xLineaAsesora, y+20, xLineaAsesora + 180, y+20);
+            g.drawString("ENTREGADO POR ASESORA", xLineaAsesora + 20, y + 34);
+
 
             return Printable.PAGE_EXISTS;
         };
@@ -605,6 +654,28 @@ public class HojaEntregaPanel extends JPanel {
             g.drawString(line.toString(), x, y);
         }
     }
+    private String aFechaLarga(String fechaCorta) {
+    if (fechaCorta == null) return "";
+    String s = fechaCorta.trim();
+    if (s.isEmpty()) return "";
+    try {
+        LocalDate f = LocalDate.parse(s, FECHA_DOC);
+        // "21 de noviembre de 2025"
+        String base = FECHA_LARGA.format(f);
+        String[] parts = base.split(" de ");
+        if (parts.length == 3) {
+            String mes = parts[1];
+            if (!mes.isEmpty()) {
+                mes = mes.substring(0, 1).toUpperCase() + mes.substring(1);
+            }
+            return parts[0] + " de " + mes + " de " + parts[2];
+        }
+        return base;
+    } catch (Exception ex) {
+        // Si no se puede parsear, imprime tal cual lo que haya capturado el usuario
+        return s;
+    }
+}
 
     private String n(String s) {
         return (s == null) ? "" : s.trim();

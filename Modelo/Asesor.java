@@ -9,6 +9,7 @@ public class Asesor {
     private LocalDate fechaBaja;
     private String tipoEmpleado;   // NUEVO: A, M, MA
     private String status;
+    private boolean permisoCancelaNota;
 
     public Integer getNumeroEmpleado() { return numeroEmpleado; }
     public void setNumeroEmpleado(Integer numeroEmpleado) { this.numeroEmpleado = numeroEmpleado; }
@@ -22,4 +23,6 @@ public class Asesor {
     public void setTipoEmpleado(String tipoEmpleado) { this.tipoEmpleado = tipoEmpleado; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public boolean isPermisoCancelaNota() { return permisoCancelaNota; }
+    public void setPermisoCancelaNota(boolean permisoCancelaNota) { this.permisoCancelaNota = permisoCancelaNota; }
 }

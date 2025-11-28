@@ -27,9 +27,22 @@ public class menuPrincipal extends JFrame {
     // Historial para navegar hacia atrás
     private final Deque<String> history = new ArrayDeque<>();
     private String current = CARD_HOME;
+    private final Modelo.Asesor usuarioActual;
 
-    public menuPrincipal() {
+    public menuPrincipal(Modelo.Asesor usuarioActual) {
         setTitle("MIANOVIAS");
+        this.usuarioActual = usuarioActual;
+                // ===== Menú de sistema (cerrar sesión)
+        JMenuBar mb = new JMenuBar();
+        JMenu menuSis = new JMenu("Sistema");
+        JMenuItem miCerrarSesion = new JMenuItem("Cerrar sesión");
+
+        miCerrarSesion.addActionListener(_e -> cerrarSesion());
+
+        menuSis.add(miCerrarSesion);
+        mb.add(menuSis);
+        setJMenuBar(mb);
+
         setLayout(new BorderLayout());
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -76,15 +89,32 @@ public class menuPrincipal extends JFrame {
         mainPanel.add(new ClientesPanel(), ClientesSubmenuPanel.CARD_CLIENTES_REGISTRO);
         
         mainPanel.add(new EditarClientePanel(),   ClientesSubmenuPanel.CARD_CLIENTES_EDITAR);
-        mainPanel.add(new RegistroCitasPanel(),   ClientesSubmenuPanel.CARD_CLIENTES_CITAS);
+        mainPanel.add(new AgendaPanel(),   ClientesSubmenuPanel.CARD_CLIENTES_CITAS);
         mainPanel.add(new HistorialClientePanel(),ClientesSubmenuPanel.CARD_CLIENTES_HIST);
 
 
         // Submenú Operaciones (usa IDs de texto EXACTOS que emite OperacionesPanel)
         mainPanel.add(new OperacionesPanel(card -> showCard(card, tituloDe(card))), CARD_OPER);
-        mainPanel.add(new VentaContadoPanel(),        "Venta de contado");
-        mainPanel.add(new VentaCreditoPanel(),        "Venta a crédito");
-        mainPanel.add(new AbonoPanel(),               "Abono");
+        VentaContadoPanel ventaContado = new VentaContadoPanel();
+        VentaCreditoPanel ventaCredito = new VentaCreditoPanel();
+        AbonoPanel abonoPanel = new AbonoPanel();
+        if (usuarioActual != null) {
+            ventaContado.setCajeraActual(
+                usuarioActual.getNumeroEmpleado(),
+                usuarioActual.getNombreCompleto()
+            );
+            ventaCredito.setCajeraActual(
+                usuarioActual.getNumeroEmpleado(),
+                usuarioActual.getNombreCompleto()
+            );
+            abonoPanel.setCajeraActual(
+                usuarioActual.getNumeroEmpleado(),
+                usuarioActual.getNombreCompleto()
+            );
+        }
+        mainPanel.add(ventaContado,        "Venta de contado");
+        mainPanel.add(ventaCredito,        "Venta de crédito");
+        mainPanel.add(abonoPanel,               "Abono");
         mainPanel.add(new DevolucionPanel(),          "Devoluciones");
         mainPanel.add(new CancelarNotaPanel(),        "Cancelación de notas");
         mainPanel.add(new CambioFechaEventoPanel(),   "Cambio de fecha de evento");
@@ -161,8 +191,8 @@ public class menuPrincipal extends JFrame {
         JButton btEdit = tileButton("Editar información de cliente");
         btEdit.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_EDITAR, "Editar información de cliente"));
 
-        JButton btCitas = tileButton("Registro de citas");
-        btCitas.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_CITAS, "Registro de citas"));
+        JButton btCitas = tileButton("Agenda y Registro de citas");
+        btCitas.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_CITAS, "Agenda y Registro de citas"));
 
         JButton btHist = tileButton("Registrar historial de cliente");
         btHist.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_HIST, "Registrar historial de cliente"));
@@ -195,6 +225,31 @@ public class menuPrincipal extends JFrame {
         wrap.add(center, BorderLayout.CENTER);
         return wrap;
     }
+    private void cerrarSesion() {
+    Object[] ops = {"SI","NO"};
+    int r = JOptionPane.showOptionDialog(this,
+            "¿Deseas cerrar tu sesión?",
+            "Cerrar sesión",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.QUESTION_MESSAGE,
+            null, ops, ops[1]);
+    if (r != JOptionPane.YES_OPTION) return;
+
+    // Cerrar sesión actual
+    Modelo.SesionUsuario.cerrar();
+    dispose();
+
+    // Volver a mostrar login
+    SwingUtilities.invokeLater(() -> {
+        Modelo.Asesor usuario = LoginDialog.mostrarLogin(null);
+        if (usuario == null) {
+            System.exit(0);
+        }
+        Modelo.SesionUsuario.iniciar(usuario);
+        new menuPrincipal(usuario);   // ← AQUÍ TAMBIÉN CAMBIA
+    });
+}
+
 
     private JButton tileButton(String text) {
         JButton b = new JButton("<html><b>" + text + "</b></html>");
@@ -239,7 +294,7 @@ public class menuPrincipal extends JFrame {
             case CARD_CLIENTES:    return "Clientes";
             case ClientesSubmenuPanel.CARD_CLIENTES_REGISTRO: return "Registro de clientes";
             case ClientesSubmenuPanel.CARD_CLIENTES_EDITAR:   return "Editar información de cliente";
-            case ClientesSubmenuPanel.CARD_CLIENTES_CITAS:    return "Registro de citas";
+            case ClientesSubmenuPanel.CARD_CLIENTES_CITAS:    return "Agenda y Registro de citas";
             case ClientesSubmenuPanel.CARD_CLIENTES_HIST:     return "Registrar historial de cliente";
             case CARD_INV_MENU:    return "Inventario";
             case CARD_INV_ART:     return "Inventario de artículos";
@@ -259,7 +314,7 @@ public class menuPrincipal extends JFrame {
             case ReportesPanel.CARD_REP_VENTAS:    return "Reporte de ventas";
             // Los siguientes ya son “humanos”; devuélvelos tal cual:
             case "Venta de contado":
-            case "Venta a crédito":
+            case "Venta de crédito":
             case "Abono":
             case "Devoluciones":
             case "Cancelación de notas":
@@ -284,11 +339,21 @@ public class menuPrincipal extends JFrame {
 
     // ====== Main
     public static void main(String[] args) {
-        try {
-            for (UIManager.LookAndFeelInfo i : UIManager.getInstalledLookAndFeels())
-                if ("Nimbus".equals(i.getName())) { UIManager.setLookAndFeel(i.getClassName()); break; }
-        } catch (Exception ignore) {}
-        SwingUtilities.invokeLater(menuPrincipal::new);
-        Conexion.BootstrapDB.ensure();   // crea DB/tablas si no existen
-    }
+    try {
+        for (UIManager.LookAndFeelInfo i : UIManager.getInstalledLookAndFeels())
+            if ("Nimbus".equals(i.getName())) { UIManager.setLookAndFeel(i.getClassName()); break; }
+    } catch (Exception ignore) {}
+
+    Conexion.BootstrapDB.ensure();   // como ya lo tienes
+
+    SwingUtilities.invokeLater(() -> {
+        // Mostrar login primero
+        Modelo.Asesor usuario = LoginDialog.mostrarLogin(null);
+        if (usuario == null) {
+            System.exit(0); // canceló
+        }
+        Modelo.SesionUsuario.iniciar(usuario);
+        new menuPrincipal(usuario);  // constructor sigue igual
+    });
+}
 }

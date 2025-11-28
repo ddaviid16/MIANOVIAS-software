@@ -258,8 +258,6 @@ public class DevolucionPanel extends JPanel {
             // 2) Leer detalle de la DV y calcular total (solo para listar en impresión)
             NotasDAO ndao = new NotasDAO();
             List<NotaDetalle> detDV = ndao.listarDetalleDeNota(res.numeroNotaDV);
-            double totalDV = 0.0;
-            for (NotaDetalle d : detDV) totalDV += (d.getSubtotal()==null?0.0:d.getSubtotal());
 
             // 3) Armar objeto Nota DV para imprimir
             Nota nDV = new Nota();

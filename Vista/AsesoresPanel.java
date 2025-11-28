@@ -2,6 +2,7 @@ package Vista;
 
 import Controlador.AsesorDAO;
 import Modelo.Asesor;
+import Utilidades.SeguridadUI;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
@@ -22,7 +23,7 @@ public class AsesoresPanel extends JPanel {
     private static final DateTimeFormatter MX = DateTimeFormatter.ofPattern("dd-MM-uuuu");
 
     // Códigos / textos de tipo de empleado
-    private static final String[] TIPOS_COD = {"A","M","MA"};
+    private static final String[] TIPOS_COD   = {"A","M","MA"};
     private static final String[] TIPOS_LABEL = {"Asesora","Modista","Modista / Asesora"};
 
     private JTextField txtNumero;
@@ -87,9 +88,12 @@ public class AsesoresPanel extends JPanel {
         add(alta, BorderLayout.WEST);
 
         // --- Tabla
-        String[] cols = {"Número", "Nombre", "Fecha alta", "Fecha baja", "Puesto", "Status", "Modificar"};
+        String[] cols = {
+                "Número", "Nombre", "Fecha alta", "Fecha baja",
+                "Puesto", "Status", "Perm. cancelar", "Modificar"
+        };
         modelo = new DefaultTableModel(cols, 0) {
-            @Override public boolean isCellEditable(int r, int col) { return col == 6; }
+            @Override public boolean isCellEditable(int r, int col) { return col == 7; }
         };
         tabla = new JTable(modelo);
         tabla.setRowHeight(24);
@@ -107,7 +111,7 @@ public class AsesoresPanel extends JPanel {
                 int numero = Integer.parseInt(modelo.getValueAt(modelRow, 0).toString());
                 abrirDialogoModificar(numero);
             }
-        }, 6);
+        }, 7);
 
         // --- Barra inferior (solo refrescar)
         JPanel acciones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -134,6 +138,7 @@ public class AsesoresPanel extends JPanel {
                         a.getFechaBaja()==null ? "" : a.getFechaBaja().format(MX),
                         tipoLabel(a.getTipoEmpleado()),
                         a.getStatus(),
+                        a.isPermisoCancelaNota() ? "SI" : "NO",
                         "Modificar"
                 });
             }
@@ -193,6 +198,7 @@ public class AsesoresPanel extends JPanel {
             a.setFechaAlta(fechaAlta); // si viene null, DAO usará hoy
             a.setTipoEmpleado(tipoCod);
             a.setStatus("A");
+            a.setPermisoCancelaNota(false);   // alta sin permiso por defecto
             dao.insertar(a);
 
             JOptionPane.showMessageDialog(this, "Empleado guardado correctamente.");
@@ -354,7 +360,7 @@ public class AsesoresPanel extends JPanel {
         }
     }
 
-    // ---- Botón en columna (igual que en InventarioPanel) ----
+    // ---- Botón en columna ----
     static class ButtonColumn extends AbstractCellEditor
             implements TableCellRenderer, TableCellEditor, java.awt.event.ActionListener {
         private final JTable table;
@@ -395,8 +401,10 @@ public class AsesoresPanel extends JPanel {
         private final JTextField txtFb  = new JTextField();
         private final JComboBox<String> cbTipoDlg = new JComboBox<>(TIPOS_LABEL);
         private final JComboBox<String> cbStatus  = new JComboBox<>(new String[]{"A","C"});
+        private final JCheckBox chkPermiteCancelar = new JCheckBox("Puede cancelar notas");
         private boolean guardado = false;
         private boolean cambiandoStatus = false;
+        private boolean permisoActual;
 
         DialogEmpleado(Frame owner, Asesor a) {
             super(owner, "Modificar empleado", true);
@@ -425,7 +433,24 @@ public class AsesoresPanel extends JPanel {
             cbStatus.setSelectedItem(st);
             txtFb.setEnabled("C".equals(st));
 
+            // Permiso inicial
+            permisoActual = a.isPermisoCancelaNota();
+            chkPermiteCancelar.setSelected(permisoActual);
+
             cbStatus.addActionListener(_e -> onStatusChanged());
+
+            // listener para pedir clave cuando se pasa de false -> true
+            chkPermiteCancelar.addActionListener(_e -> {
+                boolean nuevo = chkPermiteCancelar.isSelected();
+                if (!permisoActual && nuevo) {
+                    // se quiere habilitar: pedir clave maestra
+                    if (!SeguridadUI.pedirYValidarClave(this)) {
+                        chkPermiteCancelar.setSelected(false);
+                        return;
+                    }
+                }
+                permisoActual = nuevo;
+            });
 
             addCell(this, c, 0,y, new JLabel("Número:"),1,false);
             addCell(this, c, 1,y, txtNum,1,true); y++;
@@ -444,6 +469,9 @@ public class AsesoresPanel extends JPanel {
 
             addCell(this, c, 0,y, new JLabel("Status:"),1,false);
             addCell(this, c, 1,y, cbStatus,1,true); y++;
+
+            addCell(this, c, 0,y, new JLabel("Permiso cancelar notas:"),1,false);
+            addCell(this, c, 1,y, chkPermiteCancelar,1,true); y++;
 
             JButton btGuardar = new JButton("Actualizar");
             JButton btCancelar = new JButton("Cancelar");
@@ -543,6 +571,7 @@ public class AsesoresPanel extends JPanel {
                 a.setTipoEmpleado(tipoCod);
                 a.setStatus(status);
                 a.setFechaBaja(fb);
+                a.setPermisoCancelaNota(chkPermiteCancelar.isSelected());
                 dao.actualizarBasico(a);
                 guardado = true;
                 dispose();
