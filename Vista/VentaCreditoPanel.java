@@ -2077,111 +2077,128 @@ y += 6; g2.drawLine(x, y, x + w, y); y += 16;
 
             y = Math.max(yPLeft, yPRight) + 8;
 
-            // Obsequios (sin cambios)
-            if (obsequiosPrint != null && !obsequiosPrint.isEmpty()) {
-                y += 10;
-                g2.drawLine(x, y, x + w, y); y += 16;
+            // Obsequios (solo Código + Obsequio, texto ancho)
+if (obsequiosPrint != null && !obsequiosPrint.isEmpty()) {
+    y += 10;
+    g2.drawLine(x, y, x + w, y); 
+    y += 16;
 
-                g2.setFont(fSection);
-                g2.drawString("Obsequios incluidos", x, y);
-                y += 12;
+    g2.setFont(fSection);
+    g2.drawString("Obsequios incluidos", x, y);
+    y += 12;
 
-                g2.setFont(fText);
+    g2.setFont(fText);
 
-                final int gap2      = 16;
-                final int colCodW   = 70;
-                final int colTalW   = 70;
-                final int colMarW   = 70;
-                final int colModW   = 70;
-                final int colColW   = 120;
+    final int gap2    = 16;
+    final int colCodW = 70;                  // Código pequeño
+    final int colNomW = w - colCodW - gap2;  // todo lo demás para "Obsequio"
 
-                final int xCod = x;
-                final int xNom = xCod + colCodW + gap2;
-                final int xMar = xNom + colCodW + gap2;
-                final int xMod = xMar + colMarW + gap2;
-                final int xTal = xMod + colModW + gap2;
-                final int xCol = xTal + colTalW + gap2;
+    final int xCod = x;
+    final int xNom = xCod + colCodW + gap2;
 
-                g2.drawString("Código",   xCod, y);
-                g2.drawString("Obsequio", xNom, y);
-                g2.drawString("Marca",    xMar, y);
-                g2.drawString("Modelo",   xMod, y);
-                g2.drawString("Talla",    xTal, y);
-                g2.drawString("Color",    xCol, y);
-                y += 10; g2.drawLine(x, y, x + w, y); y += 14;
+    g2.drawString("Código",   xCod, y);
+    g2.drawString("Obsequio", xNom, y);
+    y += 10; 
+    g2.drawLine(x, y, x + w, y); 
+    y += 14;
 
-                // Precarga
-                // ---- Precargar detalles de TODOS los obsequios en un solo query
-List<String> codigos = new ArrayList<>();
-for (String raw : obsequiosPrint) {
-    if (raw == null) continue;
-    String codigo = raw.trim();
-    if (!codigo.isEmpty()) {
-        codigos.add(codigo);
+    // ---- Precargar detalles de TODOS los obsequios en un solo query (igual que antes)
+    java.util.List<String> codigos = new java.util.ArrayList<>();
+    for (String raw : obsequiosPrint) {
+        if (raw == null) continue;
+        String codigo = raw.trim();
+        if (!codigo.isEmpty()) {
+            codigos.add(codigo);
+        }
     }
-}
 
-Map<String, String[]> info = new HashMap<>();
-if (!codigos.isEmpty()) {
-    StringBuilder sql = new StringBuilder(
-        "SELECT codigo_articulo, articulo, marca, modelo, talla, color " +
-        "FROM InventarioObsequios WHERE codigo_articulo IN ("
-    );
-    for (int i = 0; i < codigos.size(); i++) {
-        if (i > 0) sql.append(',');
-        sql.append('?');
-    }
-    sql.append(')');
-
-    try (Connection cn = Conexion.Conecta.getConnection();
-         PreparedStatement ps = cn.prepareStatement(sql.toString())) {
-
+    java.util.Map<String, String[]> info = new java.util.HashMap<>();
+    if (!codigos.isEmpty()) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT codigo_articulo, articulo, marca, modelo, talla, color " +
+            "FROM InventarioObsequios WHERE codigo_articulo IN ("
+        );
         for (int i = 0; i < codigos.size(); i++) {
-            ps.setString(i + 1, codigos.get(i));          // <--- ahora String
+            if (i > 0) sql.append(',');
+            sql.append('?');
         }
+        sql.append(')');
 
-        try (ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                String c      = rs.getString("codigo_articulo");
-                String nombre = safe(rs.getString("articulo"));
-                String marca  = safe(rs.getString("marca"));
-                String modelo = safe(rs.getString("modelo"));
-                String talla  = safe(rs.getString("talla"));
-                String color  = safe(rs.getString("color"));
-                info.put(c, new String[]{nombre, marca, modelo, talla, color});
+        try (Connection cn = Conexion.Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql.toString())) {
+
+            for (int i = 0; i < codigos.size(); i++) {
+                ps.setString(i + 1, codigos.get(i));
             }
-        }
-    } catch (Exception ex) {
-        ex.printStackTrace();   // al menos para ver qué pasa si truena
-    }
-}
 
-// ---- Pintar filas usando el mapa precargado
-for (String raw : obsequiosPrint) {
-    if (raw == null || raw.trim().isEmpty()) continue;
-
-    String codigoTxt = raw.trim();
-    String nombre = "", marca = "", modelo = "", talla = "", color = "";
-
-    String[] row = info.get(codigoTxt);          // <--- clave = código tal cual
-    if (row != null) {
-        nombre = row[0];
-        marca  = row[1];
-        modelo = row[2];
-        talla  = row[3];
-        color  = row[4];
-    }
-
-                    int yCod = drawWrapped(g2, "• " + codigoTxt, xCod, y, colCodW);
-                    int yNom = drawWrapped(g2, nombre,          xNom, y, colCodW);
-                    int yMar = drawWrapped(g2, marca,           xMar, y, colMarW);
-                    int yMod = drawWrapped(g2, modelo,          xMod, y, colModW);
-                    int yTal = drawWrapped(g2, talla,           xTal, y, colTalW);
-                    int yCol = drawWrapped(g2, color,           xCol, y, colColW);
-
-                    y = Math.max(Math.max(Math.max(yCod, yNom), Math.max(yMar, yMod)), Math.max(yTal, yCol));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String c      = rs.getString("codigo_articulo");
+                    String nombre = safe(rs.getString("articulo"));
+                    String marca  = safe(rs.getString("marca"));
+                    String modelo = safe(rs.getString("modelo"));
+                    String talla  = safe(rs.getString("talla"));
+                    String color  = safe(rs.getString("color"));
+                    info.put(c, new String[]{nombre, marca, modelo, talla, color});
                 }
             }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    // ---- Pintar filas usando SOLO "Código" + descripción de Obsequio
+    for (String raw : obsequiosPrint) {
+        if (raw == null || raw.trim().isEmpty()) continue;
+
+        String codigoTxt = raw.trim();
+        String descripcion = "";
+
+        String[] row = info.get(codigoTxt);
+        if (row != null) {
+            String nombre = row[0];
+            String marca  = row[1];
+            String modelo = row[2];
+            String talla  = row[3];
+            String color  = row[4];
+
+            StringBuilder desc = new StringBuilder();
+            if (!nombre.isBlank()) {
+                desc.append(nombre);
+            }
+
+            // Marca + modelo entre paréntesis (opcional)
+            String mm = "";
+            if (!marca.isBlank()) mm = marca;
+            if (!modelo.isBlank()) {
+                if (!mm.isEmpty()) mm += " ";
+                mm += modelo;
+            }
+            if (!mm.isEmpty()) {
+                if (desc.length() > 0) desc.append(" ");
+                desc.append('(').append(mm).append(')');
+            }
+
+            // Talla y color en la misma frase, también dentro del mismo campo
+            if (!talla.isBlank()) {
+                if (desc.length() > 0) desc.append(" ");
+                desc.append("Talla ").append(talla);
+            }
+            if (!color.isBlank()) {
+                if (desc.length() > 0) desc.append(" ");
+                desc.append("Color ").append(color);
+            }
+
+            descripcion = desc.toString();
+        }
+
+        int yCod = drawWrapped(g2, "• " + codigoTxt, xCod, y, colCodW);
+        int yNom = drawWrapped(g2, descripcion,      xNom, y, colNomW);
+
+        y = Math.max(yCod, yNom);
+    }
+}
+
 
             String cajeraLinea = "Cajera: " + safe(fCajeraCodigo);
             if (!fCajeraNombre.isEmpty()) {

@@ -2520,84 +2520,90 @@ if (obsequiosPrint != null && !obsequiosPrint.isEmpty()) {
 
     g2.setFont(fText);
 
-    // Columnas: Código | Obsequio | Talla | Color
+    // Columnas: Código | Obsequio (el obsequio usa todo el espacio restante)
     final int gap2      = 16;
     final int colCodW   = 70;
 
-    final int xCod = x;
-    final int xNom = xCod + colCodW + gap2;
+    final int xCod      = x;
+    final int xNom      = xCod + colCodW + gap2;
+    final int anchoNom  = w - (xNom - x);   // todo el espacio que queda a la derecha
 
     // Encabezado
     g2.drawString("Código",   xCod, y);
     g2.drawString("Obsequio", xNom, y);
-    y += 10; g2.drawLine(x, y, x + w, y); y += 14;
+    y += 10; 
+    g2.drawLine(x, y, x + w, y); 
+    y += 14;
 
-    // ---- Precargar detalles de TODOS los obsequios en un solo query (sin filtrar por status/existencia)
-    // ---- Precargar detalles de TODOS los obsequios en un solo query
-List<String> codigos = new ArrayList<>();
-for (String raw : obsequiosPrint) {
-    if (raw == null) continue;
-    String codigo = raw.trim();
-    if (!codigo.isEmpty()) {
-        codigos.add(codigo);
+    // ---- Precargar detalles de TODOS los obsequios (igual que ya lo tienes) ----
+    List<String> codigos = new ArrayList<>();
+    for (String raw : obsequiosPrint) {
+        if (raw == null) continue;
+        String codigo = raw.trim();
+        if (!codigo.isEmpty()) {
+            codigos.add(codigo);
+        }
     }
-}
 
-Map<String, String[]> info = new HashMap<>();
-if (!codigos.isEmpty()) {
-    StringBuilder sql = new StringBuilder(
-        "SELECT codigo_articulo, articulo, marca, modelo, talla, color " +
-        "FROM InventarioObsequios WHERE codigo_articulo IN ("
-    );
-    for (int i = 0; i < codigos.size(); i++) {
-        if (i > 0) sql.append(',');
-        sql.append('?');
-    }
-    sql.append(')');
-
-    try (Connection cn = Conexion.Conecta.getConnection();
-         PreparedStatement ps = cn.prepareStatement(sql.toString())) {
-
+    Map<String, String[]> info = new HashMap<>();
+    if (!codigos.isEmpty()) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT codigo_articulo, articulo, marca, modelo, talla, color " +
+            "FROM InventarioObsequios WHERE codigo_articulo IN ("
+        );
         for (int i = 0; i < codigos.size(); i++) {
-            ps.setString(i + 1, codigos.get(i));          // <--- ahora String
+            if (i > 0) sql.append(',');
+            sql.append('?');
         }
+        sql.append(')');
 
-        try (ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                String c      = rs.getString("codigo_articulo");
-                String nombre = safe(rs.getString("articulo"));
-                String marca  = safe(rs.getString("marca"));
-                String modelo = safe(rs.getString("modelo"));
-                String talla  = safe(rs.getString("talla"));
-                String color  = safe(rs.getString("color"));
-                info.put(c, new String[]{nombre, marca, modelo, talla, color});
+        try (Connection cn = Conexion.Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql.toString())) {
+
+            for (int i = 0; i < codigos.size(); i++) {
+                ps.setString(i + 1, codigos.get(i));
             }
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String c      = rs.getString("codigo_articulo");
+                    String nombre = safe(rs.getString("articulo"));
+                    String marca  = safe(rs.getString("marca"));
+                    String modelo = safe(rs.getString("modelo"));
+                    String talla  = safe(rs.getString("talla"));
+                    String color  = safe(rs.getString("color"));
+                    info.put(c, new String[]{nombre, marca, modelo, talla, color});
+                }
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
-    } catch (Exception ex) {
-        ex.printStackTrace();   // al menos para ver qué pasa si truena
+    }
+
+    // ---- Pintar filas usando SOLO código + obsequio, con obsequio ancho ----
+    for (String raw : obsequiosPrint) {
+        if (raw == null || raw.trim().isEmpty()) continue;
+
+        String codigoTxt = raw.trim();
+        String nombre = "";
+        String[] row = info.get(codigoTxt);
+        if (row != null) {
+            nombre = row[0]; // solo el "Obsequio" (articulo)
+        }
+
+        // código (columna pequeña)
+        int yCodBase = y + g2.getFontMetrics().getAscent();
+        g2.drawString("• " + codigoTxt, xCod, yCodBase);
+
+        // obsequio usando todo el ancho libre
+        int yNom = drawWrapped(g2, nombre, xNom, yCodBase, anchoNom);
+
+        // siguiente renglón, respetando el más largo
+        y = Math.max(yCodBase, yNom) + 4;
     }
 }
 
-// ---- Pintar filas usando el mapa precargado
-for (String raw : obsequiosPrint) {
-    if (raw == null || raw.trim().isEmpty()) continue;
-
-    String codigoTxt = raw.trim();
-    String nombre = "";
-
-    String[] row = info.get(codigoTxt);          // <--- clave = código tal cual
-    if (row != null) {
-        nombre = row[0];
-    }
-
-    int yCod = drawWrapped(g2, "• " + codigoTxt, xCod, y, colCodW);
-    int yNom = drawWrapped(g2, nombre,          xNom, y, colCodW);
-
-    y = Math.max(yCod, yNom);
-}
-
-}
-// ===== Cajera (pie de página) =====
+        // ===== Cajera (pie de página) =====
 String cajeraLinea = "Cajera: " + safe(fCajeraCodigo);
 if (!fCajeraNombre.isEmpty()) {
     cajeraLinea += " - " + fCajeraNombre;

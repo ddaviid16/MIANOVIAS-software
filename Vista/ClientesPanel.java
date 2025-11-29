@@ -482,8 +482,8 @@ private static String validarFechas(LocalDate evento,
 
     // ----- Prueba 1 (opcional) -----
     if (p1 != null) {
-        if (!p1.isAfter(hoy))
-            return "La fecha de prueba 1 debe ser mayor a la fecha actual.";
+        if (p1.isBefore(hoy))
+        return "La fecha de prueba 1 debe ser mayor o igual a la fecha actual.";
         if (!p1.isBefore(evento))
             return "La fecha de prueba 1 debe ser menor a la fecha de evento.";
     }
