@@ -1090,13 +1090,13 @@ if (imprimirCondiciones) {
     }
     // Render final con datos reales para condiciones
     Map<String,String> varsFinal = buildMemoVars(
-            emp, n, dets, entregaMostrar, eventoMostrar, sel.getNombreCompleto()
+            emp, n, detsPrint, entregaMostrar, eventoMostrar, sel.getNombreCompleto()
     );
 
     Printable condiciones = construirPrintableCondiciones(
             emp,
             n,
-            dets,
+            detsPrint,
             varsFinal,
             folioImpresion,
             sel.getNombreCompleto(),
@@ -1474,9 +1474,32 @@ private Map<String,String> buildMemoVars(EmpresaInfo emp, Nota n, java.util.List
     v.put("fecha_en_tienda", fechaEntregaMostrar==null? "" : fechaEntregaMostrar.format(MX));
 
     // Artículo principal
-    NotaDetalle d0 = null;
-    for (NotaDetalle d : dets) { if (d.getCodigoArticulo() != null && !d.getCodigoArticulo().isEmpty()) { d0 = d; break; } }
-    if (d0 == null && !dets.isEmpty()) d0 = dets.get(0);
+    // Artículo principal
+NotaDetalle d0 = null;
+
+// 1) Intentar tomar primero un "vestido"
+for (NotaDetalle d : dets) {
+    if (esArticuloVestido(d.getArticulo())) {
+        d0 = d;
+        break;
+    }
+}
+
+// 2) Si no encontró vestido, buscar cualquiera con código
+if (d0 == null) {
+    for (NotaDetalle d : dets) {
+        if (d.getCodigoArticulo() != null && !d.getCodigoArticulo().isEmpty()) {
+            d0 = d;
+            break;
+        }
+    }
+}
+
+// 3) Si sigue sin nada, tomar el primero
+if (d0 == null && !dets.isEmpty()) {
+    d0 = dets.get(0);
+}
+
     v.put("modelo",  d0==null? "": n(d0.getModelo()));
     v.put("marca",   d0==null? "": n(d0.getMarca()));
     v.put("color",   d0==null? "": n(d0.getColor()));

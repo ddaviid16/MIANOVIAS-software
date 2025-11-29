@@ -668,9 +668,31 @@ private Map<String,String> buildMemoVars(EmpresaInfo emp, Nota n, java.util.List
     v.put("fecha_en_tienda", fechaEntregaMostrar==null? "" : fechaEntregaMostrar.format(MX));
 
     // Artículo principal
-    NotaDetalle d0 = null;
-    for (NotaDetalle d : dets) { if (d.getCodigoArticulo() != null && !d.getCodigoArticulo().isEmpty()) { d0 = d; break; } }
-    if (d0 == null && !dets.isEmpty()) d0 = dets.get(0);
+    // Artículo principal
+NotaDetalle d0 = null;
+
+// 1) Primero intenta usar un "Vestido" (incluye PEDIDO – Vestido...)
+for (NotaDetalle d : dets) {
+    if (esArticuloVestido(d.getArticulo())) {
+        d0 = d;
+        break;
+    }
+}
+
+// 2) Si no hubo vestido, usa el primer artículo con código (inventario normal)
+if (d0 == null) {
+    for (NotaDetalle d : dets) {
+        if (d.getCodigoArticulo() != null && !d.getCodigoArticulo().isEmpty()) {
+            d0 = d;
+            break;
+        }
+    }
+}
+
+// 3) Si sigue sin haber nada pero la lista no está vacía, usa el primer renglón
+if (d0 == null && !dets.isEmpty()) {
+    d0 = dets.get(0);
+}
     v.put("modelo",  d0==null? "": n(d0.getModelo()));
     v.put("marca",   d0==null? "": n(d0.getMarca()));
     v.put("color",   d0==null? "": n(d0.getColor()));
@@ -1861,22 +1883,17 @@ try {
 boolean imprimirCondiciones = detsPrint.stream()
         .anyMatch(d -> esArticuloVestido(d.getArticulo()));
 
-// Por defecto: solo ticket
 Printable printablePrincipal = prn;
 
 if (imprimirCondiciones) {
-    // === 4.1) MEMO / CONDICIONES ===
     if (memoEditable == null) {
-        // Fuerza a que el usuario vea/edite el texto al menos una vez
         editarMemoPrevia(true);
     }
 
-    // Texto CRUDO a guardar (puede incluir {tokens})
     String memoCrudoAGuardar = (memoEditable == null || memoEditable.isBlank())
             ? obtenerCondicionesPredeterminadas()
             : memoEditable;
 
-    // Guardar/actualizar el texto de condiciones SOLO si habrá hoja de condiciones
     try {
         new NotasMemoDAO().upsert(numeroNota, memoCrudoAGuardar);
     } catch (SQLException ex) {
@@ -1885,14 +1902,14 @@ if (imprimirCondiciones) {
             "Aviso", JOptionPane.WARNING_MESSAGE);
     }
 
-    // Render final con datos reales para la hoja de condiciones
+    // 🔧 AHORA usamos detsPrint, que SÍ incluye los PEDIDO
     java.util.Map<String,String> varsFinal = buildMemoVars(
-            emp, n, dets, entregaMostrar, eventoMostrar, sel.getNombreCompleto());
+            emp, n, detsPrint, entregaMostrar, eventoMostrar, sel.getNombreCompleto());
 
     Printable condiciones = construirPrintableCondiciones(
             emp,
             n,
-            dets,
+            detsPrint,   // este parámetro ni lo usas dentro, pero lo dejo coherente
             varsFinal,
             folioImpresion,
             sel.getNombreCompleto(),
@@ -1901,9 +1918,9 @@ if (imprimirCondiciones) {
             clienteNombre
     );
 
-    // Ticket + hoja de condiciones en 2 páginas
     printablePrincipal = combinarEnDosPaginas(prn, condiciones);
 }
+
 
 // >>> SNAPSHOT PARA TARJETAS (antes de limpiar UI)
 java.util.List<String> obsequiosTarjetas = new java.util.ArrayList<>(obsequiosSel);
