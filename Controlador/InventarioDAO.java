@@ -62,7 +62,7 @@ public class InventarioDAO {
         "  existencia, inventario_conteo, " +
         "  fecha_registro, fecha_pago, " +
         "  remision, factura, status" +
-        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),?,?,?)";
+        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),?,?,?,?)";
 
     private static final String UPDATE_SQL =
         "UPDATE Inventarios SET " +
