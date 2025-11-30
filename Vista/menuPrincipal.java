@@ -7,6 +7,8 @@ import java.awt.event.WindowEvent;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
+import Controlador.AsesorDAO;
+
 public class menuPrincipal extends JFrame {
 
     // IDs de tarjetas “estructura”
@@ -235,20 +237,32 @@ public class menuPrincipal extends JFrame {
             null, ops, ops[1]);
     if (r != JOptionPane.YES_OPTION) return;
 
-    // Cerrar sesión actual
     Modelo.SesionUsuario.cerrar();
     dispose();
 
-    // Volver a mostrar login
     SwingUtilities.invokeLater(() -> {
+        // Si no hay empleados, saltar login igual que en main
+        if (!AsesorDAO.hayEmpleadosRegistrados()) {
+            menuPrincipal frame = new menuPrincipal(null);
+            JOptionPane.showMessageDialog(
+                    frame,
+                    "Por favor, registra al menos un empleado en el menú \"Empresa > Empleados\".",
+                    "Empleados",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+            return;
+        }
+
+        // Flujo normal
         Modelo.Asesor usuario = LoginDialog.mostrarLogin(null);
         if (usuario == null) {
             System.exit(0);
         }
         Modelo.SesionUsuario.iniciar(usuario);
-        new menuPrincipal(usuario);   // ← AQUÍ TAMBIÉN CAMBIA
+        new menuPrincipal(usuario);
     });
 }
+
 
 
     private JButton tileButton(String text) {
@@ -344,16 +358,31 @@ public class menuPrincipal extends JFrame {
             if ("Nimbus".equals(i.getName())) { UIManager.setLookAndFeel(i.getClassName()); break; }
     } catch (Exception ignore) {}
 
-    Conexion.BootstrapDB.ensure();   // como ya lo tienes
+    Conexion.BootstrapDB.ensure();
 
     SwingUtilities.invokeLater(() -> {
-        // Mostrar login primero
+
+        // 1) Revisar si hay empleados
+        if (!AsesorDAO.hayEmpleadosRegistrados()) {
+            // No hay nadie: entrar directo al menú sin login
+            menuPrincipal frame = new menuPrincipal(null);
+            JOptionPane.showMessageDialog(
+                    frame,
+                    "Por favor, registra al menos un empleado en el menú \"Empresa > Empleados\".",
+                    "Empleados",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+            return;
+        }
+
+        // 2) Flujo normal: hay empleados, entonces sí pedimos login
         Modelo.Asesor usuario = LoginDialog.mostrarLogin(null);
         if (usuario == null) {
             System.exit(0); // canceló
         }
         Modelo.SesionUsuario.iniciar(usuario);
-        new menuPrincipal(usuario);  // constructor sigue igual
+        new menuPrincipal(usuario);
     });
 }
+
 }

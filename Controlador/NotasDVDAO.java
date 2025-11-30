@@ -19,55 +19,52 @@ public class NotasDVDAO {
 
     /** Lista DV del cliente con "disponible" > 0.
      *  Si la DV proviene de CR: montoBase = MIN(totalDV, anticipoOrigen). */
-    public List<DVDisponible> listarDisponiblesPorTelefono(String telefono) throws SQLException {
-        String sql =
-            "SELECT dv.numero_nota AS dv_num, dv.folio AS dv_folio, " +
-            "       dv.total AS dv_total, " +                             // valor nominal de la DV
-            "       n0.tipo AS origen_tipo, n0.numero_nota AS origen_num, " +
-            "       COALESCE(fp.anticipo,0) AS anticipo, " +
-            "       COALESCE(d.monto_usado,0) AS aplicado " +             // ← usa Devoluciones.monto_usado
-            "FROM Notas dv " +
-            "JOIN Devoluciones d ON d.numero_nota_dv = dv.numero_nota " +
-            "JOIN Notas n0 ON n0.numero_nota = d.nota_origen " +
-            "LEFT JOIN ( " +
-            "   SELECT numero_nota, " +
-            "          COALESCE(tarjeta_credito,0)+COALESCE(tarjeta_debito,0)+COALESCE(american_express,0)+ " +
-            "          COALESCE(transferencia_bancaria,0)+COALESCE(deposito_bancario,0)+COALESCE(efectivo,0) AS anticipo " +
-            "   FROM Formas_Pago WHERE tipo_operacion='CR' " +
-            ") fp ON fp.numero_nota = n0.numero_nota " +
-            "WHERE dv.tipo='DV' AND dv.status='A' AND dv.telefono=? " +
-            "ORDER BY dv.numero_nota DESC";
+public List<DVDisponible> listarDisponiblesPorTelefono(String telefono) throws SQLException {
+    String sql =
+        "SELECT dv.numero_nota AS dv_num, dv.folio AS dv_folio, " +
+        "       COALESCE(dv.saldo,0) AS dv_saldo, " +          // ← usamos SALDO de la DV
+        "       n0.tipo AS origen_tipo, n0.numero_nota AS origen_num, " +
+        "       COALESCE(d.monto_usado,0) AS aplicado " +      // ya usado de ESTA DV
+        "FROM Notas dv " +
+        "JOIN Devoluciones d ON d.numero_nota_dv = dv.numero_nota " +
+        "JOIN Notas n0 ON n0.numero_nota = d.nota_origen " +
+        "WHERE dv.tipo='DV' AND dv.status='A' AND dv.telefono=? " +
+        "ORDER BY dv.numero_nota DESC";
 
-        try (Connection cn = Conecta.getConnection();
-             PreparedStatement ps = cn.prepareStatement(sql)) {
-            ps.setString(1, telefono);
-            try (ResultSet rs = ps.executeQuery()) {
-                List<DVDisponible> out = new ArrayList<>();
-                while (rs.next()) {
-                    DVDisponible r = new DVDisponible();
-                    r.numeroNotaDV     = rs.getInt("dv_num");
-                    r.folio            = rs.getString("dv_folio");
-                    r.origenTipo       = rs.getString("origen_tipo");
-                    r.numeroNotaOrigen = rs.getInt("origen_num");
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
 
-                    double totalDV  = rs.getBigDecimal("dv_total")   == null ? 0 : rs.getBigDecimal("dv_total").doubleValue();
-                    double anticipo = rs.getBigDecimal("anticipo")   == null ? 0 : rs.getBigDecimal("anticipo").doubleValue();
-                    r.aplicado      = rs.getBigDecimal("aplicado")   == null ? 0 : rs.getBigDecimal("aplicado").doubleValue();
+        ps.setString(1, telefono);
 
-                    // Si la DV viene de una venta CR, no puede valer más que lo que se pagó de anticipo
-                    double base = "CR".equalsIgnoreCase(r.origenTipo)
-                            ? Math.min(totalDV, anticipo)
-                            : totalDV;
+        try (ResultSet rs = ps.executeQuery()) {
+            List<DVDisponible> out = new ArrayList<>();
+            while (rs.next()) {
+                DVDisponible r = new DVDisponible();
+                r.numeroNotaDV     = rs.getInt("dv_num");
+                r.folio            = rs.getString("dv_folio");
+                r.origenTipo       = rs.getString("origen_tipo");
+                r.numeroNotaOrigen = rs.getInt("origen_num");
 
-                    r.montoBase  = base;
-                    r.disponible = Math.max(0, base - r.aplicado);
+                double saldoDV = rs.getBigDecimal("dv_saldo") == null
+                                 ? 0.0
+                                 : rs.getBigDecimal("dv_saldo").doubleValue();
 
-                    if (r.disponible > 0.005) out.add(r);
+                r.aplicado = rs.getBigDecimal("aplicado") == null
+                             ? 0.0
+                             : rs.getBigDecimal("aplicado").doubleValue();
+
+                // Ahora el "monto base" de la DV ES su saldo a favor original
+                r.montoBase  = saldoDV;
+                r.disponible = Math.max(0.0, r.montoBase - r.aplicado);
+
+                if (r.disponible > 0.005) {
+                    out.add(r);      // solo devoluciones con algo disponible
                 }
-                return out;
             }
+            return out;
         }
     }
+}
 
     public void aplicarAVenta(int numeroNota, String tipo, java.util.List<Modelo.PagoDV> items) throws SQLException {
         if (items == null || items.isEmpty()) return;

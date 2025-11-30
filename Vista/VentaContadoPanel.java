@@ -1516,6 +1516,10 @@ private void cargarAsesores() {
                     "Quitar"
             });
             recalcularTotales();
+            // limpiar campo de código y ocultar botón PEDIR
+            txtCod.setText("");
+            btRegistrarPedido.setVisible(false);
+
             dlg.dispose();
         });
 
@@ -1962,6 +1966,20 @@ try {
 
 
             // ======= 5) LIMPIAR UI =======
+                        // limpiar observaciones
+observacionesTexto = null;
+
+// limpiar asesor (regresar al placeholder "Selecciona asesor")
+if (cbAsesor.getItemCount() > 0) {
+    cbAsesor.setSelectedIndex(0);
+}
+
+// limpiar DV internas
+dvAplicadas.clear();
+
+// limpiar campo de código de artículo y botón PEDIR
+txtCod.setText("");
+btRegistrarPedido.setVisible(false);
 model.setRowCount(0);
 txtSubtotal.setText("");
 txtTotal.setText("");

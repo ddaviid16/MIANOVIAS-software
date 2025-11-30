@@ -467,43 +467,31 @@ model.addTableModelListener(evt -> {
             txtFechaEntrega.setText(fmt(cr.getFechaEntrega()));
 
             // === Cargar folios de devolución del cliente ===
-try (Connection cn = Conexion.Conecta.getConnection();
-     PreparedStatement ps = cn.prepareStatement("""
-        SELECT 
-            n.folio,
-            n.total AS total_original,
-            COALESCE(n.total - SUM(fp.devolucion), n.total) AS saldo_disponible,
-            MAX(n.fecha_registro) AS fecha_reciente
-        FROM Notas n
-        JOIN Devoluciones d ON d.numero_nota_dv = n.numero_nota
-        LEFT JOIN Formas_Pago fp
-            ON fp.referencia_dv = n.folio
-            AND fp.status = 'A'
-            AND fp.devolucion IS NOT NULL
-        WHERE n.tipo = 'DV'
-          AND n.status = 'A'
-          AND n.telefono = ?
-        GROUP BY n.folio, n.total
-        HAVING COALESCE(n.total - SUM(fp.devolucion), n.total) > 0
-        ORDER BY fecha_reciente DESC;
-     """)) {
-    ps.setString(1, tel);
-    try (ResultSet rs = ps.executeQuery()) {
-        cbFolioDV.removeAllItems();
-        cbFolioDV.addItem("--- Pagar con folio de devolución ---"); // placeholder
+// === Cargar folios de devolución del cliente (usando NotasDVDAO) ===
+try {
+    cbFolioDV.removeAllItems();
+    cbFolioDV.addItem("--- Pagar con folio de devolución ---"); // placeholder
 
-        while (rs.next()) {
-            String folio = rs.getString("folio");
-            double saldo = rs.getDouble("saldo_disponible");
-            cbFolioDV.addItem(folio + " - $" + String.format("%.2f", saldo));
-        }
-        cbFolioDV.setSelectedIndex(0);
+    // Reset estado interno de DV
+    dvAplicadas.clear();
+    montoDVAplicado = 0;
+    txtMontoDV.setText("");
+
+    java.util.List<Controlador.NotasDVDAO.DVDisponible> lista =
+            new Controlador.NotasDVDAO().listarDisponiblesPorTelefono(tel);
+
+    for (Controlador.NotasDVDAO.DVDisponible dv : lista) {
+        double saldo = dv.disponible;  // ESTE es el saldo correcto
+        cbFolioDV.addItem(dv.folio + " - $" + String.format("%.2f", saldo));
     }
+
+    cbFolioDV.setSelectedIndex(0);
 } catch (SQLException ex) {
     JOptionPane.showMessageDialog(this,
         "Error al cargar devoluciones: " + ex.getMessage(),
         "Error", JOptionPane.ERROR_MESSAGE);
 }
+
 
 
             // Aunque no se muestre, se mantiene la asignación (no afecta a la UI)
@@ -753,6 +741,10 @@ private void cargarAsesores() {
                     "Quitar"
             });
             recalcularTotales();
+            // limpiar campo de código y ocultar botón PEDIR
+            txtCod.setText("");
+            btRegistrarPedido.setVisible(false);
+
             dlg.dispose();
         });
 
@@ -1170,6 +1162,21 @@ try {
 
 
             // ======= 5) LIMPIAR UI =======
+            // limpiar observaciones
+observacionesTexto = null;
+
+// limpiar asesor (regresar al placeholder "Selecciona asesor")
+if (cbAsesor.getItemCount() > 0) {
+    cbAsesor.setSelectedIndex(0);
+}
+
+// limpiar DV internas
+dvAplicadas.clear();
+
+// limpiar campo de código de artículo y botón PEDIR
+txtCod.setText("");
+btRegistrarPedido.setVisible(false);
+
 model.setRowCount(0);
 txtSubtotal.setText("");
 txtTotal.setText("");

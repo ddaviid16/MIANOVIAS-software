@@ -83,11 +83,26 @@ public class DevolucionService {
                 }
                 montoDV = Math.round(montoDV * 100.0) / 100.0;
 
-                // 2.1) Calcula pagado y saldo a favor correcto
-                double pagadoAntes = Math.max(0.0, totalOrigen - saldoOrigen); // lo que ya pagó el cliente
-                double saldoAFavor = "CR".equalsIgnoreCase(tipo)
-                        ? Math.min(montoDV, pagadoAntes)  // en crédito: no más de lo pagado
-                        : montoDV;                         // en contado: todo el monto devuelto
+                // 2.1) Calcula saldo a favor REAL y nuevo saldo de la nota origen
+double saldoAFavor;
+double nuevoSaldo;
+
+if ("CR".equalsIgnoreCase(tipo)) {
+    // D = montoDV = lo que se devuelve
+    // S = saldoOrigen = lo que todavía debía el cliente
+    //
+    // Si D <= S: solo baja la deuda, no hay saldo a favor.
+    // Si D > S: cancela la deuda y el sobrante (D - S) es saldo a favor.
+    saldoAFavor = Math.max(0.0, montoDV - saldoOrigen);
+    nuevoSaldo  = Math.max(0.0, saldoOrigen - montoDV);
+} else {
+    // Venta de contado:
+    // Todo lo devuelto se convierte en saldo a favor,
+    // y la nota origen se considera sin saldo pendiente.
+    saldoAFavor = montoDV;
+    nuevoSaldo  = 0.0;
+}
+
 
                 // 3) Genera folio y crea header DV (en BD total= montoDV, como corresponde a la devolución)
                 FoliosDAO fdao = new FoliosDAO();
@@ -137,23 +152,18 @@ public class DevolucionService {
                     }
                 }
 
-                // 6) Ajusta total/saldo de la nota origen (saldo solo en CR)
-                Double nuevoSaldo;
+                // 6) Ajusta total/saldo de la nota origen usando el nuevoSaldo calculado
                 try (PreparedStatement ps = cn.prepareStatement(
                         "UPDATE Notas " +
-                        "SET total = total - ?, " +
-                        "    saldo = CASE WHEN tipo='CR' THEN GREATEST(0, saldo - ?) ELSE 0 END " +
+                        "SET total = GREATEST(0, total - ?), " +
+                        "    saldo = ? " +
                         "WHERE numero_nota=?")) {
                     ps.setDouble(1, montoDV);
-                    ps.setDouble(2, montoDV);
+                    ps.setDouble(2, nuevoSaldo);
                     ps.setInt   (3, numeroNotaOrigen);
                     ps.executeUpdate();
                 }
-                if ("CR".equalsIgnoreCase(tipo)) {
-                    nuevoSaldo = Math.max(0.0, saldoOrigen - montoDV);
-                } else {
-                    nuevoSaldo = 0.0;
-                }
+
 
                 // 7) Guarda registro de devolución (opcional)
                 try (PreparedStatement ps = cn.prepareStatement(

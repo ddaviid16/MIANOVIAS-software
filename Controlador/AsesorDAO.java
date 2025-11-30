@@ -315,4 +315,21 @@ public class AsesorDAO {
             }
         }
     }
+    /** Devuelve true si existe al menos un empleado registrado. */
+    public static boolean hayEmpleadosRegistrados() {
+        String sql = "SELECT COUNT(*) FROM asesor"; // ajusta nombre de tabla si es otro
+
+        try (Connection cn = Conecta.getConnection(); // o Conecta.Conectar(), etc
+             PreparedStatement ps = cn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+        }
+        // En caso de error, por seguridad devolvemos false
+        return false;
+    }
 }
