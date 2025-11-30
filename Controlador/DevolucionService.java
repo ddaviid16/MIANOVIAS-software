@@ -1,10 +1,15 @@
 // Controlador/DevolucionService.java
 package Controlador;
 
-import Conexion.Conecta;
-
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
 import java.util.List;
+
+import Conexion.Conecta;
 
 public class DevolucionService {
 
@@ -54,7 +59,7 @@ public class DevolucionService {
 
                 // 2) Valida renglones y acumula total de devolución
                 double montoDV = 0;
-                java.util.List<Integer> codigos = new java.util.ArrayList<>();
+                java.util.List<String> codigos = new java.util.ArrayList<>();
                 try (PreparedStatement ps = cn.prepareStatement(
                     "SELECT id, numero_nota, codigo_articulo, subtotal, status " +
                     "FROM Nota_Detalle WHERE id=? FOR UPDATE")) {
@@ -69,8 +74,10 @@ public class DevolucionService {
                             String st = rs.getString("status");
                             if (st == null || !"A".equalsIgnoreCase(st))
                                 throw new SQLException("Renglón inactivo (id=" + id + ")");
-                            codigos.add(rs.getInt("codigo_articulo"));
-                            montoDV += rs.getDouble("subtotal");
+                            String codArt = rs.getString("codigo_articulo");
+                            if (codArt != null && !codArt.isBlank()) {
+                                codigos.add(codArt);
+}                            montoDV += rs.getDouble("subtotal");
                         }
                     }
                 }
@@ -124,8 +131,8 @@ public class DevolucionService {
                 // 5) Regresa existencia al inventario
                 try (PreparedStatement up = cn.prepareStatement(
                         "UPDATE Inventarios SET existencia = COALESCE(existencia,0) + 1 WHERE codigo_articulo=?")) {
-                    for (Integer cod : codigos) {
-                        up.setInt(1, cod);
+                    for (String cod : codigos) {
+                        up.setString(1, cod);
                         up.executeUpdate();
                     }
                 }
