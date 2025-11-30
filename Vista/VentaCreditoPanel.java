@@ -85,6 +85,7 @@ import Modelo.PagoFormas;
 import Utilidades.TelefonosUI;
 import Controlador.FacturaDatosDAO;
 
+
 public class VentaCreditoPanel extends JPanel {
 
     private java.util.List<String> obsequiosSel = new java.util.ArrayList<>();
@@ -120,6 +121,11 @@ public void setCajeraActual(int codigoEmpleado, String nombreCompleto) {
     private JTextField txtCod;
     private JTable tb;
     private DefaultTableModel model;
+     private JButton btnCambiarFechaVenta;
+    private JLabel lblFechaVenta;
+
+    private LocalDate fechaVentaSeleccionada = null;
+    private final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final JButton btRegistrarPedido = new JButton("Registrar artículo");
 
@@ -273,9 +279,27 @@ public void setCajeraActual(int codigoEmpleado, String nombreCompleto) {
         y++;
 
         ((AbstractDocument) txtCod.getDocument()).addDocumentListener((SimpleDocListener) () -> {
-            String s = txtCod.getText();
-            btRegistrarPedido.setVisible(s != null && s.trim().equalsIgnoreCase("PEDIR"));
-        });
+    String s = txtCod.getText();
+    String val = (s == null) ? "" : s.trim().toUpperCase();
+
+    // Botón PEDIR como ya lo tenías
+    btRegistrarPedido.setVisible("PEDIR".equals(val));
+
+    // Modo admin para fecha de venta
+    boolean esAdmin = "ADMIN".equals(val);
+    if (btnCambiarFechaVenta != null) {
+        btnCambiarFechaVenta.setVisible(esAdmin);
+    }
+
+    // Si dejan de estar en "admin", regresamos al modo normal
+    if (!esAdmin) {
+        fechaVentaSeleccionada = null;
+        if (lblFechaVenta != null) {
+            lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
+        }
+    }
+});
+
 
 
         // ===== Tabla carrito con "Fecha art."
@@ -411,6 +435,15 @@ model.addTableModelListener(evt -> {
         JButton btGuardar = new JButton("Registrar venta (Crédito)");
         btGuardar.addActionListener(_e -> guardarVentaCredito());
         addCell(bottom,d,3,r,btGuardar,1,false);
+        r++;
+        lblFechaVenta = new JLabel("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
+        btnCambiarFechaVenta = new JButton("Cambiar fecha venta");
+        btnCambiarFechaVenta.setVisible(false); // solo se ve con "admin"
+        btnCambiarFechaVenta.addActionListener(_e -> cambiarFechaVenta());
+
+        addCell(bottom, d, 2, r, lblFechaVenta, 1, false);
+        addCell(bottom, d, 3, r, btnCambiarFechaVenta, 1, false);
+
 
         // ====== Panel que contiene todo (igual que VentaContado) ======
         JPanel contenido = new JPanel(new BorderLayout());
@@ -547,6 +580,42 @@ try {
         if (chkUsarFechaCliente.isSelected()) return parseFecha(txtFechaEvento.getText());
         return parseFecha(txtFechaEventoVenta.getText());
     }
+    private LocalDate getFechaVentaEfectiva() {
+    // Si el admin eligió una fecha, usar esa. Si no, hoy.
+    return (fechaVentaSeleccionada != null) ? fechaVentaSeleccionada : LocalDate.now();
+}
+    private void cambiarFechaVenta() {
+    LocalDate actual = getFechaVentaEfectiva();
+    String valorActual = actual.format(MX); // dd-MM-yyyy
+
+    String input = JOptionPane.showInputDialog(
+            this,
+            "Ingresa la fecha de venta (dd-MM-yyyy):",
+            valorActual
+    );
+
+    if (input == null || input.trim().isEmpty()) {
+        // Canceló o dejó vacío -> volvemos a hoy
+        fechaVentaSeleccionada = null;
+    } else {
+        try {
+            LocalDate f = LocalDate.parse(input.trim(), MX);
+            fechaVentaSeleccionada = f;
+        } catch (DateTimeParseException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Fecha inválida. Ejemplo: 25-11-2025",
+                    "Error de fecha",
+                    JOptionPane.ERROR_MESSAGE);
+            fechaVentaSeleccionada = null;
+        }
+    }
+
+    if (lblFechaVenta != null) {
+        lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
+    }
+}
+
+
     private JTextField readOnlyField() {
         JTextField t = new JTextField();
         t.setEditable(false);
@@ -949,11 +1018,13 @@ for (PedidosDAO.PedidoDraft ped : pedidosCarrito) {
 
     detsPrint.add(d);
 }
+LocalDate fechaVenta = getFechaVentaEfectiva();
 
 
 
             PagoFormas p = new PagoFormas();
-            p.setFechaOperacion(LocalDate.now());
+            p.setFechaOperacion(fechaVenta);
+
             p.setTarjetaCredito(nullIfZero(parseMoney(txtTC.getText())));
             p.setTarjetaDebito(nullIfZero(parseMoney(txtTD.getText())));
             p.setAmericanExpress(nullIfZero(parseMoney(txtAMX.getText())));
@@ -980,7 +1051,7 @@ for (PedidosDAO.PedidoDraft ped : pedidosCarrito) {
 
             VentaCreditoService svc = new VentaCreditoService();
             // -> ahora pasamos evento y entrega
-            int numeroNota = svc.crearVentaCredito(n, dets, p, fechaEventoDefault, fechaEntregaDefault);
+            int numeroNota = svc.crearVentaCredito(n, dets, p, fechaVenta, fechaEventoDefault, fechaEntregaDefault);
             n.setNumeroNota(numeroNota); // <-- ¡asigna el número real antes de imprimir!
             // ======= Factura: si hay captura, persístela en Factura_Datos =======
 try {
@@ -1023,13 +1094,14 @@ if (dvAplicadas != null && !dvAplicadas.isEmpty()) {
                     odao.insertarParaNota(
                         numeroNota,
                         tel.isEmpty() ? null : tel,
-                        LocalDate.now(),
+                        fechaVenta,   // <<< misma fecha de venta
                         obsequiosSel,
                         "CR",
                         sel != null ? sel.getNumeroEmpleado() : null,
                         "A",
                         fEvento
                     );
+
 
                 } catch (SQLException ex) {
                     JOptionPane.showMessageDialog(this,
@@ -1105,7 +1177,7 @@ if (imprimirCondiciones) {
 // >>> SNAPSHOT PARA TARJETAS (antes de limpiar UI)
 java.util.List<String> obsequiosTarjetas = new java.util.ArrayList<>(obsequiosSel);
 String obsTarjetas = observacionesTexto;
-LocalDate fechaCompraTarjetas = LocalDate.now();
+LocalDate fechaCompraTarjetas = fechaVenta;
 
         imprimirYConfirmarAsync(
         printablePrincipal,
@@ -1163,6 +1235,14 @@ try {
 
             // ======= 5) LIMPIAR UI =======
             // limpiar observaciones
+            fechaVentaSeleccionada = null;
+if (lblFechaVenta != null) {
+    lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
+}
+if (btnCambiarFechaVenta != null) {
+    btnCambiarFechaVenta.setVisible(false);
+}
+
 observacionesTexto = null;
 
 // limpiar asesor (regresar al placeholder "Selecciona asesor")
@@ -1353,7 +1433,7 @@ private Map<String,String> construirVarsDesdeUI() {
 
     // Cliente
     v.put("cliente_nombre", n(txtNombreCompleto.getText()));
-    v.put("fecha_compra", LocalDate.now().format(MX));
+    v.put("fecha_compra", getFechaVentaEfectiva().format(MX));
     LocalDate fe = fechaPreferida();
     v.put("fecha_evento", fe == null ? "" : fe.format(MX));
 
@@ -1412,7 +1492,7 @@ private String obtenerCondicionesPredeterminadas() {
 private Map<String, String> construirCtxMemoPreliminar() {
     Map<String, String> vars = new HashMap<>();
     vars.put("cliente_nombre", txtNombreCompleto.getText().trim());
-    vars.put("fecha_compra", LocalDate.now().format(MX));
+    vars.put("fecha_compra", getFechaVentaEfectiva().format(MX));
     vars.put("fecha_evento", txtFechaEvento.getText().trim());
     vars.put("fecha_en_tienda", txtFechaEntrega.getText().trim());
     vars.put("asesora", cbAsesor.getSelectedItem() != null
@@ -1476,7 +1556,7 @@ private Map<String,String> buildMemoVars(EmpresaInfo emp, Nota n, java.util.List
     } catch (Exception ignore) {}
 
     v.put("cliente_nombre", cliNombre);
-    v.put("fecha_compra", LocalDate.now().format(MX));
+    v.put("fecha_compra", getFechaVentaEfectiva().format(MX));
     v.put("fecha_evento", fechaEventoMostrar==null? "" : fechaEventoMostrar.format(MX));
     v.put("fecha_en_tienda", fechaEntregaMostrar==null? "" : fechaEntregaMostrar.format(MX));
 
@@ -1830,7 +1910,7 @@ private Printable construirPrintableEmpresarial(
         int cajeraCodigo, String cajeraNombre) {
 
     final String tel1      = (n.getTelefono() == null) ? "" : n.getTelefono();
-    final String fechaHoy  = LocalDate.now().format(MX);
+    final String fechaHoy  = getFechaVentaEfectiva().format(MX);
     final String fEntrega  = (fechaEntregaMostrar == null) ? "" : fechaEntregaMostrar.format(MX);
     final String fEvento   = (fechaEventoMostrar  == null) ? "" : fechaEventoMostrar.format(MX);
     final double total     = (n.getTotal() == null) ? 0d : n.getTotal();

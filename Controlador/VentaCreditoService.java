@@ -11,9 +11,10 @@ import java.util.List;
 
 public class VentaCreditoService {
 
+
     private static final String SQL_INS_NOTA =
         "INSERT INTO Notas (folio, fecha_registro, telefono, asesor, tipo, total, saldo, status) " +
-        "VALUES (?, NOW(), ?, ?, 'CR', ?, ?, 'A')";
+        "VALUES (?, ?, ?, ?, 'CR', ?, ?, 'A')";
 
     private static final String SQL_INS_DET =
         "INSERT INTO Nota_Detalle (numero_nota, codigo_articulo, articulo, marca, modelo, talla, color, precio, descuento, subtotal, fecha_evento, fecha_entrega) " +
@@ -23,17 +24,22 @@ public class VentaCreditoService {
         "INSERT INTO Formas_Pago (" +
         "numero_nota, fecha_operacion, tarjeta_credito, tarjeta_debito, american_express, " +
         "transferencia_bancaria, deposito_bancario, efectivo, devolucion, referencia_dv, tipo_operacion, status" +
-        ") VALUES (?, CURDATE(), ?,?,?,?,?,?,?,?, 'CR', 'A')";
+        ") VALUES (?, ?, ?,?,?,?,?,?,?,?, 'CR', 'A')";
+
 
     public int crearVentaCredito(Nota nota,
-                                 List<NotaDetalle> dets,
-                                 PagoFormas pago,
-                                 LocalDate fechaEventoVenta,
-                                 LocalDate fechaEntregaDefault) throws SQLException {
+                             List<NotaDetalle> dets,
+                             PagoFormas pago,
+                             LocalDate fechaVenta,          // ← NUEVO
+                             LocalDate fechaEventoVenta,
+                             LocalDate fechaEntregaDefault) throws SQLException {
+
 
         try (Connection cn = Conecta.getConnection()) {
             cn.setAutoCommit(false);
             try {
+                LocalDate fechaVentaEfectiva = (fechaVenta != null ? fechaVenta : LocalDate.now());
+
                 // ===== FOLIO =====
                 String folio = new FoliosDAO().siguiente(cn, "CR");
                 nota.setFolio(folio);
@@ -55,10 +61,20 @@ public class VentaCreditoService {
                 // ===== INSERT EN NOTAS =====
                 try (PreparedStatement psn = cn.prepareStatement(SQL_INS_NOTA, Statement.RETURN_GENERATED_KEYS)) {
                     psn.setString(1, folio);
-                    psn.setString(2, nota.getTelefono());
-                    if (nota.getAsesor() == null) psn.setNull(3, Types.INTEGER); else psn.setInt(3, nota.getAsesor());
-                    psn.setDouble(4, total);
-                    psn.setDouble(5, saldo);
+
+                    // fecha_registro = fechaVentaEfectiva (sin hora, te basta la fecha)
+                    psn.setDate(2, java.sql.Date.valueOf(fechaVentaEfectiva));
+
+                    psn.setString(3, nota.getTelefono());
+
+                    if (nota.getAsesor() == null)
+                        psn.setNull(4, Types.INTEGER);
+                    else
+                        psn.setInt(4, nota.getAsesor());
+
+                    psn.setDouble(5, total);
+                    psn.setDouble(6, saldo);
+
                     psn.executeUpdate();
 
                     try (ResultSet keys = psn.getGeneratedKeys()) {
@@ -66,6 +82,7 @@ public class VentaCreditoService {
                         nota.setNumeroNota(keys.getInt(1));
                     }
                 }
+
 
                 // ===== DETALLE DE LA NOTA =====
                 try (PreparedStatement psd = cn.prepareStatement(SQL_INS_DET)) {
@@ -132,16 +149,23 @@ public class VentaCreditoService {
                 // ===== FORMAS DE PAGO =====
                 try (PreparedStatement psp = cn.prepareStatement(SQL_INS_FP)) {
                     psp.setInt(1, nota.getNumeroNota());
-                    setNullable(psp, 2, pago.getTarjetaCredito());
-                    setNullable(psp, 3, pago.getTarjetaDebito());
-                    setNullable(psp, 4, pago.getAmericanExpress());
-                    setNullable(psp, 5, pago.getTransferencia());
-                    setNullable(psp, 6, pago.getDeposito());
-                    setNullable(psp, 7, pago.getEfectivo());
-                    setNullable(psp, 8, pago.getDevolucion());
-                    psp.setString(9, pago.getReferenciaDV());
+
+                    // fecha_operacion = misma fecha de venta
+                    psp.setDate(2, java.sql.Date.valueOf(fechaVentaEfectiva));
+
+                    // OJO: Todos los índices se recorren +1
+                    setNullable(psp, 3, pago.getTarjetaCredito());
+                    setNullable(psp, 4, pago.getTarjetaDebito());
+                    setNullable(psp, 5, pago.getAmericanExpress());
+                    setNullable(psp, 6, pago.getTransferencia());
+                    setNullable(psp, 7, pago.getDeposito());
+                    setNullable(psp, 8, pago.getEfectivo());
+                    setNullable(psp, 9, pago.getDevolucion());
+                    psp.setString(10, pago.getReferenciaDV());
+
                     psp.executeUpdate();
                 }
+
 
                 cn.commit();
                 return nota.getNumeroNota();
