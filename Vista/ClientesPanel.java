@@ -20,6 +20,8 @@ public class ClientesPanel extends JPanel {
     private JTextField txtBusto, txtCintura, txtCadera, txtEdad;
     private JTextField txtParenTel2;
 
+    private JDialog ownerDialog;
+
     // Fechas (máscara mexicana DD-MM-YYYY)
     private JFormattedTextField txtFechaEvento, txtPrueba1, txtPrueba2, txtEntrega;
 
@@ -157,6 +159,10 @@ public class ClientesPanel extends JPanel {
             txtNombre.requestFocus();
         }
     }
+    public void setOwnerDialog(JDialog ownerDialog) {
+    this.ownerDialog = ownerDialog;
+}
+
 
     // ---------------------- Layout helpers
     private void addRow(JPanel p, GridBagConstraints c, int y,
@@ -305,13 +311,22 @@ public class ClientesPanel extends JPanel {
             cli.setSituacionEvento((String) cbSituacion.getSelectedItem());
 
             boolean ok = dao.crear(cli);
-            if (ok) {
-                JOptionPane.showMessageDialog(this, "Cliente guardado correctamente");
-                limpiar();
-            } else {
-                JOptionPane.showMessageDialog(this, "No se insertaron filas. Verifica los datos.",
-                        "Atención", JOptionPane.WARNING_MESSAGE);
-            }
+if (ok) {
+    JOptionPane.showMessageDialog(this, "Cliente guardado correctamente");
+
+    // Si estamos dentro de un JDialog, lo cerramos
+    if (ownerDialog != null) {
+        ownerDialog.dispose();
+    } else {
+        // Uso standalone (como el main de prueba): solo limpia
+        limpiar();
+    }
+
+} else {
+    JOptionPane.showMessageDialog(this, "No se insertaron filas. Verifica los datos.",
+            "Atención", JOptionPane.WARNING_MESSAGE);
+}
+
         } catch (IllegalArgumentException ex) {
             JOptionPane.showMessageDialog(this,
                     "Revisa las fechas (usa DD-MM-YYYY) o los campos numéricos.\nDetalle: " + ex.getMessage(),

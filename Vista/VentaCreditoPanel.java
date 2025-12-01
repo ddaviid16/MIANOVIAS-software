@@ -65,7 +65,7 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumnModel;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.DocumentFilter;
-
+import java.util.Locale;
 
 import Controlador.AsesorDAO;
 import Controlador.EmpresaDAO;
@@ -123,6 +123,8 @@ public void setCajeraActual(int codigoEmpleado, String nombreCompleto) {
     private DefaultTableModel model;
      private JButton btnCambiarFechaVenta;
     private JLabel lblFechaVenta;
+    private JDialog ownerDialog;
+
 
     private LocalDate fechaVentaSeleccionada = null;
     private final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -133,6 +135,31 @@ public void setCajeraActual(int codigoEmpleado, String nombreCompleto) {
     private JTextField txtTC, txtTD, txtAMX, txtTRF, txtDEP, txtEFE;
 
     private final DateTimeFormatter MX = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+    private static final Locale LOCALE_ES_MX = Locale.of("es", "MX");
+    private static final DateTimeFormatter MX_LARGO =
+        DateTimeFormatter.ofPattern("dd-MMMM-yyyy", LOCALE_ES_MX);
+
+/** 29-Noviembre-2025 */
+private String fechaLarga(LocalDate fecha) {
+    if (fecha == null) return "";
+    // "29-noviembre-2025"
+    String raw = fecha.format(MX_LARGO);
+
+    int guion1 = raw.indexOf('-');
+    int guion2 = raw.lastIndexOf('-');
+    if (guion1 <= 0 || guion2 <= guion1) return raw;
+
+    String dia  = raw.substring(0, guion1);
+    String mes  = raw.substring(guion1 + 1, guion2);  // "noviembre"
+    String anio = raw.substring(guion2 + 1);
+
+    mes = mes.isEmpty()
+            ? mes
+            : mes.substring(0, 1).toUpperCase(LOCALE_ES_MX) + mes.substring(1);
+
+    return dia + "-" + mes + "-" + anio;
+}
+
     private String lastTelefonoConsultado = null;
     private boolean updatingTable = false;
 
@@ -466,6 +493,10 @@ model.addTableModelListener(evt -> {
         cargarAsesores();
     }
 
+    public void setOwnerDialog(JDialog ownerDialog) {
+    this.ownerDialog = ownerDialog;
+}
+
     private void seleccionarObsequios() {
         Window owner = SwingUtilities.getWindowAncestor(this);
         DialogSeleccionObsequios dlg;
@@ -552,21 +583,51 @@ try {
         lastTelefonoConsultado = null;
     }
 
-    private void abrirFormularioCliente() {
-        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
-        if (tel == null || tel.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Ingresa primero el teléfono del cliente.", "Atención",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(this), "Registro de Clientes", Dialog.ModalityType.APPLICATION_MODAL);
-        dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-        dlg.getContentPane().add(new ClientesPanel(tel));
-        dlg.setSize(760, 620);
-        dlg.setLocationRelativeTo(this);
-        dlg.setVisible(true);
-        cargarCliente();
+private void abrirFormularioCliente() {
+    String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+    if (tel == null || tel.isEmpty()) {
+        JOptionPane.showMessageDialog(
+                this,
+                "Ingresa primero el teléfono del cliente.",
+                "Atención",
+                JOptionPane.WARNING_MESSAGE
+        );
+        return;
     }
+
+    // Ventana dueña (para que el diálogo quede centrado y modal)
+    Window owner = SwingUtilities.getWindowAncestor(this);
+    JDialog dlg;
+
+    if (owner instanceof Frame f) {
+        dlg = new JDialog(f, "Registro de clientes", Dialog.ModalityType.APPLICATION_MODAL);
+    } else if (owner instanceof Dialog d) {
+        dlg = new JDialog(d, "Registro de clientes", Dialog.ModalityType.APPLICATION_MODAL);
+    } else {
+        dlg = new JDialog((Frame) null, "Registro de clientes", Dialog.ModalityType.APPLICATION_MODAL);
+    }
+
+    // Panel de clientes con el teléfono prellenado
+    ClientesPanel cp = new ClientesPanel(tel);
+
+    // IMPORTANTE: ClientesPanel debe tener este setter y usarlo para cerrar el diálogo al guardar
+    cp.setOwnerDialog(dlg);
+
+    dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+    dlg.getContentPane().setLayout(new BorderLayout());
+    dlg.getContentPane().add(cp, BorderLayout.CENTER);
+    dlg.pack();
+    dlg.setLocationRelativeTo(owner);
+
+    // Bloquea hasta que el usuario cierre el diálogo (guardar o cancelar)
+    dlg.setVisible(true);
+
+    // Al cerrar el diálogo:
+    // 1) limpiamos el cache del último teléfono consultado
+    // 2) llamamos a cargarCliente(), que buscará en BD y llenará los campos si ya existe
+    lastTelefonoConsultado = null;
+    cargarCliente();
+}
 
     private String fmt(LocalDate d) { return d == null ? "" : d.format(MX); }
     private LocalDate parseFecha(String s){
@@ -844,7 +905,17 @@ private void cargarAsesores() {
     txtTotal.setToolTipText(String.format("Pagado: %.2f  | Diferencia: %.2f", suma, (total - suma)));
 }
 
-
+    /** Solo para impresión: 10 dígitos -> 123-456-7890; si no, lo deja como viene. */
+private String formatearTelefonoImpresion(String tel) {
+    if (tel == null) return "";
+    String dig = Utilidades.TelefonosUI.soloDigitos(tel);
+    if (dig != null && dig.length() == 10) {
+        return dig.substring(0, 3) + "-" +
+               dig.substring(3, 6) + "-" +
+               dig.substring(6);
+    }
+    return tel.trim();
+}
 
     private boolean validarClienteObligatorio() {
         String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
@@ -1909,7 +1980,7 @@ private Printable construirPrintableEmpresarial(
         String clienteNombreFallback, String tel2Fallback, String observacionesTexto,
         int cajeraCodigo, String cajeraNombre) {
 
-    final String tel1      = (n.getTelefono() == null) ? "" : n.getTelefono();
+    final String tel1Raw      = (n.getTelefono() == null) ? "" : n.getTelefono();
     final String fechaHoy  = getFechaVentaEfectiva().format(MX);
     final String fEntrega  = (fechaEntregaMostrar == null) ? "" : fechaEntregaMostrar.format(MX);
     final String fEvento   = (fechaEventoMostrar  == null) ? "" : fechaEventoMostrar.format(MX);
@@ -1932,7 +2003,7 @@ private Printable construirPrintableEmpresarial(
     String cliPrueba1 = "", cliPrueba2 = "";
     try {
         clienteDAO cdao = new clienteDAO();
-        ClienteResumen cr = cdao.buscarResumenPorTelefono(tel1);
+        ClienteResumen cr = cdao.buscarResumenPorTelefono(tel1Raw);
         if (cr != null) {
             if (cr.getNombreCompleto() != null && !cr.getNombreCompleto().isBlank())
                 cliNombre = cr.getNombreCompleto();
@@ -1945,7 +2016,7 @@ private Printable construirPrintableEmpresarial(
     String medBusto = "", medCintura = "", medCadera = "";
     try {
         clienteDAO cdao = new clienteDAO();
-        java.util.Map<String,String> raw = cdao.detalleGenericoPorTelefono(tel1);
+        java.util.Map<String,String> raw = cdao.detalleGenericoPorTelefono(tel1Raw);
         if (raw != null) {
             for (java.util.Map.Entry<String,String> e : raw.entrySet()) {
                 String k = e.getKey() == null ? "" : e.getKey().toLowerCase();
@@ -1968,6 +2039,10 @@ private Printable construirPrintableEmpresarial(
     final String fCajeraNombre = (cajeraNombre == null ? "" : cajeraNombre.trim());
 
     final String fCliNombre  = cliNombre;
+    final String fTel1Print = formatearTelefonoImpresion(tel1Raw);
+    
+    cliTel2 = formatearTelefonoImpresion(cliTel2);
+    
     final String fCliTel2    = cliTel2;
     final String fCliPrueba1 = cliPrueba1;
     final String fCliPrueba2 = cliPrueba2;
@@ -2075,7 +2150,7 @@ private Printable construirPrintableEmpresarial(
             g2.setFont(fText);
             yLeft  = drawWrapped(g2, labelIf("Nombre: ", safe(fCliNombre)), x, yLeft, leftW);
             yLeft  = drawWrapped(g2, joinNonBlank("   ",
-                    labelIf("Teléfono: ", safe(tel1)),
+                    labelIf("Teléfono: ", safe(fTel1Print)),
                     labelIf("Teléfono 2: ", safe(fCliTel2))), x, yLeft + 2, leftW);
             if (!medidasFmt.isBlank()) yLeft = drawWrapped(g2, medidasFmt, x, yLeft + 2, leftW);
 
@@ -2542,6 +2617,7 @@ if (obsequiosPrint != null && !obsequiosPrint.isEmpty()) {
         double yaDV = dvAplicadas.stream().mapToDouble(p -> p.monto).sum();
         double restante = Math.max(0.0, total - anticipo - yaDV);
 
+        
         // Mapa de DV ya aplicadas (para prellenar)
         java.util.Map<Integer, Double> pre = new java.util.HashMap<>();
         for (Modelo.PagoDV p : dvAplicadas) pre.put(p.numeroNotaDV, p.monto);
@@ -3160,8 +3236,9 @@ private java.util.List<TarjetaVentaData> construirTarjetasVenta(
             ? emp.razonSocial
             : (emp.nombreFiscal != null ? emp.nombreFiscal : "");
 
-    String fechaEventoStr = (fechaEvento == null) ? "" : fechaEvento.format(MX);
-    String fechaCompraStr = (fechaCompra == null) ? "" : fechaCompra.format(MX);
+    String fechaEventoStr = fechaLarga(fechaEvento);
+    String fechaCompraStr = fechaLarga(fechaCompra);
+
 
     // ======================== O B S E Q U I O S ========================
     String obsequiosTexto = "";

@@ -8,6 +8,7 @@ import Controlador.NotasMemoDAO;
 
 import java.awt.FlowLayout;
 import Controlador.FacturaDatosDAO;
+import java.util.Locale;
 
 
 import java.awt.BorderLayout;
@@ -156,6 +157,31 @@ public class VentaContadoPanel extends JPanel {
 
 
     private final DateTimeFormatter MX = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+    private static final Locale LOCALE_ES_MX = Locale.of("es", "MX");
+    private static final DateTimeFormatter MX_LARGO =
+        DateTimeFormatter.ofPattern("dd-MMMM-yyyy", LOCALE_ES_MX);
+
+/** 29-Noviembre-2025 */
+private String fechaLarga(LocalDate fecha) {
+    if (fecha == null) return "";
+    // "29-noviembre-2025"
+    String raw = fecha.format(MX_LARGO);
+
+    int guion1 = raw.indexOf('-');
+    int guion2 = raw.lastIndexOf('-');
+    if (guion1 <= 0 || guion2 <= guion1) return raw;
+
+    String dia  = raw.substring(0, guion1);
+    String mes  = raw.substring(guion1 + 1, guion2);  // "noviembre"
+    String anio = raw.substring(guion2 + 1);
+
+    mes = mes.isEmpty()
+            ? mes
+            : mes.substring(0, 1).toUpperCase(LOCALE_ES_MX) + mes.substring(1);
+
+    return dia + "-" + mes + "-" + anio;
+}
+
     private String lastTelefonoConsultado = null;
     private boolean updatingTable = false;
 
@@ -1227,6 +1253,7 @@ try (Connection cn = Conexion.Conecta.getConnection();
         txtUltimaNota.setText("");
         btnRegistrarCliente.setVisible(false);
         lastTelefonoConsultado = null;
+        
     }
 
 private void aplicarDevolucion() {
@@ -1301,26 +1328,51 @@ private void aplicarDevolucion() {
 
 
 
-    private void abrirFormularioCliente() {
-        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
-        if (tel == null || tel.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Ingresa primero el teléfono del cliente.", "Atención",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        if (nav != null) {
-            nav.prefillClienteTelefono(tel);
-            nav.show("CARD_CLIENTES");
-        } else {
-            JFrame f = new JFrame("Registro de Clientes");
-            f.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-            f.setSize(760, 620);
-            f.setLocationRelativeTo(this);
-            f.setLayout(new BorderLayout());
-            f.add(new ClientesPanel(tel), BorderLayout.CENTER);
-            f.setVisible(true);
-        }
+private void abrirFormularioCliente() {
+    String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+    if (tel == null || tel.isEmpty()) {
+        JOptionPane.showMessageDialog(
+                this,
+                "Ingresa primero el teléfono del cliente.",
+                "Atención",
+                JOptionPane.WARNING_MESSAGE
+        );
+        return;
     }
+
+    // Ventana dueña (para que el diálogo quede centrado y modal)
+    Window owner = SwingUtilities.getWindowAncestor(this);
+    JDialog dlg;
+
+    if (owner instanceof Frame f) {
+        dlg = new JDialog(f, "Registro de clientes", Dialog.ModalityType.APPLICATION_MODAL);
+    } else if (owner instanceof Dialog d) {
+        dlg = new JDialog(d, "Registro de clientes", Dialog.ModalityType.APPLICATION_MODAL);
+    } else {
+        dlg = new JDialog((Frame) null, "Registro de clientes", Dialog.ModalityType.APPLICATION_MODAL);
+    }
+
+    // Panel de clientes con el teléfono prellenado
+    ClientesPanel cp = new ClientesPanel(tel);
+
+    // IMPORTANTE: ClientesPanel debe tener este setter y usarlo para cerrar el diálogo al guardar
+    cp.setOwnerDialog(dlg);
+
+    dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+    dlg.getContentPane().setLayout(new BorderLayout());
+    dlg.getContentPane().add(cp, BorderLayout.CENTER);
+    dlg.pack();
+    dlg.setLocationRelativeTo(owner);
+
+    // Bloquea hasta que el usuario cierre el diálogo (guardar o cancelar)
+    dlg.setVisible(true);
+
+    // Al cerrar el diálogo:
+    // 1) limpiamos el cache del último teléfono consultado
+    // 2) llamamos a cargarCliente(), que buscará en BD y llenará los campos si ya existe
+    lastTelefonoConsultado = null;
+    cargarCliente();
+}
 
     private String fmt(LocalDate d) { return d == null ? "" : d.format(MX); }
     private LocalDate parseFecha(String s){
@@ -2103,6 +2155,17 @@ txtTelefono.requestFocus();
     }
 
     // ===== Utilidades =====
+    /** Solo para impresión: 10 dígitos -> 123-456-7890; si no, lo deja como viene. */
+private String formatearTelefonoImpresion(String tel) {
+    if (tel == null) return "";
+    String dig = Utilidades.TelefonosUI.soloDigitos(tel);
+    if (dig != null && dig.length() == 10) {
+        return dig.substring(0, 3) + "-" +
+               dig.substring(3, 6) + "-" +
+               dig.substring(6);
+    }
+    return tel.trim();
+}
     private String n(String s){ return s==null?"":s; }
     private double parseMoney(Object o){
         if (o==null) return 0;
@@ -2330,7 +2393,7 @@ private Printable construirPrintableEmpresarial(
         int cajeraCodigo, String cajeraNombre) {
 
     // ===== datos base ya calculados (efectivamente finales) =====
-    final String tel1      = (n.getTelefono() == null) ? "" : n.getTelefono();
+    final String tel1Raw      = (n.getTelefono() == null) ? "" : n.getTelefono();
     final String fechaHoy  = getFechaVentaEfectiva().format(MX);
     final String fEntrega  = (fechaEntregaMostrar == null) ? "" : fechaEntregaMostrar.format(MX);
     final String fEvento   = (fechaEventoMostrar  == null) ? "" : fechaEventoMostrar.format(MX);
@@ -2350,7 +2413,7 @@ private Printable construirPrintableEmpresarial(
     String cliPrueba1 = "", cliPrueba2 = "";
     try {
         clienteDAO cdao = new clienteDAO();
-        ClienteResumen cr = cdao.buscarResumenPorTelefono(tel1);
+        ClienteResumen cr = cdao.buscarResumenPorTelefono(tel1Raw);
         if (cr != null) {
             if (cr.getNombreCompleto() != null && !cr.getNombreCompleto().isBlank())
                 cliNombre = cr.getNombreCompleto();
@@ -2364,7 +2427,7 @@ private Printable construirPrintableEmpresarial(
     String medBusto = "", medCintura = "", medCadera = "";
     try {
         clienteDAO cdao = new clienteDAO();
-        java.util.Map<String,String> raw = cdao.detalleGenericoPorTelefono(tel1);
+        java.util.Map<String,String> raw = cdao.detalleGenericoPorTelefono( tel1Raw );
         if (raw != null) {
             for (java.util.Map.Entry<String,String> e : raw.entrySet()) {
                 String k = e.getKey() == null ? "" : e.getKey().toLowerCase();
@@ -2382,6 +2445,8 @@ private Printable construirPrintableEmpresarial(
     if (!medCadera.isBlank())  { if (_med.length()>0) _med.append("   "); _med.append("Cadera: ").append(medCadera); }
     final String medidasFmt = _med.toString();
 
+    final String fTel1Print = formatearTelefonoImpresion(tel1Raw);
+    cliTel2 = formatearTelefonoImpresion(cliTel2);
     final String folio = (folioTxt == null || folioTxt.isBlank()) ? "—" : folioTxt;
         final String fCajeraCodigo = (cajeraCodigo == 0 ? "" : String.valueOf(cajeraCodigo).trim());
     final String fCajeraNombre = (cajeraNombre == null ? "" : cajeraNombre.trim());
@@ -2506,7 +2571,7 @@ private Printable construirPrintableEmpresarial(
             // Izquierda: identidad y contacto
             yLeft  = drawWrapped(g2, labelIf("Nombre: ", safe(fCliNombre)), x, yLeft, leftW);
             yLeft  = drawWrapped(g2, joinNonBlank("   ",
-                    labelIf("Teléfono: ", safe(tel1)),
+                    labelIf("Teléfono: ", safe(fTel1Print)),
                     labelIf("Teléfono 2: ", safe(fCliTel2))), x, yLeft + 2, leftW);
             if (!medidasFmt.isBlank()) {
                 yLeft = drawWrapped(g2, medidasFmt, x, yLeft + 2, leftW);
@@ -3271,8 +3336,8 @@ private java.util.List<TarjetaVentaData> construirTarjetasVenta(
             ? emp.razonSocial
             : (emp.nombreFiscal != null ? emp.nombreFiscal : "");
 
-    String fechaEventoStr = (fechaEvento == null) ? "" : fechaEvento.format(MX);
-    String fechaCompraStr = (fechaCompra == null) ? "" : fechaCompra.format(MX);
+    String fechaEventoStr = fechaLarga(fechaEvento);
+    String fechaCompraStr = fechaLarga(fechaCompra);
 
     // ======================== O B S E Q U I O S ========================
     String obsequiosTexto = "";

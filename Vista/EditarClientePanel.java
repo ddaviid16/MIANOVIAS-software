@@ -523,7 +523,7 @@ public class EditarClientePanel extends JPanel {
 
         if (p2 != null) {
             if (p1 == null)
-                return "Si capturas la fecha de prueba 2, también debes capturar la prueba 1.";
+                return "Si capturas la fecha de prueba 2, también es necesario capturar la prueba 1.";
             if (!p2.isAfter(p1))
                 return "La fecha de prueba 2 debe ser mayor a la fecha de prueba 1.";
             if (!p2.isBefore(evento))
@@ -531,8 +531,6 @@ public class EditarClientePanel extends JPanel {
         }
 
         if (entrega != null) {
-            if (p2 == null)
-                return "Si capturas la fecha de entrega, también debes capturar la prueba 2.";
             if (!entrega.isAfter(p2))
                 return "La fecha de entrega debe ser mayor a la fecha de prueba 2.";
             if (!entrega.isBefore(evento))
