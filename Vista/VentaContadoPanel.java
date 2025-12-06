@@ -2571,7 +2571,7 @@ private Printable construirPrintableEmpresarial(
         EmpresaInfo emp, Nota n, List<NotaDetalle> dets, PagoFormas p,
         LocalDate fechaEntregaMostrar, LocalDate fechaEventoMostrar,
         String asesorNombre, String folioTxt,
-        String clienteNombreFallback, String tel2Fallback, String observacionesTexto,
+        String clienteNombreFallback, String observacionesTexto, String tel2Fallback,
         int cajeraCodigo, String cajeraNombre) {
 
     // ===== datos base ya calculados (efectivamente finales) =====
@@ -3665,71 +3665,169 @@ private void imprimirTarjetasVenta(
                 "Impresión de tarjetas", JOptionPane.WARNING_MESSAGE);
     }
 }
-public static void reimprimirVentaContadoDesdeDatos(
+// ================== REIMPRESIÓN DE VENTA CRÉDITO ==================
+public static void reimprimirNotaContadoDesdeDatos(
         Component parent,
         Nota nota,
-        List<NotaDetalle> detsDB,
+        java.util.List<NotaDetalle> detsDB,
         PagoFormas pagos,
         String asesorNombre,
         LocalDate fechaEventoMostrar,
         LocalDate fechaEntregaMostrar,
         String clienteNombre,
         String telefono2,
+        String memoTextoBD,
         String observacionesBD,
-        List<String> codigosObsequios,
+        java.util.List<String> codigosObsequios,
         int cajeraCodigo,
-        String cajeraNombre
-) {
+        String cajeraNombre) {
+
+    // Panel "dummy" para reutilizar toda la lógica de impresión ya existente
     VentaContadoPanel dummy = new VentaContadoPanel();
 
-    // Fecha de venta
     LocalDate fechaVenta = null;
-    if (nota != null && nota.getFechaRegistro() != null) {
+
+// 1) Preferir la fecha de la nota (fecha de venta real)
+// Usa aquí el/los getters reales que tengas en tu clase Nota
+if (nota != null) {
+    // ejemplo 1: si tienes un campo LocalDate directamente
+    if (nota.getFechaRegistro() != null) {
         fechaVenta = nota.getFechaRegistro().toLocalDate();
     }
-    if (fechaVenta == null && pagos != null && pagos.getFechaOperacion() != null) {
-        fechaVenta = pagos.getFechaOperacion();
+    // ejemplo 2: si solo tienes fecha_registro
+    else if (nota.getFechaRegistro() != null) {
+        // si es LocalDate:
+        // fechaVenta = nota.getFechaRegistro();
+        // si es LocalDateTime:
+        fechaVenta = nota.getFechaRegistro().toLocalDate();
     }
-    if (fechaVenta == null) {
-        fechaVenta = LocalDate.now();
+}
+
+// 2) Si la nota no tiene fecha, usar la de PagoFormas
+if (fechaVenta == null && pagos != null && pagos.getFechaOperacion() != null) {
+    fechaVenta = pagos.getFechaOperacion();
+}
+
+// 3) Último recurso: hoy
+if (fechaVenta == null) {
+    fechaVenta = LocalDate.now();
+}
+
+dummy.fechaVentaSeleccionada = fechaVenta;
+
+    // 2) Obsequios y observaciones para que el ticket los imprima igual
+dummy.obsequiosSel = new java.util.ArrayList<>();
+if (codigosObsequios != null) {
+    for (String raw : codigosObsequios) {
+        if (raw == null) continue;
+        String s = raw.trim();
+        if (s.isEmpty()) continue;
+
+        String codigo = s;
+
+        // Si viene "CODIGO - Descripción", toma solo el código
+        int idx = s.indexOf(" - ");
+        if (idx >= 0) {
+            codigo = s.substring(0, idx).trim();
+        }
+
+        dummy.obsequiosSel.add(codigo);
     }
-    dummy.fechaVentaSeleccionada = fechaVenta;
+}
 
-    // Obsequios
-    dummy.obsequiosSel = (codigosObsequios != null)
-            ? new java.util.ArrayList<>(codigosObsequios)
-            : new java.util.ArrayList<>();
+dummy.observacionesTexto = observacionesBD;
 
-    // Observaciones
-    dummy.observacionesTexto = observacionesBD;
 
-    // Empresa
+    // 3) Empresa
     EmpresaInfo emp = dummy.cargarEmpresaInfo();
+// 4) Detalles a imprimir: lo que viene de la BD
+java.util.List<NotaDetalle> detsPrint = new java.util.ArrayList<>(detsDB);
 
-    // Detalle
-    java.util.List<NotaDetalle> detsPrint = new java.util.ArrayList<>(detsDB);
+// ¿El detalle ya trae líneas de MODISTA?
+boolean yaTieneModistasEnDetalle = detsDB.stream().anyMatch(d -> {
+    String art = d.getArticulo();
+    return art != null && art.toUpperCase(java.util.Locale.ROOT).contains("MODISTA");
+});
 
-    // Folio
+// 4.1) Solo agregamos MODISTA desde Manufacturas si NO existen en NotaDetalle
+if (!yaTieneModistasEnDetalle) {
+    try {
+        ManufacturasDAO mdao = new ManufacturasDAO();
+        java.util.List<Manufactura> lst = mdao.listarPorNota(nota.getNumeroNota()); // ya lo tienes
+
+        for (Manufactura manu : lst) {
+            NotaDetalle d = new NotaDetalle();
+
+            d.setCodigoArticulo(null); // sin código inventario
+            d.setArticulo("MODISTA – " + dummy.n(manu.getArticulo()));
+            d.setMarca("");
+            d.setModelo(dummy.n(manu.getDescripcion()));
+            d.setTalla("");
+            d.setColor("");
+
+            double precio = manu.getPrecio()    == null ? 0d : manu.getPrecio();
+            double desc   = manu.getDescuento() == null ? 0d : manu.getDescuento();
+            double monto  = precio * (desc / 100.0);
+            double sub    = precio - monto;
+
+            d.setPrecio(precio);
+            d.setDescuento(desc);
+            d.setDescuentoMonto(monto);
+            d.setSubtotal(sub);
+
+            if (manu.getFechaRegistro() != null) {
+                d.setFechaEvento(manu.getFechaRegistro());
+            } else {
+                d.setFechaEvento(fechaEventoMostrar);
+            }
+
+            detsPrint.add(d);
+        }
+    } catch (Exception ex) {
+        ex.printStackTrace();
+    }
+}
+
+
+
+    // 5) Folio
     String folioImpresion = (nota.getFolio() == null || nota.getFolio().isBlank())
             ? "—"
             : nota.getFolio();
 
-    // Pago
+    // 6) PagoFormas "seguro"
     PagoFormas p = (pagos != null) ? pagos : new PagoFormas();
 
-    // Fechas evento / entrega (mismo esquema que en crédito)
-    LocalDate eventoMostrar = fechaEventoMostrar;
-    if (eventoMostrar == null) {
+    // === NUEVO: asegurarnos de que la devolución se cargue para reimpresión ===
+    dummy.rellenarDevolucionDesdeBD(nota, p);
+
+
+    // 7) Fechas para mostrar en ticket / condiciones, con mismos criterios que en guardarVentaCredito
+    LocalDate tmpeventoMostrar = fechaEventoMostrar;
+    LocalDate entregaMostrar = fechaEntregaMostrar;
+
+    // Si no te pasan las fechas calculadas, intenta reconstruir algo decente
+    if (tmpeventoMostrar == null) {
+        // Primero la del detalle
         for (NotaDetalle d : detsPrint) {
             if (d.getFechaEvento() != null) {
-                eventoMostrar = d.getFechaEvento();
+                tmpeventoMostrar = d.getFechaEvento();
                 break;
             }
         }
     }
-    LocalDate entregaMostrar = fechaEntregaMostrar;
+    LocalDate eventoMostrar = tmpeventoMostrar;
+    // Si sigue en null, podrías intentar consultarla del cliente/nota,
+    // pero como ya te pasan fechaEventoMostrar desde afuera, aquí no me meto más.
 
-    // Ticket con el MISMO formato empresarial
+    // Lo mismo para entrega:
+    // si no viene, se puede dejar en null. El ticket aguanta vacío.
+    if (entregaMostrar == null) {
+        // Podrías reconstruir desde la nota o desde el cliente, si tienes esos campos ahí.
+        // Para no inventar más lógica, lo dejamos así.
+    }
+
+    // 8) Ticket principal (NOTA CONTADO)
     Printable prnTicket = dummy.construirPrintableEmpresarial(
             emp,
             nota,
@@ -3746,14 +3844,78 @@ public static void reimprimirVentaContadoDesdeDatos(
             cajeraNombre
     );
 
+    // 9) ¿Se deben imprimir condiciones?
+    boolean hayVestido = detsPrint.stream()
+            .anyMatch(d -> dummy.esArticuloVestido(d.getArticulo()));
+
+    // Para reimpresión, SOLO imprimimos condiciones si:
+    // - hay vestido, y
+    // - existe memo guardado en BD (memoTextoBD no vacío).
+    boolean imprimirCondiciones = hayVestido &&
+            memoTextoBD != null &&
+            !memoTextoBD.isBlank();
+
+    Printable printablePrincipal;
+
+    if (imprimirCondiciones) {
+        // Usar el texto que se guardó en BD como "memoEditable"
+        dummy.memoEditable = memoTextoBD;
+
+        java.util.Map<String,String> vars = dummy.buildMemoVars(
+                emp,
+                nota,
+                detsPrint,
+                entregaMostrar,
+                eventoMostrar,
+                asesorNombre
+        );
+
+        Printable condiciones = dummy.construirPrintableCondiciones(
+                emp,
+                nota,
+                detsPrint,
+                vars,
+                folioImpresion,
+                asesorNombre,
+                eventoMostrar,
+                entregaMostrar,
+                clienteNombre
+        );
+
+        printablePrincipal = combinarEnDosPaginas(prnTicket, condiciones);
+    } else {
+        printablePrincipal = prnTicket;
+    }
+
+    // 10) Datos para tarjetas (¼ de hoja) igual que en la venta original
+    java.util.List<String> obsequiosTarjetas = new java.util.ArrayList<>(dummy.obsequiosSel);
+
+    String obsTarjetas = observacionesBD;
+    LocalDate fechaCompraTarjetas = fechaVenta;
+
+    // 11) Reutilizamos el mismo flujo asíncrono de impresión
     dummy.imprimirYConfirmarAsync(
-            prnTicket,
-            () -> JOptionPane.showMessageDialog(
-                    parent,
-                    "Nota de CONTADO reimpresa.\nFolio: " + folioImpresion,
-                    "Reimpresión",
-                    JOptionPane.INFORMATION_MESSAGE
-            ),
+            printablePrincipal,
+            () -> {
+                // Primero las tarjetas
+                dummy.imprimirTarjetasVenta(
+                        emp,
+                        clienteNombre,
+                        eventoMostrar,
+                        fechaCompraTarjetas,
+                        asesorNombre,
+                        detsPrint,
+                        obsequiosTarjetas,
+                        obsTarjetas
+                );
+
+                JOptionPane.showMessageDialog(
+                        parent,
+                        "Nota de CONTADO reimpresa.\nFolio: " + folioImpresion,
+                        "Reimpresión",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+            },
             () -> JOptionPane.showMessageDialog(
                     parent,
                     "La reimpresión fue cancelada o falló.\n" +
@@ -3763,6 +3925,10 @@ public static void reimprimirVentaContadoDesdeDatos(
             )
     );
 }
+/** 
+ * Para reimpresión: si el PagoFormas no trae devolucion, 
+ * la buscamos en Formas_Pago (status = 'A', devolucion IS NOT NULL).
+ */
 private void rellenarDevolucionDesdeBD(Nota nota, PagoFormas p) {
     if (nota == null || p == null) return;
 

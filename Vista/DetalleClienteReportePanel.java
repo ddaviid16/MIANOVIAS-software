@@ -148,80 +148,65 @@ public class DetalleClienteReportePanel extends JPanel {
         modelFechasNota.setRowCount(0);
     }
 
-    private void buscar() {
-        String tel = Utilidades.TelefonosUI.soloDigitos(txtTel.getText());
-        if (tel.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Captura el teléfono del cliente.", "Atención",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        limpiar();
-
-        // === 1) Datos completos del cliente (todas las columnas) ===
-        try {
-            Map<String, String> detalle = new clienteDAO().detalleGenericoPorTelefono(tel);
-            if (detalle == null) {
-                modelInfo.addRow(new Object[]{"—", "Cliente no encontrado"});
-            } else {
-                for (Map.Entry<String, String> e : detalle.entrySet()) {
-                    modelInfo.addRow(new Object[]{prettify(e.getKey()), e.getValue()});
-                }
-            }
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error consultando cliente: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        // === 2) Historial de operaciones (todas las notas del cliente) ===
-        try {
-            NotasDAO ndao = new NotasDAO();
-            List<NotasDAO.NotaHistRow> list = ndao.historialPorTelefono(tel);
-
-            for (NotasDAO.NotaHistRow r : list) {
-                String f = (r.fechaRegistro == null)
-                        ? ""
-                        : r.fechaRegistro.toLocalDateTime().format(DF);
-
-                double total = (r.total == null ? 0.0 : r.total);
-
-
-                // Por defecto, usamos el saldo tal cual viene de Notas
-                Double saldoMostrar = r.saldo;
-
-                // Si es ABONO, mostramos saldo del CR - monto del ABONO
-                if ("AB".equalsIgnoreCase(nullToEmpty(r.tipo))) {
-                    Double saldoCR = obtenerSaldoCreditoDeAbono(r.numeroNota);
-                    if (saldoCR != null) {
-                        saldoMostrar = saldoCR - total;   // <--- AQUÍ EL CAMBIO
-                    }
-                }
-
-                double saldo = (saldoMostrar == null ? 0.0 : saldoMostrar);
-
-
-
-                modelNotas.addRow(new Object[]{
-                        r.numeroNota,
-                        r.tipo,
-                        nullToEmpty(r.folio),
-                        f,
-                        total,
-                        saldo,
-                        nullToEmpty(r.status)
-                });
-            }
-
-            if (list.isEmpty()) {
-                modelNotas.addRow(new Object[]{"—", "—", "—", "—", 0.0, 0.0, "Sin registros"});
-            } else {
-                tbNotas.setRowSelectionInterval(0, 0);
-            }
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error cargando operaciones: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
-        }
+private void buscar() {
+    String tel = Utilidades.TelefonosUI.soloDigitos(txtTel.getText());
+    if (tel.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Captura el teléfono del cliente.", "Atención",
+                JOptionPane.WARNING_MESSAGE);
+        return;
     }
+    limpiar();
+
+    // === 1) Datos completos del cliente (todas las columnas) ===
+    try {
+        Map<String, String> detalle = new clienteDAO().detalleGenericoPorTelefono(tel);
+        if (detalle == null) {
+            modelInfo.addRow(new Object[]{"—", "Cliente no encontrado"});
+        } else {
+            for (Map.Entry<String, String> e : detalle.entrySet()) {
+                modelInfo.addRow(new Object[]{prettify(e.getKey()), e.getValue()});
+            }
+        }
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this, "Error consultando cliente: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+
+ // === 2) Historial de operaciones (todas las notas del cliente) ===
+try {
+    NotasDAO ndao = new NotasDAO();
+    List<NotasDAO.NotaResumen> list = ndao.listarNotasPorTelefonoResumen(tel);
+
+    for (NotasDAO.NotaResumen r : list) {
+        String f = (r.fecha == null)
+                ? ""
+                : r.fecha.format(DF);
+
+        double total = (r.total == null ? 0.0 : r.total);
+        double saldo = (r.saldo == null ? 0.0 : r.saldo);
+
+        modelNotas.addRow(new Object[]{
+                r.numero,
+                r.tipo,
+                nullToEmpty(r.folio),
+                f,
+                total,
+                saldo,
+                nullToEmpty(r.status)
+        });
+    }
+
+    if (list.isEmpty()) {
+        modelNotas.addRow(new Object[]{"—", "—", "—", "—", 0.0, 0.0, "Sin registros"});
+    } else {
+        tbNotas.setRowSelectionInterval(0, 0);
+    }
+} catch (SQLException ex) {
+    JOptionPane.showMessageDialog(this, "Error cargando operaciones: " + ex.getMessage(),
+            "Error", JOptionPane.ERROR_MESSAGE);
+}
+}
 
 /** Carga productos, fechas y formas de pago de la nota seleccionada. */
 private void cargarDetalleYFechasDeNotaSeleccionada() {

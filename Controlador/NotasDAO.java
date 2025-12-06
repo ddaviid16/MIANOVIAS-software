@@ -10,35 +10,132 @@
 
     public class NotasDAO {
         /** Notas (todas) por rango de fechas de registro [ini, fin), más recientes primero. */
-        public List<NotaResumen> listarNotasPorRangoResumen(java.time.LocalDate ini, java.time.LocalDate fin) throws SQLException {
-            String sql = "SELECT numero_nota, tipo, folio, DATE(fecha_registro) AS fecha, total, saldo, status " +
-                        "FROM Notas " +
-                        "WHERE fecha_registro >= ? AND fecha_registro < ? " +
-                        "ORDER BY fecha_registro DESC, numero_nota DESC";
-            try (java.sql.Connection cn = Conexion.Conecta.getConnection();
-                java.sql.PreparedStatement ps = cn.prepareStatement(sql)) {
-                ps.setDate(1, java.sql.Date.valueOf(ini));
-                ps.setDate(2, java.sql.Date.valueOf(fin));
-                try (java.sql.ResultSet rs = ps.executeQuery()) {
-                    java.util.List<NotaResumen> out = new java.util.ArrayList<>();
-                    while (rs.next()) {
-                        NotaResumen r = new NotaResumen();
-                        r.numero = rs.getInt("numero_nota");
-                        r.tipo   = rs.getString("tipo");
-                        try { r.folio = rs.getString("folio"); } catch (Throwable ignore) {}
-                        java.sql.Date f = rs.getDate("fecha");
-                        r.fecha = (f == null ? null : f.toLocalDate());
-                        try { r.total = (rs.getBigDecimal("total")==null? null : rs.getBigDecimal("total").doubleValue()); }
-                        catch(Throwable t){ r.total = rs.getDouble("total"); }
-                        try { r.saldo = (rs.getBigDecimal("saldo")==null? null : rs.getBigDecimal("saldo").doubleValue()); }
-                        catch(Throwable t){ r.saldo = rs.getDouble("saldo"); }
-                        r.status = rs.getString("status");
-                        out.add(r);
+/** Notas (todas) por rango de fechas [ini, fin), con saldo ajustado para CR/AB. */
+public List<NotaResumen> listarNotasPorRangoResumen(java.time.LocalDate ini,
+                                                    java.time.LocalDate fin) throws SQLException {
+    String sql =
+            "SELECT numero_nota, tipo, folio, DATE(fecha_registro) AS fecha, " +
+            "       total, saldo, nota_relacionada, status " +
+            "FROM Notas " +
+            "WHERE fecha_registro >= ? AND fecha_registro < ? " +
+            // ASC para poder recorrer cronológicamente
+            "ORDER BY fecha_registro ASC, numero_nota ASC";
+
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setDate(1, java.sql.Date.valueOf(ini));
+        ps.setDate(2, java.sql.Date.valueOf(fin));
+
+        try (ResultSet rs = ps.executeQuery()) {
+
+            List<NotaResumen> out = new ArrayList<>();
+
+            // Mapa: numero_nota (CR) -> lista de abonos (NotaResumen)
+            Map<Integer, List<NotaResumen>> abonosPorCredito = new HashMap<>();
+
+            while (rs.next()) {
+                NotaResumen r = new NotaResumen();
+                r.numero = rs.getInt("numero_nota");
+                r.tipo   = rs.getString("tipo");
+                try { r.folio = rs.getString("folio"); } catch (Throwable ignore) {}
+
+                java.sql.Date f = rs.getDate("fecha");
+                r.fecha = (f == null ? null : f.toLocalDate());
+
+                try {
+                    java.math.BigDecimal bdTot = rs.getBigDecimal("total");
+                    r.total = (bdTot == null ? null : bdTot.doubleValue());
+                } catch (Throwable t) {
+                    r.total = rs.getDouble("total");
+                }
+
+                try {
+                    java.math.BigDecimal bdSal = rs.getBigDecimal("saldo");
+                    r.saldo = (bdSal == null ? null : bdSal.doubleValue());
+                } catch (Throwable t) {
+                    r.saldo = rs.getDouble("saldo");
+                }
+
+                r.status = rs.getString("status");
+
+                // Si es ABONO, guardamos la relación contra su crédito
+                String tipoUpper = (r.tipo == null ? "" : r.tipo.trim().toUpperCase());
+                if ("AB".equals(tipoUpper)) {
+                    int numRel = rs.getInt("nota_relacionada");
+                    if (!rs.wasNull()) {
+                        abonosPorCredito
+                                .computeIfAbsent(numRel, k -> new ArrayList<>())
+                                .add(r);
                     }
-                    return out;
+                }
+
+                out.add(r);
+            }
+
+            // ===================== AJUSTE DE SALDOS SECUENCIALES POR CRÉDITO =====================
+            if (!abonosPorCredito.isEmpty()) {
+
+                // Créditos presentes en el rango
+                Map<Integer, NotaResumen> creditosPorNumero = new HashMap<>();
+                for (NotaResumen r : out) {
+                    String t = (r.tipo == null ? "" : r.tipo.trim().toUpperCase());
+                    if ("CR".equals(t) && r.numero > 0) {
+                        creditosPorNumero.put(r.numero, r);
+                    }
+                }
+
+                Comparator<NotaResumen> cmp =
+                        Comparator.comparing(
+                                        (NotaResumen r) -> r.fecha,
+                                        Comparator.nullsLast(Comparator.naturalOrder())
+                                )
+                                .thenComparingInt(r -> r.numero);
+
+                FormasPagoDAO fdao = new FormasPagoDAO();
+
+                for (Map.Entry<Integer, List<NotaResumen>> e : abonosPorCredito.entrySet()) {
+                    Integer numCredito = e.getKey();
+                    NotaResumen credito = creditosPorNumero.get(numCredito);
+
+                    // Si el crédito no está en el rango de fechas, no podemos recalcularlo aquí
+                    if (credito == null) continue;
+
+                    // Saldo inicial REAL del crédito = total - pagos iniciales del CR
+                    Double saldoInicial = calcularSaldoInicialCredito(credito, fdao);
+                    if (saldoInicial == null) continue;
+
+                    // Mostrar este saldo inicial en la fila del CR
+                    credito.saldo = saldoInicial;
+
+                    List<NotaResumen> abonos = e.getValue();
+                    abonos.sort(cmp);
+
+                    double saldoTmp = saldoInicial;
+                    for (NotaResumen ab : abonos) {
+                        double montoAbono = (ab.total == null ? 0.0 : ab.total);
+                        saldoTmp -= montoAbono;
+                        if (Math.abs(saldoTmp) < 0.01) saldoTmp = 0.0;  // tolerancia centavos
+                        // saldo DESPUÉS de este abono
+                        ab.saldo = saldoTmp;
+                    }
                 }
             }
+
+            // Volver a "más recientes primero" como cuando lo usabas antes
+            out.sort(
+                    Comparator.comparing(
+                                    (NotaResumen r) -> r.fecha,
+                                    Comparator.nullsLast(Comparator.naturalOrder())
+                            )
+                            .thenComparingInt(r -> r.numero)
+                            .reversed()
+            );
+
+            return out;
         }
+    }
+}
             /** Busca una nota por folio. Devuelve null si no existe.
          *  Se usa para la Hoja de Entrega. */
         public Nota buscarNotaPorFolio(String folio) throws SQLException {
@@ -493,6 +590,7 @@ public List<Modelo.NotaDetalle> listarDetalleDeNota(int numeroNota) throws SQLEx
             public int numero;
             public String tipo;
             public String folio;
+            public String folioRef;          // NUEVO: folio del crédito al que se relaciona (AB/DV)
             public LocalDate fecha;
             public Double total;
             public Double saldo;
@@ -502,50 +600,164 @@ public List<Modelo.NotaDetalle> listarDetalleDeNota(int numeroNota) throws SQLEx
             public String estatusFactura;   // TIMBRADA/BORRADOR/CANCELADA o null
         }
 
-        /** Notas de un cliente por teléfono (todas, orden más reciente primero). */
-        public List<NotaResumen> listarNotasPorTelefonoResumen(String telefono) throws SQLException {
-    String sql = "SELECT numero_nota, tipo, folio, DATE(fecha_registro) AS fecha, " +
-                 "       total, saldo, status " +
-                 "FROM Notas WHERE telefono=? " +
-                 "ORDER BY fecha_registro DESC, numero_nota DESC";
+
+/** Notas de un cliente por teléfono (todas, orden más reciente primero). */
+public List<NotaResumen> listarNotasPorTelefonoResumen(String telefono) throws SQLException {
+    String sql =
+        "SELECT numero_nota, tipo, folio, DATE(fecha_registro) AS fecha, " +
+        "       total, saldo, nota_relacionada, status " +
+        "FROM Notas WHERE telefono=? " +
+        // ASC para poder recorrer cronológicamente
+        "ORDER BY fecha_registro ASC, numero_nota ASC";
+
     try (Connection cn = Conecta.getConnection();
          PreparedStatement ps = cn.prepareStatement(sql)) {
 
         ps.setString(1, telefono);
+
         try (ResultSet rs = ps.executeQuery()) {
-            List<NotaResumen> out = new java.util.ArrayList<>();
+            List<NotaResumen> out = new ArrayList<>();
+
+            // Mapa: numero_nota (CR) -> lista de abonos (NotaResumen)
+            Map<Integer, List<NotaResumen>> abonosPorCredito = new HashMap<>();
+
             while (rs.next()) {
                 NotaResumen r = new NotaResumen();
                 r.numero = rs.getInt("numero_nota");
                 r.tipo   = rs.getString("tipo");
                 try { r.folio = rs.getString("folio"); } catch (Throwable ignore) {}
+
                 Date f = rs.getDate("fecha");
                 r.fecha = (f == null ? null : f.toLocalDate());
+
                 try {
-                    r.total = (rs.getBigDecimal("total")==null
+                    r.total = (rs.getBigDecimal("total") == null
                                ? null
                                : rs.getBigDecimal("total").doubleValue());
-                } catch(Throwable t){
+                } catch (Throwable t) {
                     r.total = rs.getDouble("total");
                 }
+
                 try {
-                    r.saldo = (rs.getBigDecimal("saldo")==null
+                    r.saldo = (rs.getBigDecimal("saldo") == null
                                ? null
                                : rs.getBigDecimal("saldo").doubleValue());
-                } catch(Throwable t){
+                } catch (Throwable t) {
                     r.saldo = rs.getDouble("saldo");
                 }
+
                 r.status = rs.getString("status");
 
-                // Estas dos líneas QUITARLAS (o dejarlas comentadas):
-                // r.uuidFactura    = rs.getString("uuid_fact");
-                // r.estatusFactura = rs.getString("est_fact");
+                // Si es ABONO, guardamos la relación numérica contra su crédito
+                String tipoUpper = (r.tipo == null ? "" : r.tipo.trim().toUpperCase());
+                if ("AB".equals(tipoUpper)) {
+                    int numRel = rs.getInt("nota_relacionada");
+                    if (!rs.wasNull()) {
+                        abonosPorCredito
+                                .computeIfAbsent(numRel, k -> new ArrayList<>())
+                                .add(r);
+                    }
+                }
 
                 out.add(r);
             }
+
+            // ===================== AJUSTE DE SALDOS SECUENCIALES POR CRÉDITO =====================
+            if (!abonosPorCredito.isEmpty()) {
+                // créditos por número interno
+                Map<Integer, NotaResumen> creditosPorNumero = new HashMap<>();
+                for (NotaResumen r : out) {
+                    String t = (r.tipo == null ? "" : r.tipo.trim().toUpperCase());
+                    if ("CR".equals(t) && r.numero > 0) {
+                        creditosPorNumero.put(r.numero, r);
+                    }
+                }
+
+                Comparator<NotaResumen> cmp =
+                    Comparator.comparing(
+                            (NotaResumen r) -> r.fecha,
+                            Comparator.nullsLast(Comparator.naturalOrder())
+                    ).thenComparingInt(r -> r.numero);
+
+                FormasPagoDAO fdao = new FormasPagoDAO();
+
+                for (Map.Entry<Integer, List<NotaResumen>> e : abonosPorCredito.entrySet()) {
+                    Integer numCredito = e.getKey();
+                    NotaResumen credito = creditosPorNumero.get(numCredito);
+                    if (credito == null) continue;
+
+                    // Saldo inicial REAL del crédito = total - pagos iniciales del CR
+                    Double saldoInicial = calcularSaldoInicialCredito(credito, fdao);
+                    if (saldoInicial == null) continue;
+
+                    // Mostrar este saldo inicial en la fila del CR
+                    credito.saldo = saldoInicial;
+
+                    List<NotaResumen> abonos = e.getValue();
+                    abonos.sort(cmp);
+
+                    double saldoTmp = saldoInicial;
+                    for (NotaResumen ab : abonos) {
+                        double montoAbono = (ab.total == null ? 0.0 : ab.total);
+                        saldoTmp -= montoAbono;
+                        if (Math.abs(saldoTmp) < 0.01) saldoTmp = 0.0;  // tolerancia
+                        // saldo DESPUÉS de este abono
+                        ab.saldo = saldoTmp;
+                    }
+                }
+            }
+
+            // De vuelta a "más recientes primero"
+            out.sort(
+                Comparator.comparing(
+                            (NotaResumen r) -> r.fecha,
+                            Comparator.nullsLast(Comparator.naturalOrder())
+                       )
+                       .thenComparingInt(r -> r.numero)
+                       .reversed()
+            );
+
             return out;
         }
     }
+}
+/** Suma pagos iniciales del CR y calcula saldo inicial = total - pagosIniciales. */
+private Double calcularSaldoInicialCredito(NotaResumen credito, FormasPagoDAO fdao) {
+    if (credito == null) return null;
+
+    // Si no hay total, intentamos usar saldo de BD como último recurso
+    if (credito.total == null) {
+        return credito.saldo;
+    }
+
+    double total = credito.total;
+    double pagosIniciales = 0.0;
+
+    try {
+        FormasPagoDAO.FormasPagoRow fp = fdao.obtenerPorNota(credito.numero);
+        if (fp != null) {
+            pagosIniciales += nz(fp.efectivo);
+            pagosIniciales += nz(fp.tarjetaCredito);
+            pagosIniciales += nz(fp.tarjetaDebito);
+            pagosIniciales += nz(fp.americanExpress);
+            pagosIniciales += nz(fp.transferencia);
+            pagosIniciales += nz(fp.deposito);
+            // OJO: no restamos aquí DV, eso ya se maneja por otro flujo
+        }
+    } catch (Exception ignore) {
+        // Si algo truena, regresamos lo que tengamos
+        return (credito.saldo != null ? credito.saldo : credito.total);
+    }
+
+    double saldo = total - pagosIniciales;
+    if (saldo < 0 && Math.abs(saldo) < 0.01) {
+        saldo = 0.0; // ajustes de centavos
+    }
+    return saldo;
+}
+
+private static double nz(Double v) {
+    return (v == null ? 0.0 : v);
 }
 
             /** 
