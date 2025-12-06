@@ -79,6 +79,7 @@ import java.io.ByteArrayInputStream;
 
 import Controlador.AsesorDAO;
 import Controlador.InventarioDAO;
+import Controlador.ManufacturasDAO;
 import Controlador.NotasDAO;
 import Controlador.PedidosDAO;
 import Controlador.VentaContadoService;
@@ -87,6 +88,7 @@ import Controlador.EmpresaDAO;
 
 import Modelo.ClienteResumen;
 import Modelo.Inventario;
+import Modelo.Manufactura;
 import Modelo.Nota;
 import Modelo.NotaDetalle;
 import Modelo.PagoFormas;
@@ -145,6 +147,10 @@ public class VentaContadoPanel extends JPanel {
     private DefaultTableModel model;
 
     private final JButton btRegistrarPedido = new JButton("Registrar artículo");
+    private final JButton btRegistrarManufactura = new JButton("Registrar modista");
+
+    
+
 
     // ========= Totales y pagos
     private JTextField txtSubtotal, txtTotal;
@@ -302,11 +308,20 @@ private String fechaLarga(LocalDate fecha) {
         addCell(top, c, 1, y, txtCod, 1, true);
         addCell(top, c, 2, y, btSeleccionar, 2, false);
         y++;
+        JPanel pnlRegistrarEspecial = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
 
         // Botón PEDIR
         btRegistrarPedido.setVisible(false);
         btRegistrarPedido.addActionListener(_e -> abrirDialogoPedido());
         addCell(top, c, 0, y, btRegistrarPedido, 1, false);
+        
+        btRegistrarManufactura.setVisible(false);
+        btRegistrarManufactura.addActionListener(_e -> abrirDialogoManufactura());
+
+        pnlRegistrarEspecial.add(btRegistrarPedido);
+        pnlRegistrarEspecial.add(btRegistrarManufactura);
+
+        addCell(top, c, 0, y, pnlRegistrarEspecial, 1, false);
 
         // Botón obsequios
         JButton btObsequios = new JButton("Añadir obsequio(s)");
@@ -323,6 +338,9 @@ private String fechaLarga(LocalDate fecha) {
             btRegistrarPedido.setVisible(s != null && s.trim().equalsIgnoreCase("PEDIR"));
             String val = (s == null) ? "" : s.trim().toUpperCase();
 
+
+            
+    btRegistrarManufactura.setVisible("MODISTA".equals(val));
     // Modo admin para fecha de venta
     boolean esAdmin = "ADMIN".equals(val);
     if (btnCambiarFechaVenta != null) {
@@ -1646,6 +1664,111 @@ private void cargarAsesores() {
         dlg.setVisible(true);
     }
 
+    private void abrirDialogoManufactura() {
+    JDialog dlg = new JDialog(
+            SwingUtilities.getWindowAncestor(this),
+            "Registrar modista",
+            Dialog.ModalityType.APPLICATION_MODAL
+    );
+
+    JPanel p = new JPanel(new GridBagLayout());
+    GridBagConstraints c = new GridBagConstraints();
+    c.insets = new Insets(6, 6, 6, 6);
+    c.fill = GridBagConstraints.HORIZONTAL;
+    c.weightx = 1;
+    int y = 0;
+
+    JTextField tArticulo = new JTextField();
+    JTextField tDescripcion = new JTextField();
+    JTextField tPrecio = new JTextField();
+    ((AbstractDocument) tPrecio.getDocument()).setDocumentFilter(onlyDecimal());
+    JTextField tDesc = new JTextField("0");
+    ((AbstractDocument) tDesc.getDocument()).setDocumentFilter(onlyDecimal());
+    JTextField tFechaEntrega = new JTextField(); // dd-MM-yyyy opcional
+
+    JTextArea tObs = new JTextArea(4, 30);
+    tObs.setLineWrap(true);
+    tObs.setWrapStyleWord(true);
+
+    addCell(p, c, 0, y, new JLabel("Artículo*:"), 1, false);
+    addCell(p, c, 1, y, tArticulo, 1, true); y++;
+    addCell(p, c, 0, y, new JLabel("Descripción:"), 1, false);
+    addCell(p, c, 1, y, tDescripcion, 1, true); y++;
+    addCell(p, c, 0, y, new JLabel("Precio*:"), 1, false);
+    addCell(p, c, 1, y, tPrecio, 1, true); y++;
+    addCell(p, c, 0, y, new JLabel("% desc.:"), 1, false);
+    addCell(p, c, 1, y, tDesc, 1, true); y++;
+    addCell(p, c, 0, y, new JLabel("Fecha entrega (dd-MM-yyyy):"), 1, false);
+    addCell(p, c, 1, y, tFechaEntrega, 1, true); y++;
+    addCell(p, c, 0, y, new JLabel("Observaciones:"), 1, false);
+    addCell(p, c, 1, y, new JScrollPane(tObs), 1, true); y++;
+
+    JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+    JButton bOk = new JButton("Agregar al carrito");
+    JButton bCancel = new JButton("Cancelar");
+    south.add(bCancel);
+    south.add(bOk);
+
+    dlg.getContentPane().add(p, BorderLayout.CENTER);
+    dlg.getContentPane().add(south, BorderLayout.SOUTH);
+    dlg.setSize(480, 360);
+    dlg.setLocationRelativeTo(this);
+
+    bCancel.addActionListener(_e -> dlg.dispose());
+    bOk.addActionListener(_e -> {
+        String art = tArticulo.getText().trim();
+        double precio = parseMoney(tPrecio.getText());
+        double desc = clamp0a100(parseMoney(tDesc.getText()));
+        LocalDate fEnt = parseFecha(tFechaEntrega.getText()); // dd-MM-yyyy (mismo formato MX)
+
+        if (art.isEmpty()) {
+            JOptionPane.showMessageDialog(dlg, "Captura el nombre del trabajo de modista.");
+            return;
+        }
+        if (precio <= 0) {
+            JOptionPane.showMessageDialog(dlg, "Captura un precio válido (>0).");
+            return;
+        }
+
+        Manufactura m = new Manufactura();
+        m.setArticulo(art);
+        m.setDescripcion(tDescripcion.getText().trim());
+        m.setPrecio(precio);
+        m.setDescuento(desc);
+        m.setFechaRegistro(getFechaVentaEfectiva());           // fecha de venta
+        m.setFechaEntrega(fEnt);
+        String obs = tObs.getText().trim();
+        m.setObservaciones(obs.isEmpty() ? null : obs);
+        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+        m.setTelefono((tel == null || tel.isEmpty()) ? null : tel);
+        m.setStatus("A");
+
+        double monto = precio * (desc / 100.0);
+        double sub = precio - monto;
+        String fArt = fmt(fechaPreferida());
+
+        model.addRow(new Object[]{
+                m,                                  // col 0 = objeto Manufactura
+                "MODISTA – " + art,             // col 1
+                "",                                 // Marca
+                n(m.getDescripcion()),              // Modelo = descripción
+                "",                                 // Talla
+                "",                                 // Color
+                fArt,
+                String.format("%.2f", precio),
+                String.format("%.2f", desc),
+                String.format("%.2f", monto),
+                String.format("%.2f", sub),
+                "Quitar"
+        });
+        recalcularTotales();
+        txtCod.setText("");
+        btRegistrarManufactura.setVisible(false);
+        dlg.dispose();
+    });
+
+    dlg.setVisible(true);
+}
     private void recalcularTotales() {
         double tot = 0;
         for (int r=0; r<model.getRowCount(); r++){
@@ -1728,8 +1851,6 @@ private void cargarAsesores() {
         int r = JOptionPane.showOptionDialog(this,"¿Registrar la venta de contado?","Confirmación",
                 JOptionPane.YES_NO_OPTION,JOptionPane.QUESTION_MESSAGE,null,ops,ops[0]);
         if (r != JOptionPane.YES_OPTION) return;
-
-        try {
             // === Validar que el monto de devolución no exceda el disponible ===
 Object selItem = cbFolioDV.getSelectedItem();
 if (selItem != null) {
@@ -1775,6 +1896,8 @@ if (selItem != null) {
         }
     }
 }
+        try {
+
 
 
             if (observacionesTexto == null) {
@@ -1796,33 +1919,76 @@ if (selItem != null) {
             n.setSaldo(0.0);
             n.setStatus("A");
 
-            List<NotaDetalle> dets = new ArrayList<>();
-            for (int i=0; i<model.getRowCount(); i++){
-                String cod = "";
-                try { cod = model.getValueAt(i,0).toString(); } catch(Exception ignore){}
-                if (cod == null) cod = "";
-                cod = cod.trim();
-                if (cod.isEmpty() || "0".equals(cod)) continue;   // 0 = PEDIDO
+            List<NotaDetalle> dets = new ArrayList<>();List<NotaDetalle> detsManufactura = new ArrayList<>();
+java.util.List<Manufactura> manufacturas = new ArrayList<>();
 
-                NotaDetalle d = new NotaDetalle();
-                d.setCodigoArticulo(cod);
-                d.setArticulo(model.getValueAt(i,1).toString());
-                d.setMarca(model.getValueAt(i,2).toString());
-                d.setModelo(model.getValueAt(i,3).toString());
-                d.setTalla(model.getValueAt(i,4).toString());
-                d.setColor(model.getValueAt(i,5).toString());
-                d.setPrecio(parseMoney(model.getValueAt(i,7)));
-                d.setDescuento(parseMoney(model.getValueAt(i,8)));
-                d.setDescuentoMonto(parseMoney(model.getValueAt(i,9)));
-                d.setSubtotal(parseMoney(model.getValueAt(i,10)));
-                LocalDate fRow = parseFecha(String.valueOf(model.getValueAt(i,6)));
-                d.setFechaEvento(fRow != null ? fRow : fechaEventoDefault);
-                dets.add(d);
-            }
+for (int i = 0; i < model.getRowCount(); i++) {
+    Object codObj = model.getValueAt(i, 0);
+
+    Manufactura manu = null;
+    String cod = "";
+    if (codObj instanceof Manufactura m) {
+        manu = m;
+    } else if (codObj != null) {
+        cod = codObj.toString().trim();
+    }
+
+    boolean esManufactura = (manu != null);
+    boolean esPedido = (!esManufactura) && (cod.isEmpty() || "0".equals(cod));
+    if (esPedido) {
+        // Se manejará aparte en Pedidos
+        continue;
+    }
+
+    LocalDate fRow = parseFecha(String.valueOf(model.getValueAt(i, 6)));
+    LocalDate fechaDet = (fRow != null ? fRow : fechaEventoDefault);
+
+    if (esManufactura) {
+        // Completar datos de la manufactura para guardar después
+        manu.setTelefono(n.getTelefono());
+        if (manu.getFechaRegistro() == null) manu.setFechaRegistro(getFechaVentaEfectiva());
+        if (manu.getFechaEntrega() == null) manu.setFechaEntrega(fechaEntregaDefault);
+        manu.setPrecio(parseMoney(model.getValueAt(i, 7)));
+        manu.setDescuento(parseMoney(model.getValueAt(i, 8)));
+        if (manu.getStatus() == null || manu.getStatus().isBlank()) manu.setStatus("A");
+        manufacturas.add(manu);
+
+        // Línea para IMPRESIÓN (no va a Nota_Detalle)
+        NotaDetalle d = new NotaDetalle();
+        d.setCodigoArticulo(null);  // sin código de inventario
+        d.setArticulo(String.valueOf(model.getValueAt(i, 1)));   // "MANUFACTURA – ..."
+        d.setMarca("");
+        d.setModelo(String.valueOf(model.getValueAt(i, 3)));     // usamos la descripción
+        d.setTalla("");
+        d.setColor("");
+        d.setPrecio(parseMoney(model.getValueAt(i, 7)));
+        d.setDescuento(parseMoney(model.getValueAt(i, 8)));
+        d.setDescuentoMonto(parseMoney(model.getValueAt(i, 9)));
+        d.setSubtotal(parseMoney(model.getValueAt(i, 10)));
+        d.setFechaEvento(fechaDet);
+        detsManufactura.add(d);
+    } else {
+        // Artículo normal de inventario
+        NotaDetalle d = new NotaDetalle();
+        d.setCodigoArticulo(cod);
+        d.setArticulo(model.getValueAt(i,1).toString());
+        d.setMarca(model.getValueAt(i,2).toString());
+        d.setModelo(model.getValueAt(i,3).toString());
+        d.setTalla(model.getValueAt(i,4).toString());
+        d.setColor(model.getValueAt(i,5).toString());
+        d.setPrecio(parseMoney(model.getValueAt(i,7)));
+        d.setDescuento(parseMoney(model.getValueAt(i,8)));
+        d.setDescuentoMonto(parseMoney(model.getValueAt(i,9)));
+        d.setSubtotal(parseMoney(model.getValueAt(i,10)));
+        d.setFechaEvento(fechaDet);
+        dets.add(d);
+    }
+}
 
 
         // ===== NUEVO: lista para IMPRESIÓN (inventario + pedidos) =====
         List<NotaDetalle> detsPrint = new ArrayList<>(dets);
+        detsPrint.addAll(detsManufactura);
 
         // Reusar lo que ya tienes para extraer PEDIR del carrito
         List<PedidosDAO.PedidoDraft> pedidosCarrito = extraerPedidosDelCarrito();
@@ -1883,6 +2049,21 @@ LocalDate fechaVenta = getFechaVentaEfectiva();
 
 
             n.setNumeroNota(numeroNota); // <-- ¡asigna el número real antes de imprimir!
+                        // Guardar manufacturas asociadas a la nota
+if (!manufacturas.isEmpty()) {
+    try {
+        ManufacturasDAO mdao = new ManufacturasDAO();
+        for (Manufactura manu : manufacturas) {
+            manu.setNumeroNota(numeroNota);
+            mdao.insertar(manu);
+        }
+    } catch (SQLException exManu) {
+        JOptionPane.showMessageDialog(this,
+                "La venta se registró, pero los trabajos de modista no se pudieron guardar:\n" + exManu.getMessage(),
+                "Modistas", JOptionPane.WARNING_MESSAGE);
+    }
+}
+
 
             // ======= Factura: si hay captura, persístela en Factura_Datos =======
 try {
@@ -1990,7 +2171,7 @@ Printable prn = construirPrintableEmpresarial(
         emp, n, detsPrint, p,
         entregaMostrar, eventoMostrar,
         sel.getNombreCompleto(), folioImpresion,
-        clienteNombre, tel2, cajeraCodigo, cajeraNombre
+        clienteNombre, observacionesTexto,tel2, cajeraCodigo, cajeraNombre
 );
 
 // === 4.0) Guardar OBSERVACIONES (van en el ticket, siempre) ===
@@ -2109,6 +2290,7 @@ dvAplicadas.clear();
 // limpiar campo de código de artículo y botón PEDIR
 txtCod.setText("");
 btRegistrarPedido.setVisible(false);
+btRegistrarManufactura.setVisible(false);
 model.setRowCount(0);
 txtSubtotal.setText("");
 txtTotal.setText("");
@@ -2389,14 +2571,14 @@ private Printable construirPrintableEmpresarial(
         EmpresaInfo emp, Nota n, List<NotaDetalle> dets, PagoFormas p,
         LocalDate fechaEntregaMostrar, LocalDate fechaEventoMostrar,
         String asesorNombre, String folioTxt,
-        String clienteNombreFallback, String tel2Fallback,
+        String clienteNombreFallback, String tel2Fallback, String observacionesTexto,
         int cajeraCodigo, String cajeraNombre) {
 
     // ===== datos base ya calculados (efectivamente finales) =====
     final String tel1Raw      = (n.getTelefono() == null) ? "" : n.getTelefono();
-    final String fechaHoy  = getFechaVentaEfectiva().format(MX);
-    final String fEntrega  = (fechaEntregaMostrar == null) ? "" : fechaEntregaMostrar.format(MX);
-    final String fEvento   = (fechaEventoMostrar  == null) ? "" : fechaEventoMostrar.format(MX);
+    final String fechaHoy  = fechaLarga(getFechaVentaEfectiva());
+    final String fEntrega  = (fechaEntregaMostrar == null) ? "" : fechaLarga(fechaEntregaMostrar);
+    final String fEvento   = (fechaEventoMostrar  == null) ? "" : fechaLarga(fechaEventoMostrar);
     final double total     = (n.getTotal() == null) ? 0d : n.getTotal();
 
     final double tc = (p.getTarjetaCredito()   == null) ? 0d : p.getTarjetaCredito();
@@ -2418,8 +2600,9 @@ private Printable construirPrintableEmpresarial(
             if (cr.getNombreCompleto() != null && !cr.getNombreCompleto().isBlank())
                 cliNombre = cr.getNombreCompleto();
             if (cr.getTelefono2() != null) cliTel2 = cr.getTelefono2();
-            if (cr.getFechaPrueba1() != null) cliPrueba1 = cr.getFechaPrueba1().format(MX);
-            if (cr.getFechaPrueba2() != null) cliPrueba2 = cr.getFechaPrueba2().format(MX);
+            if (cr.getFechaPrueba1() != null) cliPrueba1 = fechaLarga(cr.getFechaPrueba1());
+            if (cr.getFechaPrueba2() != null) cliPrueba2 = fechaLarga(cr.getFechaPrueba2());
+
         }
     } catch (Exception ignore) { }
 
@@ -2512,9 +2695,11 @@ private Printable construirPrintableEmpresarial(
             yy = drawWrapped(g2, dir, leftTextX, yy + 2, infoTextWidth);
 
             // Tel/WhatsApp permanecen en el bloque de empresa
+            String telEmpPrint = formatearTelefonoImpresion(emp.telefono);
+            String waEmpPrint  = formatearTelefonoImpresion(emp.whatsapp);
             yy = drawWrapped(g2, joinNonBlank("   ",
-                    labelIf("Tel: ", emp.telefono),
-                    labelIf("WhatsApp: ", emp.whatsapp)), leftTextX, yy + 2, infoTextWidth);
+                    labelIf("Tel: ", telEmpPrint),
+                    labelIf("WhatsApp: ", waEmpPrint)), leftTextX, yy + 2, infoTextWidth);
 
             // Folio arriba derecha
             g2.setFont(fH1);
@@ -3480,5 +3665,144 @@ private void imprimirTarjetasVenta(
                 "Impresión de tarjetas", JOptionPane.WARNING_MESSAGE);
     }
 }
+public static void reimprimirVentaContadoDesdeDatos(
+        Component parent,
+        Nota nota,
+        List<NotaDetalle> detsDB,
+        PagoFormas pagos,
+        String asesorNombre,
+        LocalDate fechaEventoMostrar,
+        LocalDate fechaEntregaMostrar,
+        String clienteNombre,
+        String telefono2,
+        String observacionesBD,
+        List<String> codigosObsequios,
+        int cajeraCodigo,
+        String cajeraNombre
+) {
+    VentaContadoPanel dummy = new VentaContadoPanel();
 
+    // Fecha de venta
+    LocalDate fechaVenta = null;
+    if (nota != null && nota.getFechaRegistro() != null) {
+        fechaVenta = nota.getFechaRegistro().toLocalDate();
+    }
+    if (fechaVenta == null && pagos != null && pagos.getFechaOperacion() != null) {
+        fechaVenta = pagos.getFechaOperacion();
+    }
+    if (fechaVenta == null) {
+        fechaVenta = LocalDate.now();
+    }
+    dummy.fechaVentaSeleccionada = fechaVenta;
+
+    // Obsequios
+    dummy.obsequiosSel = (codigosObsequios != null)
+            ? new java.util.ArrayList<>(codigosObsequios)
+            : new java.util.ArrayList<>();
+
+    // Observaciones
+    dummy.observacionesTexto = observacionesBD;
+
+    // Empresa
+    EmpresaInfo emp = dummy.cargarEmpresaInfo();
+
+    // Detalle
+    java.util.List<NotaDetalle> detsPrint = new java.util.ArrayList<>(detsDB);
+
+    // Folio
+    String folioImpresion = (nota.getFolio() == null || nota.getFolio().isBlank())
+            ? "—"
+            : nota.getFolio();
+
+    // Pago
+    PagoFormas p = (pagos != null) ? pagos : new PagoFormas();
+
+    // Fechas evento / entrega (mismo esquema que en crédito)
+    LocalDate eventoMostrar = fechaEventoMostrar;
+    if (eventoMostrar == null) {
+        for (NotaDetalle d : detsPrint) {
+            if (d.getFechaEvento() != null) {
+                eventoMostrar = d.getFechaEvento();
+                break;
+            }
+        }
+    }
+    LocalDate entregaMostrar = fechaEntregaMostrar;
+
+    // Ticket con el MISMO formato empresarial
+    Printable prnTicket = dummy.construirPrintableEmpresarial(
+            emp,
+            nota,
+            detsPrint,
+            p,
+            entregaMostrar,
+            eventoMostrar,
+            asesorNombre,
+            folioImpresion,
+            clienteNombre,
+            telefono2,
+            observacionesBD,
+            cajeraCodigo,
+            cajeraNombre
+    );
+
+    dummy.imprimirYConfirmarAsync(
+            prnTicket,
+            () -> JOptionPane.showMessageDialog(
+                    parent,
+                    "Nota de CONTADO reimpresa.\nFolio: " + folioImpresion,
+                    "Reimpresión",
+                    JOptionPane.INFORMATION_MESSAGE
+            ),
+            () -> JOptionPane.showMessageDialog(
+                    parent,
+                    "La reimpresión fue cancelada o falló.\n" +
+                    "La venta en base de datos NO se modificó.",
+                    "Reimpresión",
+                    JOptionPane.WARNING_MESSAGE
+            )
+    );
+}
+private void rellenarDevolucionDesdeBD(Nota nota, PagoFormas p) {
+    if (nota == null || p == null) return;
+
+    // Si ya trae devolución, no hacemos nada
+    if (p.getDevolucion() != null && p.getDevolucion() > 0.0001) return;
+
+    final String sql = """
+        SELECT 
+            referencia_dv,
+            SUM(COALESCE(devolucion,0)) AS total_dv
+        FROM Formas_Pago
+        WHERE numero_nota = ?
+          AND tipo_operacion = ?
+          AND status = 'A'
+          AND devolucion IS NOT NULL
+        GROUP BY referencia_dv
+        """;
+
+    try (Connection cn = Conexion.Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setInt(1, nota.getNumeroNota());
+        ps.setString(2, (nota.getTipo() == null || nota.getTipo().isBlank())
+                            ? "CR"   // por si acaso
+                            : nota.getTipo());
+
+        try (ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                double totalDv = rs.getDouble("total_dv");
+                if (!rs.wasNull() && totalDv > 0.0001) {
+                    String ref = rs.getString("referencia_dv");
+
+                    p.setDevolucion(totalDv);
+                    p.setReferenciaDV(ref);
+                }
+            }
+        }
+    } catch (SQLException ex) {
+        // No revientes la reimpresión por esto, sólo log
+        ex.printStackTrace();
+    }
+}
 }

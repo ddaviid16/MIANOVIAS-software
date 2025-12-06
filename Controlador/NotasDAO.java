@@ -306,48 +306,77 @@
         }
 
         /** Detalle de una nota (incluye 'id'). *Se eliminó el filtro por status para no ocultar renglones*. */
-        /** Detalle de una nota incluyendo también los artículos PEDIDOS. */
-    public List<Modelo.NotaDetalle> listarDetalleDeNota(int numeroNota) throws SQLException {
-        String sql =
-            "SELECT id, codigo_articulo, articulo, marca, modelo, talla, color, precio, descuento, subtotal " +
-            "FROM (" +
-            "   SELECT 1 AS ord, d.id AS id, d.codigo_articulo, d.articulo, d.marca, d.modelo, d.talla, d.color, " +
-            "          d.precio, d.descuento, d.subtotal " +
-            "   FROM Nota_Detalle d " +
-            "   WHERE d.numero_nota = ? " +        // sin filtro por status para no ocultar renglones
-            "   UNION ALL " +
-            "   SELECT 2 AS ord, p.id AS id, NULL AS codigo_articulo, " +
-            "          CONCAT('PEDIDO – ', p.articulo) AS articulo, p.marca, p.modelo, p.talla, p.color, " +
-            "          p.precio, p.descuento, (p.precio - (p.precio * (p.descuento/100))) AS subtotal " +
-            "   FROM Pedidos p " +
-            "   WHERE p.numero_nota = ? " +
-            ") x " +
-            "ORDER BY ord, id";
+/** Detalle de una nota incluyendo también PEDIDOS y MANUFACTURAS. */
+public List<Modelo.NotaDetalle> listarDetalleDeNota(int numeroNota) throws SQLException {
+    String sql =
+        "SELECT id, codigo_articulo, articulo, marca, modelo, talla, color, precio, descuento, subtotal " +
+        "FROM (" +
+        // 1) Renglones normales de Nota_Detalle
+        "   SELECT 1 AS ord, d.id AS id, d.codigo_articulo, d.articulo, d.marca, d.modelo, d.talla, d.color, " +
+        "          d.precio, d.descuento, d.subtotal " +
+        "   FROM Nota_Detalle d " +
+        "   WHERE d.numero_nota = ? " +
+        "   UNION ALL " +
+        // 2) Pedidos ligados a la nota
+        "   SELECT 2 AS ord, p.id AS id, NULL AS codigo_articulo, " +
+        "          CONCAT('PEDIDO – ', p.articulo) AS articulo, p.marca, p.modelo, p.talla, p.color, " +
+        "          p.precio, p.descuento, " +
+        "          (p.precio - (p.precio * (p.descuento/100))) AS subtotal " +
+        "   FROM Pedidos p " +
+        "   WHERE p.numero_nota = ? " +
+        "   UNION ALL " +
+        // 3) MANUFACTURAS ligadas a la nota
+        "   SELECT 3 AS ord, m.id_manufactura AS id, NULL AS codigo_articulo, " +
+        "          CONCAT('MODISTA – ', m.articulo) AS articulo, " +   // <-- AQUÍ el cambio
+        "          '' AS marca, m.descripcion AS modelo, " +           // <-- y AQUÍ usamos descripcion
+        "          '' AS talla, '' AS color, " +
+        "          m.precio, m.descuento, " +
+        "          (m.precio - (m.precio * (COALESCE(m.descuento,0)/100))) AS subtotal " +
+        "   FROM manufacturas m " +
+        "   WHERE m.numero_nota = ? AND COALESCE(m.status,'A') = 'A' " +
+        ") x " +
+        "ORDER BY ord, id";
 
-        try (Connection cn = Conecta.getConnection();
-            PreparedStatement ps = cn.prepareStatement(sql)) {
-            ps.setInt(1, numeroNota);
-            ps.setInt(2, numeroNota);
-            try (ResultSet rs = ps.executeQuery()) {
-                List<Modelo.NotaDetalle> out = new ArrayList<>();
-                while (rs.next()) {
-                    Modelo.NotaDetalle d = new Modelo.NotaDetalle();
-                    d.setId(rs.getInt("id"));
-                    d.setCodigoArticulo( rs.getString("codigo_articulo")); // null para PEDIDOS
-                    d.setArticulo(rs.getString("articulo"));
-                    d.setMarca(rs.getString("marca"));
-                    d.setModelo(rs.getString("modelo"));
-                    d.setTalla(rs.getString("talla"));
-                    d.setColor(rs.getString("color"));
-                    d.setPrecio(rs.getBigDecimal("precio")==null? null : rs.getBigDecimal("precio").doubleValue());
-                    d.setDescuento(rs.getBigDecimal("descuento")==null? null : rs.getBigDecimal("descuento").doubleValue());
-                    d.setSubtotal(rs.getBigDecimal("subtotal")==null? null : rs.getBigDecimal("subtotal").doubleValue());
-                    out.add(d);
-                }
-                return out;
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setInt(1, numeroNota);  // Nota_Detalle
+        ps.setInt(2, numeroNota);  // Pedidos
+        ps.setInt(3, numeroNota);  // Manufacturas
+
+        try (ResultSet rs = ps.executeQuery()) {
+            List<Modelo.NotaDetalle> out = new ArrayList<>();
+            while (rs.next()) {
+                Modelo.NotaDetalle d = new Modelo.NotaDetalle();
+                d.setId(rs.getInt("id"));
+                d.setCodigoArticulo(rs.getString("codigo_articulo"));  // será null para pedidos y manufacturas
+                d.setArticulo(rs.getString("articulo"));
+                d.setMarca(rs.getString("marca"));
+                d.setModelo(rs.getString("modelo"));
+                d.setTalla(rs.getString("talla"));
+                d.setColor(rs.getString("color"));
+                d.setPrecio(
+                    rs.getBigDecimal("precio") == null
+                        ? null
+                        : rs.getBigDecimal("precio").doubleValue()
+                );
+                d.setDescuento(
+                    rs.getBigDecimal("descuento") == null
+                        ? null
+                        : rs.getBigDecimal("descuento").doubleValue()
+                );
+                d.setSubtotal(
+                    rs.getBigDecimal("subtotal") == null
+                        ? null
+                        : rs.getBigDecimal("subtotal").doubleValue()
+                );
+                out.add(d);
             }
+            return out;
         }
     }
+}
+
         // ================== NUEVO: listar notas con fecha distinta a la del cliente ==================
         public static class NotaFechaRow {
         public int numero;
