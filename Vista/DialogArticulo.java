@@ -97,6 +97,9 @@ public class DialogArticulo extends JDialog {
 
         txtExistencia = new JTextField();
         applyDigitsOnly(txtExistencia, 10);
+        if (!edicion) {
+            txtExistencia.setText("1");
+        }
         txtConteo = new JTextField();
         applyDigitsOnly(txtConteo, 10);
 

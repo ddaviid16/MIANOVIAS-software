@@ -199,8 +199,13 @@ public class InventarioDAO {
             if (i.getCostoIva() == null) ps.setNull(k++, Types.DECIMAL);
             else ps.setDouble(k++, i.getCostoIva());
 
-            if (i.getExistencia() == null) ps.setNull(k++, Types.INTEGER);
-            else ps.setInt(k++, i.getExistencia());
+            // DESPUÉS: default existencia = 1 si viene null
+            Integer existencia = i.getExistencia();
+            if (existencia == null) {
+                existencia = 1;  // valor por defecto
+            }
+            ps.setInt(k++, existencia);
+
 
             if (i.getInventarioConteo() == null) ps.setNull(k++, Types.INTEGER);
             else ps.setInt(k++, i.getInventarioConteo());
