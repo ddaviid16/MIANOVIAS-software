@@ -622,8 +622,28 @@ private String obtenerCondicionesPredeterminadas() {
 }
 
 
-/** Vista previa/edición antes de imprimir. */
-private void editarMemoPrevia(boolean forzarTemplate) {
+private boolean pedirObservacionesObligatorias() {
+    JTextArea area = new JTextArea(
+        observacionesTexto == null ? "" : observacionesTexto, 10, 60);
+    area.setLineWrap(true);
+    area.setWrapStyleWord(true);
+
+    int r = JOptionPane.showConfirmDialog(this, new JScrollPane(area),
+        "Observaciones de la venta",
+        JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+    if (r == JOptionPane.OK_OPTION) {
+        observacionesTexto = area.getText().trim();
+        if (observacionesTexto.isEmpty()) observacionesTexto = null;
+        return true;
+    }
+    // Canceló o cerró la ventana
+    return false;
+}
+
+
+/** Vista previa/edición antes de imprimir. Devuelve true si el usuario confirmó (OK). */
+private boolean editarMemoPrevia(boolean forzarTemplate) {
     Map<String,String> vars = construirVarsDesdeUI();
     String base = (memoEditable == null || memoEditable.isBlank() || forzarTemplate)
             ? obtenerCondicionesPredeterminadas()
@@ -631,7 +651,8 @@ private void editarMemoPrevia(boolean forzarTemplate) {
     String borrador = renderMemo(base, vars);
 
     JTextArea area = new JTextArea(borrador, 18, 60);
-    area.setLineWrap(true); area.setWrapStyleWord(true);
+    area.setLineWrap(true); 
+    area.setWrapStyleWord(true);
 
     int r = JOptionPane.showConfirmDialog(this, new JScrollPane(area),
             "Condiciones de entrega / aceptación",
@@ -639,7 +660,9 @@ private void editarMemoPrevia(boolean forzarTemplate) {
     if (r == JOptionPane.OK_OPTION) {
         memoEditable = area.getText().trim();
         if (memoEditable.isEmpty()) memoEditable = null;
+        return true;
     }
+    return false;
 }
 
 /** Render sencillo de tokens. Soporta {token} y {{TOKEN}} (insensible a mayúsculas). */
@@ -1847,64 +1870,90 @@ private void cargarAsesores() {
             fechaEntregaDefault = (f != null) ? f : parseFecha(txtFechaEntrega.getText());
         }
 
-        Object[] ops = {"SI","NO"};
-        int r = JOptionPane.showOptionDialog(this,"¿Registrar la venta de contado?","Confirmación",
-                JOptionPane.YES_NO_OPTION,JOptionPane.QUESTION_MESSAGE,null,ops,ops[0]);
-        if (r != JOptionPane.YES_OPTION) return;
-            // === Validar que el monto de devolución no exceda el disponible ===
-Object selItem = cbFolioDV.getSelectedItem();
-if (selItem != null) {
-    String sel = selItem.toString().trim();
+    // 1) PRIMER DIÁLOGO: confirmar la venta
+    Object[] ops = {"SI","NO"};
+    int r = JOptionPane.showOptionDialog(this,
+            "¿Registrar la venta de contado?",
+            "Confirmación",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.QUESTION_MESSAGE,
+            null, ops, ops[0]);
+    if (r != JOptionPane.YES_OPTION) {
+        // Usuario dio NO o cerró => no se guarda, no se limpia
+        return;
+    }
 
-    // Ignorar si el usuario no eligió un folio real
-    if (!sel.isEmpty() && !sel.startsWith("---")) {
-        double montoIngresado = parseMoney(txtMontoDV.getText());
-        if (montoIngresado <= 0) {
-            JOptionPane.showMessageDialog(this,
-                    "Captura un monto válido para la devolución.",
-                    "Monto inválido", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
+    // 2) Validar que el monto de devolución no exceda el disponible
+    Object selItem = cbFolioDV.getSelectedItem();
+    if (selItem != null) {
+        String sel = selItem.toString().trim();
 
-        double montoDisponible;
-        try {
-            // Asegura que el texto contenga un símbolo de $
-            if (!sel.contains("$")) {
+        // Ignorar si el usuario no eligió un folio real
+        if (!sel.isEmpty() && !sel.startsWith("---")) {
+            double montoIngresado = parseMoney(txtMontoDV.getText());
+            if (montoIngresado <= 0) {
                 JOptionPane.showMessageDialog(this,
-                        "El folio seleccionado no contiene monto disponible.\nTexto: " + sel,
-                        "Error de formato", JOptionPane.ERROR_MESSAGE);
+                        "Captura un monto válido para la devolución.",
+                        "Monto inválido", JOptionPane.WARNING_MESSAGE);
                 return;
             }
-            String montoStr = sel.substring(sel.indexOf('$') + 1)
-                    .replace(",", "")
-                    .trim();
-            montoDisponible = Double.parseDouble(montoStr);
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this,
-                    "No se pudo determinar el monto disponible del folio de devolución (" + sel + ").",
-                    "Error en folio", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
 
-        if (montoIngresado > montoDisponible + 0.001) {
+            double montoDisponible;
+            try {
+                if (!sel.contains("$")) {
+                    JOptionPane.showMessageDialog(this,
+                            "El folio seleccionado no contiene monto disponible.\nTexto: " + sel,
+                            "Error de formato", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                String montoStr = sel.substring(sel.indexOf('$') + 1)
+                        .replace(",", "")
+                        .trim();
+                montoDisponible = Double.parseDouble(montoStr);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this,
+                        "No se pudo determinar el monto disponible del folio de devolución (" + sel + ").",
+                        "Error en folio", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            if (montoIngresado > montoDisponible + 0.001) {
+                JOptionPane.showMessageDialog(this,
+                        "El monto de devolución ($" + String.format("%.2f", montoIngresado) +
+                        ") excede el saldo disponible del folio (" + String.format("%.2f", montoDisponible) + ").\n" +
+                        "No se puede registrar la venta.",
+                        "Error de validación", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        }
+    }
+
+    // 3) SEGUNDO DIÁLOGO: OBSERVACIONES (obligatorio OK)
+    //    Si el usuario cierra o da Cancelar, se aborta todo.
+    if (!pedirObservacionesObligatorias()) {
+        // Usuario canceló o cerró el cuadro de Observaciones
             JOptionPane.showMessageDialog(this,
-                    "El monto de devolución ($" + String.format("%.2f", montoIngresado) +
-                    ") excede el saldo disponible del folio (" + String.format("%.2f", montoDisponible) + ").\n" +
-                    "No se puede registrar la venta.",
-                    "Error de validación", JOptionPane.ERROR_MESSAGE);
+                    "La venta NO se ha registrado.\nDebes confirmar las observaciones para continuar.",
+                    "Venta cancelada", JOptionPane.INFORMATION_MESSAGE);
+        return;
+    }
+
+    // 4) TERCER DIÁLOGO: CONDICIONES (solo si hay algún "vestido" en el carrito)
+    boolean requiereCondiciones = hayVestidoEnCarrito();
+    if (requiereCondiciones) {
+        boolean okCond = editarMemoPrevia(false); // muestra condiciones con plantilla o último texto
+        if (!okCond) {
+            // Canceló / cerró => NO guardar, NO limpiar
+            JOptionPane.showMessageDialog(this,
+                        "La venta NO se ha registrado.\nDebes confirmar las condiciones para continuar.",
+                        "Venta cancelada", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
     }
-}
-        try {
 
-
-
-            if (observacionesTexto == null) {
-            editarObservaciones(); // fuerza al usuario a capturar o confirmar que no hay
-            }
-
-
+    try {
+        // A partir de aquí ya pasamos las 3 barreras:
+        // SI  -> OK en Observaciones -> OK en Condiciones (si aplica)
             Nota n = new Nota();
             String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
             n.setTelefono(tel == null || tel.isEmpty() ? null : tel);
@@ -2455,6 +2504,7 @@ private String formatearTelefonoImpresion(String tel) {
         if (observacionesTexto.isEmpty()) observacionesTexto = null;
     }
 }
+
 
 
     public static void main(String[] args) {
@@ -3503,6 +3553,17 @@ private boolean esArticuloVestido(String articulo) {
     if (articulo == null) return false;
     String s = articulo.toLowerCase();
     return s.contains("vestido");
+}
+/** ¿En el carrito hay al menos un artículo que cuente como "vestido"? */
+private boolean hayVestidoEnCarrito() {
+    if (model == null) return false;
+    for (int i = 0; i < model.getRowCount(); i++) {
+        Object artObj = model.getValueAt(i, 1); // columna "Artículo"
+        if (artObj != null && esArticuloVestido(artObj.toString())) {
+            return true;
+        }
+    }
+    return false;
 }
 
 private java.util.List<TarjetaVentaData> construirTarjetasVenta(

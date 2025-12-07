@@ -1174,21 +1174,56 @@ if (anticipo > total + 0.005) {
             fechaEntregaDefault = (f != null) ? f : parseFecha(txtFechaEntrega.getText());
         }
 
-        Object[] ops = {"SI","NO"};
-        int r = JOptionPane.showOptionDialog(this,
-                "¿Registrar la venta de CRÉDITO?\nAnticipo: " + String.format("%.2f", anticipo) +
-                        "\nSaldo quedará pendiente para Abonos.",
-                "Confirmación", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
-                null, ops, ops[0]);
+    // ================= CONFIRMACIÓN PRINCIPAL =================
+    Object[] ops = {"SI","NO"};
+    int r = JOptionPane.showOptionDialog(this,
+            "¿Registrar la venta de CRÉDITO?\nAnticipo: " + String.format("%.2f", anticipo) +
+                    "\nSaldo quedará pendiente para Abonos.",
+            "Confirmación", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
+            null, ops, ops[0]);
 
-        
-    
+    // Si el usuario elige NO o cierra, NO se registra la venta
+    if (r != 0) {   // 0 = "SI" porque es ops[0]
+        return;
+    }
 
+    try {
+        // ================= OBSERVACIONES OBLIGATORIAS =================
+        if (!pedirObservacionesObligatorias()) {
+            // Usuario canceló o cerró el cuadro de Observaciones
+            JOptionPane.showMessageDialog(this,
+                    "La venta NO se ha registrado.\nDebes confirmar las observaciones para continuar.",
+                    "Venta cancelada", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
 
-        try {
-            if (observacionesTexto == null) {
-            editarObservaciones(); // fuerza al usuario a capturar o confirmar que no hay
+        // ================= CONDICIONES OBLIGATORIAS (SI HAY VESTIDO) =================
+        boolean hayVestidoEnCarrito = false;
+        for (int i = 0; i < model.getRowCount(); i++) {
+            Object artObj = model.getValueAt(i, 1); // columna "Artículo"
+            if (artObj != null && esArticuloVestido(artObj.toString())) {
+                hayVestidoEnCarrito = true;
+                break;
             }
+        }
+
+        if (hayVestidoEnCarrito) {
+            boolean okCond;
+            // Si no hay memo aún, arrancamos desde el template
+            if (memoEditable == null || memoEditable.isBlank()) {
+                okCond = editarMemoPrevia(true);
+            } else {
+                okCond = editarMemoPrevia(false);
+            }
+
+            if (!okCond) {
+                JOptionPane.showMessageDialog(this,
+                        "La venta NO se ha registrado.\nDebes confirmar las condiciones para continuar.",
+                        "Venta cancelada", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+        }
+
 
             Nota n = new Nota();
             String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
@@ -1703,8 +1738,28 @@ txtTelefono.requestFocus();
     }
 }
 
-/** Vista previa/edición antes de imprimir. */
-private void editarMemoPrevia(boolean forzarTemplate) {
+private boolean pedirObservacionesObligatorias() {
+    JTextArea area = new JTextArea(
+        observacionesTexto == null ? "" : observacionesTexto, 10, 60);
+    area.setLineWrap(true);
+    area.setWrapStyleWord(true);
+
+    int r = JOptionPane.showConfirmDialog(this, new JScrollPane(area),
+        "Observaciones de la venta",
+        JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+    if (r == JOptionPane.OK_OPTION) {
+        observacionesTexto = area.getText().trim();
+        if (observacionesTexto.isEmpty()) observacionesTexto = null;
+        return true;
+    }
+    // Canceló o cerró la ventana
+    return false;
+}
+
+
+/** Vista previa/edición antes de imprimir. Devuelve true si el usuario confirmó (OK). */
+private boolean editarMemoPrevia(boolean forzarTemplate) {
     Map<String,String> vars = construirVarsDesdeUI();
     String base = (memoEditable == null || memoEditable.isBlank() || forzarTemplate)
             ? obtenerCondicionesPredeterminadas()
@@ -1712,7 +1767,8 @@ private void editarMemoPrevia(boolean forzarTemplate) {
     String borrador = renderMemo(base, vars);
 
     JTextArea area = new JTextArea(borrador, 18, 60);
-    area.setLineWrap(true); area.setWrapStyleWord(true);
+    area.setLineWrap(true); 
+    area.setWrapStyleWord(true);
 
     int r = JOptionPane.showConfirmDialog(this, new JScrollPane(area),
             "Condiciones de entrega / aceptación",
@@ -1720,7 +1776,9 @@ private void editarMemoPrevia(boolean forzarTemplate) {
     if (r == JOptionPane.OK_OPTION) {
         memoEditable = area.getText().trim();
         if (memoEditable.isEmpty()) memoEditable = null;
+        return true;
     }
+    return false;
 }
 /** Variables para vista previa desde la UI (antes de crear la nota). */
 private Map<String,String> construirVarsDesdeUI() {
