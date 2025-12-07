@@ -59,7 +59,8 @@ public class ObsequiosInvPanel extends JPanel {
         JButton btnBuscar = new JButton("Buscar");
         JButton btnActualizar = new JButton("Actualizar");
 
-        rightPanel.add(new JLabel("Buscar (artículo / talla / color):"));
+        // Actualizado el texto para que coincida con lo que realmente busca el DAO
+        rightPanel.add(new JLabel("Buscar (código / artículo / marca / modelo / talla / color):"));
         rightPanel.add(txtFiltro);
         rightPanel.add(btnBuscar);
         rightPanel.add(btnActualizar);
@@ -68,18 +69,25 @@ public class ObsequiosInvPanel extends JPanel {
 
         add(top, BorderLayout.NORTH);
 
-        // ENTER en el buscador = Buscar
-        txtFiltro.addActionListener(_e -> cargar());
+        // === Listeners de búsqueda / actualización ===
+        btnBuscar.addActionListener(_e -> cargar(txtFiltro.getText()));
+        btnActualizar.addActionListener(_e -> {
+            txtFiltro.setText("");
+            cargar(null);   // sin filtro, lista completa
+        });
+
+        // ENTER en el buscador = como si se presionara "Buscar"
+        txtFiltro.addActionListener(_e -> btnBuscar.doClick());
+
+        // Nuevo obsequio
         btNuevo.addActionListener(_e -> {
-            // Obtener owner (Frame) desde este panel
             Window w = SwingUtilities.getWindowAncestor(ObsequiosInvPanel.this);
             Frame owner = (w instanceof Frame) ? (Frame) w : null;
 
             DialogObsequio dlg = new DialogObsequio(owner, null);
             dlg.setVisible(true);
-            if (dlg.isGuardado()) cargar();
+            if (dlg.isGuardado()) cargar(txtFiltro.getText());
         });
-        
 
         // ====== Tabla
         String[] cols = {"Código","Artículo","Marca","Modelo","Talla","Color",
@@ -119,7 +127,7 @@ public class ObsequiosInvPanel extends JPanel {
 
                     DialogObsequio dlg = new DialogObsequio(owner, o);
                     dlg.setVisible(true);
-                    if (dlg.isGuardado()) cargar();
+                    if (dlg.isGuardado()) cargar(txtFiltro.getText());
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(ObsequiosInvPanel.this,
                             "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -129,25 +137,24 @@ public class ObsequiosInvPanel extends JPanel {
 
         add(new JScrollPane(tb), BorderLayout.CENTER);
 
-        // Carga inicial
-        cargar();
+        // Carga inicial sin filtro
+        cargar(null);
     }
 
+    // === Carga con el texto actual del filtro (por comodidad) ===
     private void cargar() {
+        cargar(txtFiltro.getText());
+    }
+
+    // === Carga desde DAO usando el filtro (incluye código) ===
+    private void cargar(String filtro) {
         try {
             ObsequioInvDAO dao = new ObsequioInvDAO();
-            List<ObsequioInv> lista = dao.listar(); // si prefieres, cambia a listar(filtro) en tu DAO
-            String q = txtFiltro.getText().trim().toLowerCase();
+            List<ObsequioInv> lista = dao.listar(filtro);
 
             model.setRowCount(0);
 
             for (ObsequioInv o : lista) {
-                // Filtro simple por artículo/talla/color en memoria
-                if (!q.isEmpty()) {
-                    String haystack = (nz(o.getArticulo()) + " " + nz(o.getTalla()) + " " + nz(o.getColor()))
-                            .toLowerCase();
-                    if (!haystack.contains(q)) continue;
-                }
                 double precio = o.getPrecio() == null ? 0.0 : o.getPrecio();
                 double pdesc  = o.getDescuento() == null ? 0.0 : o.getDescuento();
                 double pfinal = precio * (1 - pdesc / 100.0);
@@ -205,16 +212,27 @@ public class ObsequiosInvPanel extends JPanel {
                     table, java.awt.event.ActionEvent.ACTION_PERFORMED, String.valueOf(row)));
         }
     }
-// Método para exportar a CSV
+
+    // Método para exportar a CSV
     private void exportarCSV() {
         try {
-            List<ObsequioInv> lista = new ObsequioInvDAO().listar(); // Obtener la lista de obsequios
+            // exporta todo el inventario de obsequios (sin filtro)
+            List<ObsequioInv> lista = new ObsequioInvDAO().listar();
 
-            ExportadorCSV.guardarListaCSV(lista, "inventario_obsequios", "codigoArticulo", "articulo", "marca", "modelo", "talla", "color", "precio", "descuento", "existencia");
+            ExportadorCSV.guardarListaCSV(
+                    lista,
+                    "inventario_obsequios",
+                    "codigoArticulo", "articulo", "marca", "modelo",
+                    "talla", "color", "precio", "descuento", "existencia"
+            );
 
-            JOptionPane.showMessageDialog(this, "Archivo exportado exitosamente.", "Exportación exitosa", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Archivo exportado exitosamente.",
+                    "Exportación exitosa",
+                    JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Error al exportar CSV: " + e.getMessage(),
+            JOptionPane.showMessageDialog(this,
+                    "Error al exportar CSV: " + e.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
         }
     }

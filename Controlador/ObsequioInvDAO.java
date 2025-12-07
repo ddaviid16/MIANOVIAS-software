@@ -20,6 +20,18 @@ public class ObsequioInvDAO {
         "precio, descuento, existencia, status, fecha_registro " +
         "FROM InventarioObsequios WHERE codigo_articulo=?";
 
+    private static final String SEL_SEARCH =
+    "SELECT codigo_articulo, articulo, marca, modelo, talla, color, " +
+    "       precio, descuento, existencia, status, fecha_registro " +
+    "FROM InventarioObsequios " +
+    "WHERE CAST(codigo_articulo AS CHAR) LIKE ? " +
+    "   OR articulo LIKE ? " +
+    "   OR marca LIKE ? " +
+    "   OR modelo LIKE ? " +
+    "   OR talla LIKE ? " +
+    "   OR color LIKE ? " +
+    "ORDER BY fecha_registro DESC, codigo_articulo DESC";
+
     private static final String INS =
         "INSERT INTO InventarioObsequios " +
         "(codigo_articulo, articulo, marca, modelo, talla, color, precio, descuento, existencia, status, fecha_registro) " +
@@ -30,14 +42,40 @@ public class ObsequioInvDAO {
         "precio=?, descuento=?, existencia=?, status=? WHERE codigo_articulo=?";
 
     public List<ObsequioInv> listar() throws SQLException {
-        try (Connection cn = Conecta.getConnection();
-             PreparedStatement ps = cn.prepareStatement(SEL_ALL);
-             ResultSet rs = ps.executeQuery()) {
+    // compatibilidad con código viejo que no manda filtro
+    return listar(null);
+}
+
+public List<ObsequioInv> listar(String filtro) throws SQLException {
+    try (Connection cn = Conecta.getConnection()) {
+        PreparedStatement ps;
+
+        if (filtro == null || filtro.isBlank()) {
+            // sin filtro: todo el inventario
+            ps = cn.prepareStatement(SEL_ALL);
+        } else {
+            ps = cn.prepareStatement(SEL_SEARCH);
+            String like = "%" + filtro.trim() + "%";
+
+            // 1: codigo_articulo (CAST)
+            // 2: articulo
+            // 3: marca
+            // 4: modelo
+            // 5: talla
+            // 6: color
+            for (int i = 1; i <= 6; i++) {
+                ps.setString(i, like);
+            }
+        }
+
+        try (ResultSet rs = ps.executeQuery()) {
             List<ObsequioInv> out = new ArrayList<>();
             while (rs.next()) out.add(map(rs));
             return out;
         }
     }
+}
+
 
     public List<ObsequioInv> listarActivosFiltrado(String q) throws SQLException {
         String like = "%" + (q == null ? "" : q.trim()) + "%";
@@ -46,7 +84,7 @@ public class ObsequioInvDAO {
             "       precio, descuento, existencia, status, fecha_registro " +
             "FROM InventarioObsequios " +
             "WHERE status='A' AND (" +
-            "  articulo LIKE ? OR talla LIKE ? OR color LIKE ? OR marca LIKE ? OR modelo LIKE ? " +
+            "  codigo_articulo LIKE ? OR articulo LIKE ? OR talla LIKE ? OR color LIKE ? OR marca LIKE ? OR modelo LIKE ? " +
             "  OR CAST(codigo_articulo AS CHAR) LIKE ?" +
             ") " +
             "ORDER BY articulo ASC, codigo_articulo DESC " +
@@ -54,7 +92,7 @@ public class ObsequioInvDAO {
 
         try (Connection cn = Conecta.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql)) {
-            for (int i = 1; i <= 6; i++) ps.setString(i, like);
+            for (int i = 1; i <= 7; i++) ps.setString(i, like);
             try (ResultSet rs = ps.executeQuery()) {
                 List<ObsequioInv> out = new ArrayList<>();
                 while (rs.next()) out.add(map(rs));

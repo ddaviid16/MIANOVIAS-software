@@ -38,7 +38,7 @@ public class InventarioDAO {
         "       remision, factura, " +
         "       status " +
         "FROM Inventarios " +
-        "WHERE articulo LIKE ? OR talla LIKE ? OR color LIKE ? " +
+        "WHERE codigo_articulo LIKE ? OR articulo LIKE ? OR talla LIKE ? OR color LIKE ? " +
         "ORDER BY fecha_registro DESC, codigo_articulo DESC";
 
     private static final String SELECT_BY_ID =
@@ -77,26 +77,28 @@ public class InventarioDAO {
     // ======================= LISTADOS / BÚSQUEDA =======================
 
     public List<Inventario> listar(String filtro) throws SQLException {
-        try (Connection cn = Conecta.getConnection()) {
-            PreparedStatement ps;
-            if (filtro == null || filtro.isBlank()) {
-                ps = cn.prepareStatement(SELECT_ALL);
-            } else {
-                ps = cn.prepareStatement(SELECT_SEARCH);
-                String like = "%" + filtro.trim() + "%";
-                ps.setString(1, like);
-                ps.setString(2, like);
-                ps.setString(3, like);
+    try (Connection cn = Conecta.getConnection()) {
+        PreparedStatement ps;
+        if (filtro == null || filtro.isBlank()) {
+            ps = cn.prepareStatement(SELECT_ALL);
+        } else {
+            ps = cn.prepareStatement(SELECT_SEARCH);
+            String like = "%" + filtro.trim() + "%";
+            ps.setString(1, like); // codigo_articulo
+            ps.setString(2, like); // articulo
+            ps.setString(3, like); // talla
+            ps.setString(4, like); // color
+        }
+        try (ResultSet rs = ps.executeQuery()) {
+            List<Inventario> lista = new ArrayList<>();
+            while (rs.next()) {
+                lista.add(mapRow(rs));
             }
-            try (ResultSet rs = ps.executeQuery()) {
-                List<Inventario> lista = new ArrayList<>();
-                while (rs.next()) {
-                    lista.add(mapRow(rs));
-                }
-                return lista;
-            }
+            return lista;
         }
     }
+}
+
 
     // EDITAR: trae el artículo exista o no, sin importar status
     public Inventario buscarPorCodigo(String codigoNuevo) throws SQLException {

@@ -38,7 +38,7 @@ public class InventarioPanel extends JPanel {
         txtBuscar = new JTextField(30);
         JButton btnBuscar = new JButton("Buscar");
         JButton btnActualizar = new JButton("Actualizar");
-        rightPanel.add(new JLabel("Buscar (artículo / talla / color):"));
+        rightPanel.add(new JLabel("Buscar (código / artículo / talla / color):"));
         rightPanel.add(txtBuscar);
         rightPanel.add(btnBuscar);
         rightPanel.add(btnActualizar);
