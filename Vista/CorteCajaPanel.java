@@ -110,7 +110,6 @@ private void actualizarTextoFecha() {
         y++;
 
 
-
         // Botón de refresco manual (auto-refresh siempre activo, sin checkbox)
         JButton btRefrescar = new JButton("Refrescar");
                 btRefrescar.addActionListener(_e -> {
@@ -162,22 +161,38 @@ private void actualizarTextoFecha() {
         addCell(grid,c,0,y,new JLabel("Efectivo neto:"),1,false);
         addCell(grid,c,1,y,txtEfecNeto,3,true);
 
-                // Panel central: arriba resumen, abajo desglose por folios
+        // Panel central: arriba resumen, abajo desglose por folios
         JPanel center = new JPanel(new BorderLayout());
         center.add(grid, BorderLayout.NORTH);
 
         JScrollPane spDetalle = new JScrollPane(tbDetalle);
         spDetalle.setBorder(BorderFactory.createTitledBorder(
                 "Detalle del día (folios y formas de pago)"));
-                // Ocultar la columna "# Nota" solo en la vista (se queda en el modelo)
+        // Ocultar la columna "# Nota" solo en la vista (se queda en el modelo)
         tbDetalle.getColumnModel().removeColumn(tbDetalle.getColumnModel().getColumn(0));
 
         center.add(spDetalle, BorderLayout.CENTER);
 
-        add(center, BorderLayout.CENTER);
-
-
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        // Panel raíz que va dentro del scroll (center + botones inferiores)
+        JPanel content = new JPanel(new BorderLayout());
+        content.add(center, BorderLayout.CENTER);
+        content.add(south, BorderLayout.SOUTH);
+
+        // Scroll que envuelve todo el contenido
+        JScrollPane scroll = new JScrollPane(
+                content,
+                ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
+        );
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+
+        // Este es el ÚNICO componente que va en el CENTER del CorteCajaPanel
+        add(scroll, BorderLayout.CENTER);
+
+
+
         JButton btGuardar = new JButton("Guardar corte");
         btGuardar.addActionListener(_e -> guardar());
         south.add(btGuardar);

@@ -55,13 +55,15 @@ public class InventarioPanel extends JPanel {
 
         // ---- Tabla ----
         String[] cols = {
-                "Código", "Artículo", "Desc. 1", "Desc. 2",
-                "Marca", "Modelo", "Talla", "Color",
-                "Precio", "Costo c/IVA", "Desc.%", "Precio final",
-                "Exist.", "Conteo", "Status", "Registro",
-                "Remisión", "Factura", "F. pago",
-                "Modificar"
-        };
+            "Código", "Artículo", "Desc. 1", "Desc. 2",
+            "Marca", "Modelo", "Talla", "Color",
+            "Precio", "Desc.%", "Precio final",
+            "Exist.", "Novia", "Conteo",
+            "Status", "Registro",
+            "Remisión", "Factura", "F. pago",
+            "Modificar"
+    };
+
         modeloTabla = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int row, int column) {
                 return column == 19; // solo la columna del botón "Modificar"
@@ -77,10 +79,9 @@ public class InventarioPanel extends JPanel {
         DefaultTableCellRenderer rightRenderer = new DefaultTableCellRenderer();
         rightRenderer.setHorizontalAlignment(SwingConstants.RIGHT);
         tabla.getColumnModel().getColumn(8).setCellRenderer(rightRenderer);  // Precio
-        tabla.getColumnModel().getColumn(9).setCellRenderer(rightRenderer);  // Costo c/IVA
-        tabla.getColumnModel().getColumn(10).setCellRenderer(rightRenderer); // Desc.%
-        tabla.getColumnModel().getColumn(11).setCellRenderer(rightRenderer); // Precio final
-        tabla.getColumnModel().getColumn(12).setCellRenderer(rightRenderer); // Exist.
+        tabla.getColumnModel().getColumn(9).setCellRenderer(rightRenderer);  // Desc.%
+        tabla.getColumnModel().getColumn(10).setCellRenderer(rightRenderer); // Precio final
+        tabla.getColumnModel().getColumn(11).setCellRenderer(rightRenderer); // Exist.
         tabla.getColumnModel().getColumn(13).setCellRenderer(rightRenderer); // Conteo
 
 
@@ -115,7 +116,6 @@ public class InventarioPanel extends JPanel {
                 Double desc   = i.getDescuento();
                 Double finalP = (precio == null) ? null :
                         precio * (1.0 - ((desc == null ? 0.0 : desc) / 100.0));
-                Double costoIva = i.getCostoIva();          // nuevo campo
                 Integer conteo  = i.getInventarioConteo();  // nuevo campo
 
                 Object[] row = {
@@ -127,19 +127,20 @@ public class InventarioPanel extends JPanel {
                     n(i.getModelo()),                              // 5
                     n(i.getTalla()),                               // 6
                     n(i.getColor()),                               // 7
-                    precio   == null ? null : String.format("%.2f", precio),     // 8
-                    costoIva == null ? null : String.format("%.2f", costoIva),   // 9
-                    desc     == null ? null : String.format("%.2f", desc),       // 10
-                    finalP   == null ? null : String.format("%.2f", finalP),     // 11
-                    i.getExistencia(),                                             // 12
-                    conteo == null ? 0 : conteo,                                   // 13
-                    i.getStatus(),                                                 // 14
+                    precio == null ? null : String.format("%.2f", precio),   // 8
+                    desc   == null ? null : String.format("%.2f", desc),     // 9
+                    finalP == null ? null : String.format("%.2f", finalP),   // 10
+                    i.getExistencia(),                                             // 11
+                    n(i.getNombreNovia()),                                        // 12  ← NUEVO
+                    conteo == null ? 0 : conteo,                                  // 13
+                    i.getStatus(),                                                // 14
                     i.getFechaRegistro() == null ? "" : i.getFechaRegistro().toString(), // 15
-                    n(i.getRemision()),                                            // 16
-                    n(i.getFactura()),                                             // 17
-                    i.getFechaPago() == null ? "" : i.getFechaPago().toString(),   // 18
-                    "Modificar"                                                    // 19
-            };
+                    n(i.getRemision()),                                           // 16
+                    n(i.getFactura()),                                            // 17
+                    i.getFechaPago() == null ? "" : i.getFechaPago().toString(),  // 18
+                    "Modificar"                                                   // 19
+                };
+
 
                 modeloTabla.addRow(row);
             }

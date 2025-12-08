@@ -15,42 +15,41 @@ import Modelo.Inventario;
 public class InventarioDAO {
 
     // ======================= SELECTS BASE =======================
+private static final String SELECT_ALL =
+    "SELECT codigo_articulo, articulo, " +
+    "       descripcion1, descripcion2, " +
+    "       marca, modelo, talla, color, " +
+    "       precio, descuento, costo_iva, " +
+    "       existencia, nombre_novia, inventario_conteo, " +
+    "       fecha_registro, fecha_pago, " +
+    "       remision, factura, " +
+    "       status " +
+    "FROM Inventarios " +
+    "ORDER BY fecha_registro DESC, codigo_articulo DESC";
 
-    private static final String SELECT_ALL =
-        "SELECT codigo_articulo, articulo, " +
-        "       descripcion1, descripcion2, " +                // NUEVOS
-        "       marca, modelo, talla, color, " +
-        "       precio, descuento, costo_iva, " +             // costo_iva NUEVO
-        "       existencia, inventario_conteo, " +            // inventario_conteo NUEVO
-        "       fecha_registro, fecha_pago, " +               // fecha_pago NUEVO
-        "       remision, factura, " +                        // remision, factura NUEVOS
-        "       status " +
-        "FROM Inventarios " +
-        "ORDER BY fecha_registro DESC, codigo_articulo DESC";
+private static final String SELECT_SEARCH =
+    "SELECT codigo_articulo, articulo, " +
+    "       descripcion1, descripcion2, " +
+    "       marca, modelo, talla, color, " +
+    "       precio, descuento, costo_iva, " +
+    "       existencia, nombre_novia, inventario_conteo, " +
+    "       fecha_registro, fecha_pago, " +
+    "       remision, factura, " +
+    "       status " +
+    "FROM Inventarios " +
+    "WHERE codigo_articulo LIKE ? OR articulo LIKE ? OR talla LIKE ? OR color LIKE ? " +
+    "ORDER BY fecha_registro DESC, codigo_articulo DESC";
 
-    private static final String SELECT_SEARCH =
-        "SELECT codigo_articulo, articulo, " +
-        "       descripcion1, descripcion2, " +
-        "       marca, modelo, talla, color, " +
-        "       precio, descuento, costo_iva, " +
-        "       existencia, inventario_conteo, " +
-        "       fecha_registro, fecha_pago, " +
-        "       remision, factura, " +
-        "       status " +
-        "FROM Inventarios " +
-        "WHERE codigo_articulo LIKE ? OR articulo LIKE ? OR talla LIKE ? OR color LIKE ? " +
-        "ORDER BY fecha_registro DESC, codigo_articulo DESC";
-
-    private static final String SELECT_BY_ID =
-        "SELECT codigo_articulo, articulo, " +
-        "       descripcion1, descripcion2, " +
-        "       marca, modelo, talla, color, " +
-        "       precio, descuento, costo_iva, " +
-        "       existencia, inventario_conteo, " +
-        "       fecha_registro, fecha_pago, " +
-        "       remision, factura, " +
-        "       status " +
-        "FROM Inventarios WHERE codigo_articulo = ?";
+private static final String SELECT_BY_ID =
+    "SELECT codigo_articulo, articulo, " +
+    "       descripcion1, descripcion2, " +
+    "       marca, modelo, talla, color, " +
+    "       precio, descuento, costo_iva, " +
+    "       existencia, nombre_novia, inventario_conteo, " +
+    "       fecha_registro, fecha_pago, " +
+    "       remision, factura, " +
+    "       status " +
+    "FROM Inventarios WHERE codigo_articulo = ?";
 
     // ======================= INSERT / UPDATE =======================
 
@@ -59,10 +58,12 @@ public class InventarioDAO {
         "  codigo_articulo, articulo, descripcion1, descripcion2, " +
         "  marca, modelo, talla, color, " +
         "  precio, descuento, costo_iva, " +
-        "  existencia, inventario_conteo, " +
+        "  existencia, nombre_novia, inventario_conteo, " +
         "  fecha_registro, fecha_pago, " +
         "  remision, factura, status" +
-        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,CURDATE(),?,?,?,?)";
+        ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, ?,CURDATE(),?,?,?,?)";
+    //            1 2 3 4 5 6 7 8 9 10 11 12 13 14      15 16 17 18
+
 
     private static final String UPDATE_SQL =
         "UPDATE Inventarios SET " +
@@ -118,12 +119,13 @@ public class InventarioDAO {
             "       descripcion1, descripcion2, " +
             "       marca, modelo, talla, color, " +
             "       precio, descuento, costo_iva, " +
-            "       existencia, inventario_conteo, " +
+            "       existencia, nombre_novia, inventario_conteo, " +
             "       fecha_registro, fecha_pago, " +
             "       remision, factura, " +
             "       status " +
             "FROM Inventarios " +
             "WHERE codigo_articulo=? AND status='A' AND COALESCE(existencia,0) > 0";
+
 
         try (Connection cn = Conecta.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql)) {
@@ -206,6 +208,9 @@ public class InventarioDAO {
             }
             ps.setInt(k++, existencia);
 
+            
+            // NUEVO: nombre_novia
+            ps.setString(k++, emptyToNull(i.getNombreNovia()));
 
             if (i.getInventarioConteo() == null) ps.setNull(k++, Types.INTEGER);
             else ps.setInt(k++, i.getInventarioConteo());
@@ -248,6 +253,11 @@ public class InventarioDAO {
 
             if (i.getExistencia() == null) ps.setNull(k++, Types.INTEGER);
             else ps.setInt(k++, i.getExistencia());
+
+                        
+            // NUEVO: nombre_novia
+            ps.setString(k++, emptyToNull(i.getNombreNovia()));
+
 
             if (i.getInventarioConteo() == null) ps.setNull(k++, Types.INTEGER);
             else ps.setInt(k++, i.getInventarioConteo());
@@ -338,6 +348,10 @@ public class InventarioDAO {
 
         int ex = rs.getInt("existencia");
         i.setExistencia(rs.wasNull() ? null : ex);
+
+                
+        // NUEVO
+        i.setNombreNovia(rs.getString("nombre_novia"));
 
         int conteo = rs.getInt("inventario_conteo");
         i.setInventarioConteo(rs.wasNull() ? null : conteo);

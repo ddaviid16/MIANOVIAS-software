@@ -21,61 +21,54 @@ public class ObsequioInvDAO {
         "FROM InventarioObsequios WHERE codigo_articulo=?";
 
     private static final String SEL_SEARCH =
-    "SELECT codigo_articulo, articulo, marca, modelo, talla, color, " +
-    "       precio, descuento, existencia, status, fecha_registro " +
-    "FROM InventarioObsequios " +
-    "WHERE CAST(codigo_articulo AS CHAR) LIKE ? " +
-    "   OR articulo LIKE ? " +
-    "   OR marca LIKE ? " +
-    "   OR modelo LIKE ? " +
-    "   OR talla LIKE ? " +
-    "   OR color LIKE ? " +
-    "ORDER BY fecha_registro DESC, codigo_articulo DESC";
+        "SELECT codigo_articulo, articulo, marca, modelo, talla, color, " +
+        "       precio, descuento, existencia, status, fecha_registro " +
+        "FROM InventarioObsequios " +
+        "WHERE CAST(codigo_articulo AS CHAR) LIKE ? " +
+        "   OR articulo LIKE ? " +
+        "   OR marca LIKE ? " +
+        "   OR modelo LIKE ? " +
+        "   OR talla LIKE ? " +
+        "   OR color LIKE ? " +
+        "ORDER BY fecha_registro DESC, codigo_articulo DESC";
 
+    // Ahora solo insertamos: código, artículo, status, fecha_registro
     private static final String INS =
         "INSERT INTO InventarioObsequios " +
-        "(codigo_articulo, articulo, marca, modelo, talla, color, precio, descuento, existencia, status, fecha_registro) " +
-        "VALUES (?,?,?,?,?,?,?,?,?,?,CURDATE())";
+        "(codigo_articulo, articulo, status, fecha_registro) " +
+        "VALUES (?,?,?,CURDATE())";
 
+    // Y solo actualizamos el nombre + status (que siempre será 'A')
     private static final String UPD =
-        "UPDATE InventarioObsequios SET articulo=?, marca=?, modelo=?, talla=?, color=?, " +
-        "precio=?, descuento=?, existencia=?, status=? WHERE codigo_articulo=?";
+        "UPDATE InventarioObsequios SET articulo=?, status=? WHERE codigo_articulo=?";
+
+    // ================= LISTAR =================
 
     public List<ObsequioInv> listar() throws SQLException {
-    // compatibilidad con código viejo que no manda filtro
-    return listar(null);
-}
+        return listar(null);
+    }
 
-public List<ObsequioInv> listar(String filtro) throws SQLException {
-    try (Connection cn = Conecta.getConnection()) {
-        PreparedStatement ps;
+    public List<ObsequioInv> listar(String filtro) throws SQLException {
+        try (Connection cn = Conecta.getConnection()) {
+            PreparedStatement ps;
 
-        if (filtro == null || filtro.isBlank()) {
-            // sin filtro: todo el inventario
-            ps = cn.prepareStatement(SEL_ALL);
-        } else {
-            ps = cn.prepareStatement(SEL_SEARCH);
-            String like = "%" + filtro.trim() + "%";
+            if (filtro == null || filtro.isBlank()) {
+                ps = cn.prepareStatement(SEL_ALL);
+            } else {
+                ps = cn.prepareStatement(SEL_SEARCH);
+                String like = "%" + filtro.trim() + "%";
+                for (int i = 1; i <= 6; i++) {
+                    ps.setString(i, like);
+                }
+            }
 
-            // 1: codigo_articulo (CAST)
-            // 2: articulo
-            // 3: marca
-            // 4: modelo
-            // 5: talla
-            // 6: color
-            for (int i = 1; i <= 6; i++) {
-                ps.setString(i, like);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<ObsequioInv> out = new ArrayList<>();
+                while (rs.next()) out.add(map(rs));
+                return out;
             }
         }
-
-        try (ResultSet rs = ps.executeQuery()) {
-            List<ObsequioInv> out = new ArrayList<>();
-            while (rs.next()) out.add(map(rs));
-            return out;
-        }
     }
-}
-
 
     public List<ObsequioInv> listarActivosFiltrado(String q) throws SQLException {
         String like = "%" + (q == null ? "" : q.trim()) + "%";
@@ -111,72 +104,41 @@ public List<ObsequioInv> listar(String filtro) throws SQLException {
         }
     }
 
+    // ================= INSERT / UPDATE =================
+
     public boolean insertar(ObsequioInv o) throws SQLException {
         try (Connection cn = Conecta.getConnection();
              PreparedStatement ps = cn.prepareStatement(INS)) {
-            int k=1;
+            int k = 1;
             ps.setString(k++, o.getCodigoArticulo());
             ps.setString(k++, o.getArticulo());
-            ps.setString(k++, empty(o.getMarca()));
-            ps.setString(k++, empty(o.getModelo()));
-            ps.setString(k++, empty(o.getTalla()));
-            ps.setString(k++, empty(o.getColor()));
-            ps.setObject(k++, o.getPrecio(), Types.DECIMAL);
-            ps.setObject(k++, o.getDescuento(), Types.DECIMAL);
-            ps.setObject(k++, o.getExistencia(), Types.INTEGER);
-            ps.setString(k++, (o.getStatus()==null||o.getStatus().isBlank())?"A":o.getStatus());
-            return ps.executeUpdate()==1;
+            ps.setString(k++, "A"); // siempre ACTIVO
+            return ps.executeUpdate() == 1;
         }
     }
 
     public boolean actualizar(ObsequioInv o) throws SQLException {
         try (Connection cn = Conecta.getConnection();
              PreparedStatement ps = cn.prepareStatement(UPD)) {
-            int k=1;
+            int k = 1;
             ps.setString(k++, o.getArticulo());
-            ps.setString(k++, empty(o.getMarca()));
-            ps.setString(k++, empty(o.getModelo()));
-            ps.setString(k++, empty(o.getTalla()));
-            ps.setString(k++, empty(o.getColor()));
-            ps.setObject(k++, o.getPrecio(), Types.DECIMAL);
-            ps.setObject(k++, o.getDescuento(), Types.DECIMAL);
-            ps.setObject(k++, o.getExistencia(), Types.INTEGER);
-            ps.setString(k++, (o.getStatus()==null||o.getStatus().isBlank())?"A":o.getStatus());
+            ps.setString(k++, "A"); // forzamos status A
             ps.setString(k++, o.getCodigoArticulo());
-            return ps.executeUpdate()==1;
+            return ps.executeUpdate() == 1;
         }
     }
 
-    /** Descuenta existencia de un obsequio (no cambia status). */
+    // ================= EXISTENCIA: YA NO SE TOCA =================
+
+    /** Antes descontaba existencia; ahora no hace nada. */
     public void descontarExistencia(Connection cn, int codigo, int cantidad) throws SQLException {
-        if (cantidad <= 0) return;
-
-        int existenciaActual;
-        try (PreparedStatement ps = cn.prepareStatement(
-                "SELECT COALESCE(existencia,0) FROM InventarioObsequios WHERE codigo_articulo=? FOR UPDATE")) {
-            ps.setInt(1, codigo);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) throw new SQLException("Obsequio no encontrado: " + codigo);
-                existenciaActual = rs.getInt(1);
-            }
-        }
-        if (existenciaActual < cantidad)
-            throw new SQLException("Sin existencia suficiente para obsequio " + codigo);
-
-        try (PreparedStatement ps = cn.prepareStatement(
-                "UPDATE InventarioObsequios SET existencia = COALESCE(existencia,0) - ? WHERE codigo_articulo=?")) {
-            ps.setInt(1, cantidad);
-            ps.setInt(2, codigo);
-            ps.executeUpdate();
-        }
-        // **NO** se cambia status automáticamente.
+        // Inventario de obsequios ya no maneja existencia.
+        // Método vacío para no romper llamadas antiguas.
     }
 
-    /** Descuenta 1 unidad por cada código (usa la misma transacción que recibe). */
+    /** Antes descontaba 1 por código; ahora no hace nada. */
     public void descontarExistenciaBatch(Connection cn, List<Integer> codigos) throws SQLException {
-        for (Integer cod : codigos) {
-            if (cod != null) descontarExistencia(cn, cod, 1);
-        }
+        // Sin efecto.
     }
 
     /** Obtiene el nombre visible del obsequio (para imprimir en la nota). */

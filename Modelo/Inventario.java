@@ -15,6 +15,7 @@ public class Inventario {
     private Double descuento;
     private Double costoIva;           // NUEVO
     private Integer existencia;
+    private String nombreNovia;       // NUEVO
     private Integer inventarioConteo;  // NUEVO
     private LocalDate fechaRegistro;
     private LocalDate fechaPago;       // NUEVO
@@ -57,6 +58,13 @@ public class Inventario {
 
     public Integer getExistencia() { return existencia; }
     public void setExistencia(Integer existencia) { this.existencia = existencia; }
+        public String getNombreNovia() {
+        return nombreNovia;
+    }
+
+    public void setNombreNovia(String nombreNovia) {
+        this.nombreNovia = nombreNovia;
+    }
 
     public Integer getInventarioConteo() { return inventarioConteo; }
     public void setInventarioConteo(Integer inventarioConteo) { this.inventarioConteo = inventarioConteo; }

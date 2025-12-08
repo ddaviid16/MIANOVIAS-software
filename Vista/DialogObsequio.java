@@ -4,10 +4,6 @@ import Controlador.ObsequioInvDAO;
 import Modelo.ObsequioInv;
 
 import javax.swing.*;
-import javax.swing.text.AbstractDocument;
-import javax.swing.text.AttributeSet;
-import javax.swing.text.BadLocationException;
-import javax.swing.text.DocumentFilter;
 import java.awt.*;
 import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
@@ -15,84 +11,65 @@ import java.time.format.DateTimeFormatter;
 /** Diálogo para crear/modificar registros del InventarioObsequios. */
 public class DialogObsequio extends JDialog {
 
-    // --- Campos UI
-    private JTextField txtCodigo, txtArticulo, txtMarca, txtModelo, txtTalla, txtColor;
-    private JTextField txtPrecio, txtDescuento, txtPrecioFinal, txtExistencia, txtFechaRegistro;
-    private JComboBox<String> cbStatus;
+    // --- Campos UI (solo lo necesario)
+    private JTextField txtCodigo;
+    private JTextField txtArticulo;
+    private JTextField txtFechaRegistro;
 
     // --- Estado
     private boolean guardado = false;
     private final ObsequioInvDAO dao = new ObsequioInvDAO();
     private final boolean edicion;
-    private final String codigoOriginal;
+    private final ObsequioInv original;   // para conservar valores antiguos en edición
 
     private static final DateTimeFormatter DF = DateTimeFormatter.ISO_LOCAL_DATE;
 
     // Alta
-    public DialogObsequio(Frame owner) { this(owner, null); }
+    public DialogObsequio(Frame owner) {
+        this(owner, null);
+    }
 
     // Edición
     public DialogObsequio(Frame owner, ObsequioInv ob) {
         super(owner, ob == null ? "Registrar obsequio" : "Modificar obsequio", true);
         this.edicion = (ob != null);
-        this.codigoOriginal = edicion ? ob.getCodigoArticulo() : null;
+        this.original = ob;
 
-        setSize(620, 560);
+        setSize(420, 240);
         setLocationRelativeTo(owner);
         setLayout(new BorderLayout());
 
         // ===== UI =====
         JPanel p = new JPanel(new GridBagLayout());
-        p.setBorder(BorderFactory.createEmptyBorder(12,12,12,12));
+        p.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
         GridBagConstraints c = new GridBagConstraints();
-        c.insets = new Insets(6,6,6,6);
+        c.insets = new Insets(6, 6, 6, 6);
         c.fill = GridBagConstraints.HORIZONTAL;
         c.weightx = 1;
 
         int y = 0;
 
-        txtCodigo   = new JTextField();
+        txtCodigo = new JTextField();
         txtArticulo = new JTextField();
-        txtMarca    = new JTextField();
-        txtModelo   = new JTextField();
-        txtTalla    = new JTextField();
-        txtColor    = new JTextField();
-        txtPrecio   = new JTextField(); applyDecimalOnly(txtPrecio, 10);
-        txtDescuento= new JTextField(); applyDecimalOnly(txtDescuento, 6);
-        txtPrecioFinal = new JTextField(); txtPrecioFinal.setEditable(false); txtPrecioFinal.setForeground(new Color(0,102,0));
-        txtExistencia  = new JTextField(); applyDigitsOnly(txtExistencia, 10);
-        cbStatus   = new JComboBox<>(new String[]{"A","C"});
-        txtFechaRegistro = new JTextField(); txtFechaRegistro.setEditable(false);
+        txtFechaRegistro = new JTextField();
+        txtFechaRegistro.setEditable(false);
 
-        addRow(p,c,y++, new JLabel("Código*:"),     txtCodigo);
-        addRow(p,c,y++, new JLabel("Artículo*:"),   txtArticulo);
-        addRow(p,c,y++, new JLabel("Marca:"),       txtMarca);
-        addRow(p,c,y++, new JLabel("Modelo:"),      txtModelo);
-        addRow(p,c,y++, new JLabel("Talla:"),       txtTalla);
-        addRow(p,c,y++, new JLabel("Color:"),       txtColor);
+        addRow(p, c, y++, new JLabel("Código*:"), txtCodigo);
+        addRow(p, c, y++, new JLabel("Artículo*:"), txtArticulo);
+        addRow(p, c, y++, new JLabel("Fecha registro:"), txtFechaRegistro);
 
-        y = addRowTriple(p,c,y,
-                new JLabel("Precio*:"),      txtPrecio,
-                new JLabel("Descuento(%)"),  txtDescuento,
-                new JLabel("Precio final:"), txtPrecioFinal);
-
-        y = addRowTriple(p,c,y,
-                new JLabel("Existencia:"),   txtExistencia,
-                new JLabel("Status:"),       cbStatus,
-                new JLabel("Fecha registro:"), txtFechaRegistro);
-
-        // Recalcular precio final cuando cambien precio/desc.
-        javax.swing.event.DocumentListener recalc = new javax.swing.event.DocumentListener() {
-            @Override public void insertUpdate(javax.swing.event.DocumentEvent e){ calcFinal(); }
-            @Override public void removeUpdate(javax.swing.event.DocumentEvent e){ calcFinal(); }
-            @Override public void changedUpdate(javax.swing.event.DocumentEvent e){ calcFinal(); }
-        };
-        txtPrecio.getDocument().addDocumentListener(recalc);
-        txtDescuento.getDocument().addDocumentListener(recalc);
+        // Si estamos en edición, precargar datos y bloquear código
+        if (edicion && original != null) {
+            cargar(original);
+            txtCodigo.setEditable(false);
+        } else {
+            // En alta, solo informativo
+            txtFechaRegistro.setText("Se asignará automáticamente");
+        }
 
         // Botones
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton btnGuardar  = new JButton(edicion ? "Actualizar" : "Guardar");
+        JButton btnGuardar = new JButton(edicion ? "Actualizar" : "Guardar");
         JButton btnCancelar = new JButton("Cancelar");
         actions.add(btnGuardar);
         actions.add(btnCancelar);
@@ -102,186 +79,99 @@ public class DialogObsequio extends JDialog {
 
         add(p, BorderLayout.CENTER);
         add(actions, BorderLayout.SOUTH);
-
-        if (edicion) {
-            cargar(ob);
-            txtCodigo.setEditable(false);
-        }
-
-        calcFinal();
     }
 
     // ====== Helpers de Layout ======
-    private void addRow(JPanel p, GridBagConstraints c, int y, JComponent l, JComponent f){
-        c.gridx=0; c.gridy=y; c.gridwidth=1; p.add(l,c);
-        c.gridx=1; c.gridy=y; c.gridwidth=3; p.add(f,c);
-        c.gridwidth=1;
-    }
-    private int addRowTriple(JPanel p, GridBagConstraints c, int y,
-                             JComponent l1, JComponent f1,
-                             JComponent l2, JComponent f2,
-                             JComponent l3, JComponent f3){
-        c.gridx=0; c.gridy=y; c.gridwidth=1; p.add(l1,c);
-        c.gridx=1;                p.add(f1,c);
-        c.gridx=2;                p.add(l2,c);
-        c.gridx=3;                p.add(f2,c);
-        y++;
-        c.gridx=0; c.gridy=y; p.add(l3,c);
-        c.gridx=1;              p.add(f3,c);
-        c.gridx=2; c.gridwidth=2; p.add(Box.createHorizontalStrut(0), c);
-        c.gridwidth=1;
-        return y+1;
+    private void addRow(JPanel p, GridBagConstraints c, int y, JComponent l, JComponent f) {
+        c.gridx = 0; c.gridy = y; c.gridwidth = 1; p.add(l, c);
+        c.gridx = 1; c.gridy = y; c.gridwidth = 3; p.add(f, c);
+        c.gridwidth = 1;
     }
 
     // ====== Cargar / Guardar ======
-    private void cargar(ObsequioInv ob){
-        txtCodigo.setText(String.valueOf(ob.getCodigoArticulo()));
+    private void cargar(ObsequioInv ob) {
+        txtCodigo.setText(ob.getCodigoArticulo());
         txtArticulo.setText(nz(ob.getArticulo()));
-        txtMarca.setText(nz(ob.getMarca()));
-        txtModelo.setText(nz(ob.getModelo()));
-        txtTalla.setText(nz(ob.getTalla()));
-        txtColor.setText(nz(ob.getColor()));
-        txtPrecio.setText(ob.getPrecio()==null?"":String.valueOf(ob.getPrecio()));
-        txtDescuento.setText(ob.getDescuento()==null?"":String.valueOf(ob.getDescuento()));
-        txtExistencia.setText(ob.getExistencia()==null?"":String.valueOf(ob.getExistencia()));
-        cbStatus.setSelectedItem(ob.getStatus()==null ? "A" : ob.getStatus());
-        txtFechaRegistro.setText(ob.getFechaRegistro()==null?"":ob.getFechaRegistro().format(DF));
+        txtFechaRegistro.setText(
+                ob.getFechaRegistro() == null ? "" : ob.getFechaRegistro().format(DF)
+        );
     }
 
-    private void guardar(){
-        if (txtCodigo.getText().isBlank())   { warn("Código es obligatorio", txtCodigo); return; }
-        if (txtArticulo.getText().isBlank()) { warn("Artículo es obligatorio", txtArticulo); return; }
-        if (txtPrecio.getText().isBlank())   { warn("Precio es obligatorio", txtPrecio); return; }
+    private void guardar() {
+        if (txtCodigo.getText().isBlank()) {
+            warn("Código es obligatorio", txtCodigo);
+            return;
+        }
+        if (txtArticulo.getText().isBlank()) {
+            warn("Artículo es obligatorio", txtArticulo);
+            return;
+        }
 
-        Object[] ops = {"SI","NO"};
+        Object[] ops = {"SI", "NO"};
         int r = JOptionPane.showOptionDialog(this,
                 edicion ? "¿Guardar cambios?" : "¿La información es correcta?",
-                "Confirmación", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
+                "Confirmación",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE,
                 null, ops, ops[0]);
         if (r != JOptionPane.YES_OPTION) return;
 
         try {
-            ObsequioInv ob = new ObsequioInv();
-            ob.setCodigoArticulo(String.valueOf(txtCodigo.getText().trim()));;
+            ObsequioInv ob;
+
+            if (edicion && original != null) {
+                // Reutilizamos el objeto original para no perder marca/modelo/etc. que ya existan
+                ob = original;
+            } else {
+                ob = new ObsequioInv();
+            }
+
+            ob.setCodigoArticulo(txtCodigo.getText().trim());
             ob.setArticulo(txtArticulo.getText().trim());
-            ob.setMarca(blankToNull(txtMarca));
-            ob.setModelo(blankToNull(txtModelo));
-            ob.setTalla(blankToNull(txtTalla));
-            ob.setColor(blankToNull(txtColor));
-            ob.setPrecio(Double.parseDouble(txtPrecio.getText().trim()));
-            ob.setDescuento(parseNullableDouble(txtDescuento));
-            ob.setExistencia(parseNullableInt(txtExistencia));
-            ob.setStatus((String) cbStatus.getSelectedItem());
+            // NO tocamos marca, modelo, talla, color, precio, descuento, existencia, status:
+            //   - En alta se quedan como null (el DAO pone status='A' por defecto)
+            //   - En edición conservan el valor que tenían en BD
 
             boolean ok = edicion ? dao.actualizar(ob) : dao.insertar(ob);
 
             if (ok) {
                 guardado = true;
-                JOptionPane.showMessageDialog(this, edicion ? "Obsequio actualizado" : "Obsequio registrado");
+                JOptionPane.showMessageDialog(this,
+                        edicion ? "Obsequio actualizado" : "Obsequio registrado");
                 dispose();
             } else {
-                JOptionPane.showMessageDialog(this, "No se guardó el registro", "Atención", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "No se guardó el registro",
+                        "Atención",
+                        JOptionPane.WARNING_MESSAGE);
             }
-        } catch (SQLException ex){
+        } catch (SQLException ex) {
             String msg = ex.getMessage();
             if (!edicion && msg != null && msg.toLowerCase().contains("duplicate")) {
-                JOptionPane.showMessageDialog(this, "El código ya existe.", "Duplicado", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "El código ya existe.",
+                        "Duplicado",
+                        JOptionPane.WARNING_MESSAGE);
             } else {
-                JOptionPane.showMessageDialog(this, "Error SQL: " + msg, "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "Error SQL: " + msg,
+                        "Error",
+                        JOptionPane.ERROR_MESSAGE);
             }
-        } catch (NumberFormatException nfe){
-            JOptionPane.showMessageDialog(this, "Revisa los campos numéricos (código, precio, descuento, existencia).",
-                    "Validación", JOptionPane.WARNING_MESSAGE);
-        } catch (Exception ex){
-            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error: " + ex.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    private void calcFinal(){
-        try {
-            double precio = txtPrecio.getText().isBlank()?0.0:Double.parseDouble(txtPrecio.getText().trim());
-            double desc   = txtDescuento.getText().isBlank()?0.0:Double.parseDouble(txtDescuento.getText().trim());
-            double fin    = precio * (1.0 - desc/100.0);
-            txtPrecioFinal.setText(String.format("%.2f", fin));
-        } catch(NumberFormatException nfe){
-            txtPrecioFinal.setText("");
-        }
-    }
-
-    public boolean isGuardado(){ return guardado; }
+    public boolean isGuardado() { return guardado; }
 
     // ===== Helpers =====
-    private void warn(String msg, JComponent focus){
+    private void warn(String msg, JComponent focus) {
         JOptionPane.showMessageDialog(this, msg, "Validación", JOptionPane.WARNING_MESSAGE);
         focus.requestFocus();
     }
-    private String nz(String s){ return s==null?"":s; }
-    private String blankToNull(JTextField t){
-        String s = t.getText();
-        return (s==null || s.isBlank()) ? null : s.trim();
-    }
-    private Integer parseNullableInt(JTextField t){
-        return t.getText().isBlank()?null:Integer.parseInt(t.getText().trim());
-    }
-    private Double parseNullableDouble(JTextField t){
-        return t.getText().isBlank()?null:Double.parseDouble(t.getText().trim());
-    }
-
-    // ===== Filtros para inputs =====
-    private void applyDigitsOnly(JTextField field, int maxLen){
-        ((AbstractDocument) field.getDocument()).setDocumentFilter(new DigitsOnlyFilter(maxLen));
-    }
-    private void applyDecimalOnly(JTextField field, int maxLen){
-        ((AbstractDocument) field.getDocument()).setDocumentFilter(new DecimalFilter(maxLen));
-    }
-
-    /** Sólo dígitos. */
-    static class DigitsOnlyFilter extends DocumentFilter {
-        private final int maxLen;
-        DigitsOnlyFilter(int maxLen){ this.maxLen = maxLen; }
-        private boolean valid(String text){
-            if (text == null) return true;
-            if (text.length() > maxLen) return false;
-            for (int i=0;i<text.length();i++){
-                char ch = text.charAt(i);
-                if (ch < '0' || ch > '9') return false;
-            }
-            return true;
-        }
-        @Override public void replace(FilterBypass fb, int offset, int length, String text, AttributeSet attrs)
-                throws BadLocationException {
-            String cur = fb.getDocument().getText(0, fb.getDocument().getLength());
-            String next = cur.substring(0, offset) + (text==null?"":text) + cur.substring(offset+length);
-            if (valid(next)) super.replace(fb, offset, length, text, attrs);
-        }
-        @Override public void insertString(FilterBypass fb, int offset, String text, AttributeSet attr)
-                throws BadLocationException { replace(fb, offset, 0, text, attr); }
-    }
-
-    /** Decimales con un solo punto. */
-    static class DecimalFilter extends DocumentFilter {
-        private final int maxLen;
-        DecimalFilter(int maxLen){ this.maxLen = maxLen; }
-        private boolean valid(String text){
-            if (text == null) return true;
-            if (text.length() > maxLen) return false;
-            int dots = 0;
-            for (int i=0;i<text.length();i++){
-                char ch = text.charAt(i);
-                if (ch>='0' && ch<='9') continue;
-                if (ch=='.'){ if (++dots>1) return false; continue; }
-                return false;
-            }
-            return true;
-        }
-        @Override public void replace(FilterBypass fb, int offset, int length, String text, AttributeSet attrs)
-                throws BadLocationException {
-            String cur = fb.getDocument().getText(0, fb.getDocument().getLength());
-            String next = cur.substring(0, offset) + (text==null?"":text) + cur.substring(offset+length);
-            if (valid(next)) super.replace(fb, offset, length, text, attrs);
-        }
-        @Override public void insertString(FilterBypass fb, int offset, String text, AttributeSet attr)
-                throws BadLocationException { replace(fb, offset, 0, text, attr); }
-    }
+    private String nz(String s) { return s == null ? "" : s; }
 }

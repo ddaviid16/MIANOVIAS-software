@@ -18,7 +18,6 @@ public class ObsequiosDAO {
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
 
     // INSERT nuevo: nombres + códigos (obsequio1_cod..obsequio5_cod)
-    // *IMPORTANTE*: obsequio*_cod debería ser VARCHAR si quieres guardar guiones/letras
     private static final String INSERT_SQL_WITH_CODES =
         "INSERT INTO Obsequios " +
         "(numero_nota, telefono, fecha_operacion, " +
@@ -28,16 +27,11 @@ public class ObsequiosDAO {
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
     /**
-     * Inserta los obsequios elegidos para una nota y descuenta existencia en InventarioObsequios.
+     * Inserta los obsequios elegidos para una nota.
      *
-     * @param numeroNota   nota a la que pertenecen
-     * @param telefono     teléfono del cliente (puede ser null)
-     * @param fechaOp      fecha de operación (si es null se usa hoy)
-     * @param obsequios    LISTA de códigos de obsequio (tal como los capturas, ej. "456-1234")
-     * @param tipoOperacion "CN", "CR", etc.
-     * @param asesor       número de empleado
-     * @param status       "A", etc.
-     * @param fechaEvento  fecha de evento (puede ser null)
+     * YA NO:
+     *  - Descuenta existencia de InventarioObsequios.
+     *  - Usa el status recibido: siempre guarda "A".
      */
     public void insertarParaNota(int numeroNota,
                                  String telefono,
@@ -45,11 +39,10 @@ public class ObsequiosDAO {
                                  List<String> obsequios,
                                  String tipoOperacion,
                                  int asesor,
-                                 String status,
+                                 String status,       // se ignora, siempre se usa "A"
                                  LocalDate fechaEvento) throws SQLException {
 
         if (obsequios == null || obsequios.isEmpty()) {
-            // nada que guardar, salimos en paz
             return;
         }
 
@@ -68,12 +61,10 @@ public class ObsequiosDAO {
                         String code = raw.trim();
                         if (code.isEmpty()) continue;
 
-                        // Acepta letras, dígitos y guiones. Si quieres menos permisivo, ajusta esto.
                         if (!code.matches("[A-Za-z0-9-]+")) {
                             throw new SQLException("Código de obsequio inválido: " + code);
                         }
 
-                        // Buscar nombre del obsequio
                         psNom.setString(1, code);
                         try (ResultSet rs = psNom.executeQuery()) {
                             if (!rs.next()) {
@@ -84,18 +75,16 @@ public class ObsequiosDAO {
                             nombres.add(nombre);
                         }
 
-                        // La tabla sólo tiene 5 columnas de obsequios, así que cortamos en 5
                         if (codigos.size() == 5) break;
                     }
                 }
 
-                // Rellenar a 5 posiciones con null
                 while (nombres.size() < 5) nombres.add(null);
 
-                // 2) INSERT en Obsequios (primero intenta con columnas *_cod; si no existen, usa legado)
                 boolean inserted = false;
                 LocalDate fOp = (fechaOp != null) ? fechaOp : LocalDate.now();
 
+                // 2) INSERT en Obsequios (versión con *_cod)
                 try (PreparedStatement ps = cn.prepareStatement(INSERT_SQL_WITH_CODES)) {
                     int k = 1;
                     ps.setInt(k++, numeroNota);
@@ -115,7 +104,7 @@ public class ObsequiosDAO {
                         else           ps.setString(k++, v);
                     }
 
-                    // Códigos (5). Si hay menos de 5, el resto va null
+                    // Códigos (5)
                     for (int i = 0; i < 5; i++) {
                         String cod = (i < codigos.size()) ? codigos.get(i) : null;
                         if (cod == null) ps.setNull(k++, Types.VARCHAR);
@@ -124,7 +113,8 @@ public class ObsequiosDAO {
 
                     ps.setString(k++, tipoOperacion);
                     ps.setInt(k++, asesor);
-                    ps.setString(k++, status);
+                    ps.setString(k++, "A");  // <-- SIEMPRE "A"
+
                     if (fechaEvento == null) {
                         ps.setNull(k++, Types.DATE);
                     } else {
@@ -135,7 +125,7 @@ public class ObsequiosDAO {
                     inserted = true;
 
                 } catch (SQLException ex) {
-                    // Si la BD no tiene aún las columnas *_cod, caemos al INSERT "viejo"
+                    // Si no existen las columnas *_cod, se usa el INSERT legado
                     if (!isUnknownColumnError(ex)) {
                         throw ex;
                     }
@@ -152,7 +142,6 @@ public class ObsequiosDAO {
 
                         ps.setDate(k++, Date.valueOf(fOp));
 
-                        // Sólo nombres
                         for (int i = 0; i < 5; i++) {
                             String v = nombres.get(i);
                             if (v == null) ps.setNull(k++, Types.VARCHAR);
@@ -161,7 +150,8 @@ public class ObsequiosDAO {
 
                         ps.setString(k++, tipoOperacion);
                         ps.setInt(k++, asesor);
-                        ps.setString(k++, status);
+                        ps.setString(k++, "A"); // <-- también siempre "A"
+
                         if (fechaEvento == null) {
                             ps.setNull(k++, Types.DATE);
                         } else {
@@ -173,10 +163,7 @@ public class ObsequiosDAO {
                     }
                 }
 
-                // 3) Descontar existencia DE InventarioObsequios por código
-                if (inserted && !codigos.isEmpty()) {
-                    descontarExistenciaBatch(cn, codigos);
-                }
+                // 3) YA NO SE DESCUENTA EXISTENCIA EN InventarioObsequios
 
                 cn.commit();
             } catch (SQLException ex) {
@@ -185,24 +172,6 @@ public class ObsequiosDAO {
             } finally {
                 cn.setAutoCommit(true);
             }
-        }
-    }
-
-    /** Descuenta 1 unidad por cada código en InventarioObsequios. */
-    private void descontarExistenciaBatch(Connection cn, List<String> codigos) throws SQLException {
-        if (codigos == null || codigos.isEmpty()) return;
-
-        try (PreparedStatement ps = cn.prepareStatement(
-                "UPDATE InventarioObsequios " +
-                "SET existencia = existencia - 1 " +
-                "WHERE codigo_articulo = ?")) {
-
-            for (String cod : codigos) {
-                if (cod == null || cod.isBlank()) continue;
-                ps.setString(1, cod.trim());
-                ps.addBatch();
-            }
-            ps.executeBatch();
         }
     }
 

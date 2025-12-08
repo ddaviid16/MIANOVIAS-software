@@ -40,6 +40,7 @@ public class DialogArticulo extends JDialog {
     private JTextField txtConteo;
     private JTextField txtCostoIva;
     private JTextField txtRemision, txtFactura, txtFechaPago;
+    private JTextField txtNombreNovia;   // ← NUEVO
     private JComboBox<String> cbStatus;
 
     private boolean guardado = false;
@@ -85,6 +86,7 @@ public class DialogArticulo extends JDialog {
         txtModelo = new JTextField();
         txtTalla = new JTextField();
         txtColor = new JTextField();
+        txtNombreNovia = new JTextField();   // ← NUEVO
 
         txtPrecio = new JTextField();
         applyDecimalOnly(txtPrecio, 10);
@@ -127,6 +129,7 @@ public class DialogArticulo extends JDialog {
         addRow(p, c, y++, new JLabel("Modelo:"), txtModelo);
         addRow(p, c, y++, new JLabel("Talla:"), txtTalla);
         addRow(p, c, y++, new JLabel("Color:"), txtColor);
+        addRow(p, c, y++, new JLabel("Nombre novia:"), txtNombreNovia);
 
         // Precio / Descuento / Precio final
         y = addRowTriple(p, c, y,
@@ -248,6 +251,7 @@ public class DialogArticulo extends JDialog {
         txtModelo.setText(n(inv.getModelo()));
         txtTalla.setText(n(inv.getTalla()));
         txtColor.setText(n(inv.getColor()));
+        txtNombreNovia.setText(n(inv.getNombreNovia()));   // ← NUEVO
 
         txtPrecio.setText(inv.getPrecio() == null ? "" : String.valueOf(inv.getPrecio()));
         txtDescuento.setText(inv.getDescuento() == null ? "" : String.valueOf(inv.getDescuento()));
@@ -294,7 +298,8 @@ public class DialogArticulo extends JDialog {
             inv.setExistencia(parseNullableInt(txtExistencia));
             inv.setInventarioConteo(parseNullableInt(txtConteo));
             inv.setStatus((String) cbStatus.getSelectedItem());
-
+            
+            inv.setNombreNovia(blankToNull(txtNombreNovia));   // ← NUEVO
             inv.setCostoIva(parseNullableDouble(txtCostoIva));
             inv.setRemision(blankToNull(txtRemision));
             inv.setFactura(blankToNull(txtFactura));

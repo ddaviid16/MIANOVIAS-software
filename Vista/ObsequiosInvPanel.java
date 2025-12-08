@@ -89,30 +89,28 @@ public class ObsequiosInvPanel extends JPanel {
             if (dlg.isGuardado()) cargar(txtFiltro.getText());
         });
 
-        // ====== Tabla
-        String[] cols = {"Código","Artículo","Marca","Modelo","Talla","Color",
-                "Precio","Desc.%","Precio final","Exist.","Status","Registro","Editar"};
+        // ====== Tabla (solo columnas necesarias)
+        String[] cols = {"Código","Artículo","Registro","Editar"};
         model = new DefaultTableModel(cols, 0) {
-            @Override public boolean isCellEditable(int r, int col) { return col == 12; }
+            @Override public boolean isCellEditable(int r, int col) {
+                // Solo la columna "Editar" es editable (botón)
+                return col == 3;
+            }
         };
+
         tb = new JTable(model);
         tb.setRowHeight(26);
 
         DefaultTableCellRenderer center = new DefaultTableCellRenderer();
         center.setHorizontalAlignment(SwingConstants.CENTER);
-        DefaultTableCellRenderer right = new DefaultTableCellRenderer();
-        right.setHorizontalAlignment(SwingConstants.RIGHT);
 
         TableColumnModel cm = tb.getColumnModel();
-        cm.getColumn(0).setCellRenderer(center); // código
-        cm.getColumn(6).setCellRenderer(right);  // precio
-        cm.getColumn(7).setCellRenderer(right);  // desc.%
-        cm.getColumn(8).setCellRenderer(right);  // precio final
-        cm.getColumn(9).setCellRenderer(center); // existencia
-        cm.getColumn(10).setCellRenderer(center); // status
-        cm.getColumn(11).setCellRenderer(center); // registro
+        cm.getColumn(0).setCellRenderer(center); // Código
+        cm.getColumn(2).setCellRenderer(center); // Registro
+        // La columna 3 es el botón, no necesita renderer especial aquí
 
-        // Botón Editar
+
+        // AHORA: columna 3
         new ButtonColumn(tb, new AbstractAction("Editar") {
             @Override public void actionPerformed(java.awt.event.ActionEvent e) {
                 int row = Integer.parseInt(e.getActionCommand());
@@ -133,7 +131,8 @@ public class ObsequiosInvPanel extends JPanel {
                             "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                 }
             }
-        }, 12);
+        }, 3);
+
 
         add(new JScrollPane(tb), BorderLayout.CENTER);
 
@@ -155,26 +154,14 @@ public class ObsequiosInvPanel extends JPanel {
             model.setRowCount(0);
 
             for (ObsequioInv o : lista) {
-                double precio = o.getPrecio() == null ? 0.0 : o.getPrecio();
-                double pdesc  = o.getDescuento() == null ? 0.0 : o.getDescuento();
-                double pfinal = precio * (1 - pdesc / 100.0);
+            model.addRow(new Object[]{
+                    o.getCodigoArticulo(),          // Código
+                    nz(o.getArticulo()),            // Artículo
+                    fmt(o.getFechaRegistro()),      // Registro
+                    "Editar"                        // Botón
+            });
+        }
 
-                model.addRow(new Object[]{
-                        o.getCodigoArticulo(),
-                        nz(o.getArticulo()),
-                        nz(o.getMarca()),
-                        nz(o.getModelo()),
-                        nz(o.getTalla()),
-                        nz(o.getColor()),
-                        String.format("%.2f", precio),
-                        String.format("%.2f", pdesc),
-                        String.format("%.2f", pfinal),
-                        o.getExistencia() == null ? "" : o.getExistencia(),
-                        nz(o.getStatus()),
-                        fmt(o.getFechaRegistro()),
-                        "Editar"
-                });
-            }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                     "Error al cargar inventario de obsequios: " + e.getMessage(),
