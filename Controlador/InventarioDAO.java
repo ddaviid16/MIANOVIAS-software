@@ -70,7 +70,7 @@ private static final String SELECT_BY_ID =
         "  articulo=?, descripcion1=?, descripcion2=?, " +
         "  marca=?, modelo=?, talla=?, color=?, " +
         "  precio=?, descuento=?, costo_iva=?, " +
-        "  existencia=?, inventario_conteo=?, " +
+        "  existencia=?, nombre_novia=?, inventario_conteo=?, " +
         "  fecha_pago=?, remision=?, factura=?, " +
         "  status=? " +
         "WHERE codigo_articulo=?";
