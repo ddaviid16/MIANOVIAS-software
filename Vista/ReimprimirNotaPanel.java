@@ -699,9 +699,9 @@ private void cargarNotas() {
         // 1) Inferimos tipo de nota a partir de la columna "Tipo" y total/saldo
         TipoNota tipo = inferirTipoDesdeFila(tipoCelda, total, saldo);
 
-        // 2) Fallback extra: si el folio empieza con "D", la tratamos como devolución
+        // 2) Fallback extra: si el folio empieza con "e", la tratamos como devolución
         String folioU = (folio == null) ? "" : folio.trim().toUpperCase();
-        if (folioU.startsWith("D")) {
+        if (folioU.startsWith("E")) {
             tipo = TipoNota.DEVOLUCION;
         }
 
@@ -1081,7 +1081,7 @@ if (printable == null) {
             // 1) Determinar tipo de nota
             TipoNota tipo = inferirTipoDesdeFila(tipoCelda, total, saldo);
             String folioU = (folio == null) ? "" : folio.trim().toUpperCase();
-            if (folioU.startsWith("D")) {
+            if (folioU.startsWith("E")) {
                 tipo = TipoNota.DEVOLUCION;
             }
 
@@ -1274,7 +1274,7 @@ if (printable == null) {
         }
 
         // === Abono ===
-        if (t.contains("ABONO") || t.contains("PAGO PARCIAL") || t.equals("AB")) {
+        if (t.contains("ABONO") || t.contains("PAGO PARCIAL") || t.equals("AB") || t.equals("D")) {
             return TipoNota.ABONO;
         }
 
