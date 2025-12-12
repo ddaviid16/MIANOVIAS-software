@@ -657,5 +657,50 @@ public void actualizarObservacionCita(String telefono1,
         ps.executeUpdate();
     }
 }
+/** Busca clientes por apellido paterno (apellido1) y regresa opciones para seleccionar. */
+public List<ClienteResumen> buscarOpcionesPorApellidoPaterno(String apellido1) throws SQLException {
+
+    String like = "%" + (apellido1 == null ? "" : apellido1.trim()) + "%";
+
+    String sql =
+        "SELECT telefono1, telefono2, parentesco_tel2, " +
+        "       nombre, apellido_paterno, apellido_materno, " +
+        "       fecha_evento " +
+        "FROM Clientes " +
+        "WHERE apellido_paterno LIKE ? " +
+        // Si quieres solo activos, descomenta:
+        "  AND status = 'A' " +
+        "ORDER BY apellido_paterno ASC, apellido_materno ASC, nombre ASC ";
+
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setString(1, like);
+
+        try (ResultSet rs = ps.executeQuery()) {
+            List<ClienteResumen> out = new ArrayList<>();
+            while (rs.next()) {
+                ClienteResumen cr = new ClienteResumen();
+
+                cr.setTelefono1(rs.getString("telefono1"));
+                cr.setTelefono2(rs.getString("telefono2"));
+                cr.setParentescoTel2(rs.getString("parentesco_tel2"));
+
+                String nombre = n(rs.getString("nombre"));
+                String apPat  = n(rs.getString("apellido_paterno"));
+                String apMat  = n(rs.getString("apellido_materno"));
+
+                String full = (nombre + " " + apPat + " " + apMat)
+                        .trim().replaceAll("\\s+"," ");
+                cr.setNombreCompleto(full.isBlank() ? null : full);
+
+                cr.setFechaEvento(toLocal(rs.getDate("fecha_evento")));
+
+                out.add(cr);
+            }
+            return out;
+        }
+    }
+}
 
 }

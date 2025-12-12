@@ -1269,7 +1269,7 @@ if (printable == null) {
 
         // === Devolución ===
         if (t.contains("DEVOLUCION") || t.contains("DEVOLUCIÓN") || t.contains("CAMBIO")
-            || t.equals("DV") || t.equals("D")) {
+            || t.equals("DV")) {
             return TipoNota.DEVOLUCION;
         }
 

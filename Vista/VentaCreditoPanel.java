@@ -7,6 +7,11 @@ import java.awt.Component;
 import java.awt.Dialog;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Cursor;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import javax.swing.KeyStroke;
+
 
 import java.awt.Frame;
 import java.awt.Graphics;
@@ -221,6 +226,7 @@ private String fechaLarga(LocalDate fecha) {
         addCell(top,c,0,y,new JLabel("Nombre y apellidos:"),1,false);
         addCell(top,c,1,y,txtNombreCompleto,3,true);
         y++;
+        
 
         // Registrar cliente
         btnRegistrarCliente = new JButton("Registrar cliente");
