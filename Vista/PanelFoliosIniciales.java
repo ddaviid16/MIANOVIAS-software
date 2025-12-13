@@ -9,6 +9,8 @@ import java.awt.*;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.List;
+import Utilidades.SeguridadUI;
+
 
 public class PanelFoliosIniciales extends JPanel {
 
@@ -76,61 +78,70 @@ public class PanelFoliosIniciales extends JPanel {
         }
     }
 
-    private void guardar() {
-        if (table.isEditing()) table.getCellEditor().stopCellEditing();
+private void guardar() {
+    // 0) Pedir clave global antes de permitir actualizar folios
+    if (!SeguridadUI.pedirYValidarClave(this)) {
+        // Clave incorrecta o usuario canceló → no se guarda nada
+        return;
+    }
 
-        // 1) Leer y normalizar
-        List<FoliosDAO.FolioRec> nuevos = new ArrayList<>();
-        for (int i = 0; i < model.getRowCount(); i++) {
-            String pref = String.valueOf(model.getValueAt(i, 1)).trim();
-            Integer ult = toInt(model.getValueAt(i, 3));
-            if (pref.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "El prefijo no puede estar vacío (fila " + (i+1) + ").",
-                        "Validación", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            if (ult == null || ult < 0) {
-                JOptionPane.showMessageDialog(this, "Valor inválido en “Nuevo último emitido” (fila " + (i+1) + ").",
-                        "Validación", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            // normalizamos prefijo a MAYÚSCULAS sin espacios
-            pref = pref.toUpperCase(Locale.ROOT);
+    // 1) Confirmar que no haya edición pendiente en la tabla
+    if (table.isEditing()) {
+        table.getCellEditor().stopCellEditing();
+    }
 
-            FoliosDAO.FolioRec base = rows.get(i); // contiene el código de tipo real
-            FoliosDAO.FolioRec n = new FoliosDAO.FolioRec();
-            n.tipo    = base.tipo;   // CN/CR/AB/DV (NO se edita)
-            n.prefijo = pref;        // editable
-            n.ultimo  = ult;         // editable
-            nuevos.add(n);
-        }
-
-        // 2) Validaciones de prefijos: únicos y sin solaparse
-        String err = validarPrefijos(nuevos);
-        if (err != null) {
-            JOptionPane.showMessageDialog(this, err, "Validación", JOptionPane.WARNING_MESSAGE);
+    // 2) Leer y normalizar
+    List<FoliosDAO.FolioRec> nuevos = new ArrayList<>();
+    for (int i = 0; i < model.getRowCount(); i++) {
+        String pref = String.valueOf(model.getValueAt(i, 1)).trim();
+        Integer ult = toInt(model.getValueAt(i, 3));
+        if (pref.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "El prefijo no puede estar vacío (fila " + (i+1) + ").",
+                    "Validación", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
-        // 3) Confirmación
-        Object[] ops = {"SI", "NO"};
-        int resp = JOptionPane.showOptionDialog(this,
-                "¿Actualizar prefijos y números de folio?\n" +
-                        "Se usarán los valores de las columnas “Prefijo” y “Nuevo último emitido”.",
-                "Confirmación", JOptionPane.YES_NO_OPTION,
-                JOptionPane.QUESTION_MESSAGE, null, ops, ops[0]);
-        if (resp != JOptionPane.YES_OPTION) return;
-
-        // 4) Guardar
-        try {
-            new FoliosDAO().actualizarVarios(nuevos);
-            JOptionPane.showMessageDialog(this, "Folios actualizados correctamente.");
-            cargar();
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error al guardar: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+        if (ult == null || ult < 0) {
+            JOptionPane.showMessageDialog(this, "Valor inválido en “Nuevo último emitido” (fila " + (i+1) + ").",
+                    "Validación", JOptionPane.WARNING_MESSAGE);
+            return;
         }
+        // normalizamos prefijo a MAYÚSCULAS sin espacios
+        pref = pref.toUpperCase(Locale.ROOT);
+
+        FoliosDAO.FolioRec base = rows.get(i); // contiene el código de tipo real
+        FoliosDAO.FolioRec n = new FoliosDAO.FolioRec();
+        n.tipo    = base.tipo;   // CN/CR/AB/DV (NO se edita)
+        n.prefijo = pref;        // editable
+        n.ultimo  = ult;         // editable
+        nuevos.add(n);
     }
+
+    // 3) Validaciones de prefijos: únicos y sin solaparse
+    String err = validarPrefijos(nuevos);
+    if (err != null) {
+        JOptionPane.showMessageDialog(this, err, "Validación", JOptionPane.WARNING_MESSAGE);
+        return;
+    }
+
+    // 4) Confirmación
+    Object[] ops = {"SI", "NO"};
+    int resp = JOptionPane.showOptionDialog(this,
+            "¿Actualizar prefijos y números de folio?\n" +
+                    "Se usarán los valores de las columnas “Prefijo” y “Nuevo último emitido”.",
+            "Confirmación", JOptionPane.YES_NO_OPTION,
+            JOptionPane.QUESTION_MESSAGE, null, ops, ops[0]);
+    if (resp != JOptionPane.YES_OPTION) return;
+
+    // 5) Guardar
+    try {
+        new FoliosDAO().actualizarVarios(nuevos);
+        JOptionPane.showMessageDialog(this, "Folios actualizados correctamente.");
+        cargar();
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this, "Error al guardar: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
 
     private Integer toInt(Object o) {
         if (o == null) return null;

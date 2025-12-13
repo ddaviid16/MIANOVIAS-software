@@ -338,7 +338,9 @@ private void cargar() {
         }
 
         if (modelNotas.getRowCount() == 0) {
-            modelNotas.addRow(new Object[]{"—", "—", "—", "—", 0.0, 0.0, "Sin registros"});
+            JOptionPane.showMessageDialog(this,
+                    "No hay registros para los filtros seleccionados.",
+                    "Sin registros", JOptionPane.INFORMATION_MESSAGE);
         }
     } catch (Exception ex) {
         JOptionPane.showMessageDialog(this,
@@ -347,62 +349,59 @@ private void cargar() {
     }
 }
 
-    private void cargarPorArticulo(LocalDate ini, LocalDate finExcl) throws Exception {
-        String sIni = tfArtIni.getText().trim();
-        String sFin = tfArtFin.getText().trim();
+private void cargarPorArticulo(LocalDate ini, LocalDate finExcl) throws Exception {
+    String sIni = tfArtIni.getText().trim();
+    String sFin = tfArtFin.getText().trim();
 
-        if (sIni.isEmpty() || sFin.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Debes capturar el código de artículo inicial y final.",
-                    "Aviso", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
+    if (sIni.isEmpty() || sFin.isEmpty()) {
+        JOptionPane.showMessageDialog(this,
+                "Debes capturar el código de artículo inicial y final.",
+                "Aviso", JOptionPane.WARNING_MESSAGE);
+        return;
+    }
 
-        int artIni, artFin;
-        try {
-            artIni = Integer.parseInt(sIni);
-            artFin = Integer.parseInt(sFin);
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this,
-                    "Los códigos de artículo deben ser numéricos.",
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        if (artIni > artFin) {
-            int tmp = artIni;
-            artIni = artFin;
-            artFin = tmp;
-        }
+    // Trabajar como cadenas (porque en BD es VARCHAR)
+    String artIni = sIni;
+    String artFin = sFin;
 
-        String sql =
-    "SELECT DISTINCT n.numero_nota, n.asesor, n.tipo, n.folio, n.fecha_registro, " +
-    "       n.total, n.saldo, n.status, " +
-    "       CONCAT(COALESCE(c.nombre,''),' ',COALESCE(c.apellido_paterno,''),' ',COALESCE(c.apellido_materno,'')) AS nombre_cliente " +
-    "FROM Notas n " +
-    "JOIN Nota_Detalle d ON d.numero_nota = n.numero_nota " +
-    "LEFT JOIN Clientes c ON c.telefono1 = n.telefono " +
-    "WHERE n.status='A' AND n.tipo IN ('CN','CR') " +
-    "  AND n.fecha_registro >= ? AND n.fecha_registro < ? " +
-    "  AND d.codigo_articulo BETWEEN ? AND ? " +
-    "ORDER BY n.fecha_registro, n.numero_nota";
+    // Normalizas si quieres (opcional, si tus códigos son mayúsculas)
+    artIni = artIni.toUpperCase();
+    artFin = artFin.toUpperCase();
 
+    // Asegurar que artIni <= artFin lexicográficamente
+    if (artIni.compareTo(artFin) > 0) {
+        String tmp = artIni;
+        artIni = artFin;
+        artFin = tmp;
+    }
 
+    String sql =
+        "SELECT DISTINCT n.numero_nota, n.asesor, n.tipo, n.folio, n.fecha_registro, " +
+        "       n.total, n.saldo, n.status, " +
+        "       CONCAT(COALESCE(c.nombre,''),' ',COALESCE(c.apellido_paterno,''),' ',COALESCE(c.apellido_materno,'')) AS nombre_cliente " +
+        "FROM Notas n " +
+        "JOIN Nota_Detalle d ON d.numero_nota = n.numero_nota " +
+        "LEFT JOIN Clientes c ON c.telefono1 = n.telefono " +
+        "WHERE n.status='A' AND n.tipo IN ('CN','CR') " +
+        "  AND n.fecha_registro >= ? AND n.fecha_registro < ? " +
+        "  AND d.codigo_articulo BETWEEN ? AND ? " +
+        "ORDER BY n.fecha_registro, n.numero_nota";
 
-        try (Connection cn = Conecta.getConnection();
-             PreparedStatement ps = cn.prepareStatement(sql)) {
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
 
-            ps.setDate(1, Date.valueOf(ini));
-            ps.setDate(2, Date.valueOf(finExcl));
-            ps.setInt(3, artIni);
-            ps.setInt(4, artFin);
+        ps.setDate(1, Date.valueOf(ini));
+        ps.setDate(2, Date.valueOf(finExcl));
+        ps.setString(3, artIni);
+        ps.setString(4, artFin);
 
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    agregarFilaNota(rs);
-                }
+        try (ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                agregarFilaNota(rs);
             }
         }
     }
+}
 
     private void cargarPorVendedor(LocalDate ini, LocalDate finExcl) throws Exception {
         AsesorItem ai = (AsesorItem) cbVendIni.getSelectedItem();

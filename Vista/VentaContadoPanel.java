@@ -11,6 +11,8 @@ import Controlador.FacturaDatosDAO;
 import java.util.Locale;
 
 
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -135,6 +137,8 @@ public class VentaContadoPanel extends JPanel {
     private JTextField txtFechaEvento, txtFechaPrueba1, txtFechaPrueba2, txtFechaEntrega, txtUltimaNota;
     private JComboBox<Modelo.Asesor> cbAsesor;
     private JButton btnRegistrarCliente;
+    
+    private JButton btnBuscarCliente;
 
     // === Control de fecha_evento y fecha_entrega por venta
     private JCheckBox chkUsarFechaCliente;
@@ -244,7 +248,13 @@ private String fechaLarga(LocalDate fecha) {
         btnRegistrarCliente = new JButton("Registrar cliente");
         btnRegistrarCliente.setVisible(false);
         btnRegistrarCliente.addActionListener(_e -> abrirFormularioCliente());
+        // Buscar por apellido
+        btnBuscarCliente = new JButton("Buscar por apellido…");
+        btnBuscarCliente.addActionListener(_e -> seleccionarClientePorApellido());
+
+        // Misma fila: registrar + buscar
         addCell(top, c, 0, y, btnRegistrarCliente, 1, false);
+        addCell(top, c, 1, y, btnBuscarCliente, 1, false);
         y++;
 
         // Fila 3: Asesor
@@ -2282,29 +2292,67 @@ java.util.List<String> obsequiosTarjetas = new java.util.ArrayList<>(obsequiosSe
 String obsTarjetas = observacionesTexto;
 LocalDate fechaCompraTarjetas = fechaVenta;
 
+// --- Lógica para decidir qué tarjetas imprimir ---
+// ¿Hay al menos un "vestido"?
+boolean hayVestidoTarjeta = detsPrint.stream()
+        .anyMatch(d -> esArticuloVestido(d.getArticulo()));
+// ¿Hay artículos que NO son vestido?
+boolean hayOtrosTarjeta = detsPrint.stream()
+        .anyMatch(d -> !esArticuloVestido(d.getArticulo()));
+
+final boolean imprimirVestidos = hayVestidoTarjeta;
+final boolean imprimirOtros;
+
+if (hayOtrosTarjeta) {
+    int resp = JOptionPane.showConfirmDialog(
+            this,
+            "Se han vendido artículos que no son vestido.\n" +
+            "¿Deseas imprimir tarjetas para esos artículos?",
+            "Imprimir tarjetas de artículos",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.QUESTION_MESSAGE
+    );
+    imprimirOtros = (resp == JOptionPane.YES_OPTION);
+} else {
+    imprimirOtros = false;
+}
+
+// Runnable compartido para imprimir tarjetas (independiente del ticket)
+Runnable imprimirTarjetasRunnable = () -> {
+    if (!imprimirVestidos && !imprimirOtros) return;
+    imprimirTarjetasVenta(
+            emp,
+            clienteNombre,
+            eventoMostrar,
+            fechaCompraTarjetas,
+            sel.getNombreCompleto(),
+            detsPrint,
+            obsequiosTarjetas,
+            obsTarjetas,
+            folioImpresion,
+            imprimirVestidos,
+            imprimirOtros
+    );
+};
+
 // === 4.2) IMPRIMIR (ticket +/- condiciones, luego tarjetas) ===
 imprimirYConfirmarAsync(
-    printablePrincipal,   // <- aquí ahora va ticket solo o ticket+condiciones
-    () -> {
-        // Primero las tarjetas por artículo
-        imprimirTarjetasVenta(
-                emp,
-                clienteNombre,
-                eventoMostrar,
-                fechaCompraTarjetas,
-                sel.getNombreCompleto(),
-                detsPrint,
-                obsequiosTarjetas,
-                obsTarjetas
-        );
-
-        JOptionPane.showMessageDialog(this,
-                "Venta registrada e impresa.\nNota No: " + numeroNota + "   Folio: " + folioImpresion);
-    },
-    () -> JOptionPane.showMessageDialog(this,
-            "Venta registrada pero la impresión del ticket no se confirmó.\n" +
-            "Puedes reimprimir desde el módulo de notas (Folio: " + folioImpresion + ").",
-            "Aviso", JOptionPane.WARNING_MESSAGE)
+        printablePrincipal,
+        () -> {
+            // Ticket OK → se mandan tarjetas
+            imprimirTarjetasRunnable.run();
+            JOptionPane.showMessageDialog(this,
+                    "Venta registrada.\nNota No: " + numeroNota + "   Folio: " + folioImpresion);
+        },
+        () -> {
+            // Ticket falló o se canceló → AÚN ASÍ mandamos tarjetas
+            imprimirTarjetasRunnable.run();
+            JOptionPane.showMessageDialog(this,
+                    "La venta se registró, pero la impresión del ticket no se completó.\n" +
+                    "Puedes reimprimir el ticket desde el módulo de notas.\n" +
+                    "Folio: " + folioImpresion,
+                    "Aviso", JOptionPane.WARNING_MESSAGE);
+        }
 );
 
 
@@ -2823,7 +2871,7 @@ private Printable construirPrintableEmpresarial(
             if (!fEntrega.isEmpty())
                 yRight = drawWrapped(g2, labelIf("Fecha de entrega: ", fEntrega), x + leftW + gapCols, yRight + 2, rightW);
             if (asesorNombre != null && !asesorNombre.isBlank())
-                yRight = drawWrapped(g2, labelIf("Asesor/a: ", asesorNombre), x + leftW + gapCols, yRight + 2, rightW);
+                yRight = drawWrapped(g2, labelIf("Asesora: ", asesorNombre), x + leftW + gapCols, yRight + 2, rightW);
 
             y = Math.max(yLeft, yRight) + 10;
 
@@ -2878,8 +2926,6 @@ try {
 } catch (Exception ignore) {}
 
             y += 6; g2.drawLine(x, y, x + w, y); y += 16;
-
-
             // TOTAL a la derecha
             g2.setFont(fH1);
             rightAlign(g2, "TOTAL: $" + fmt2(total), x, w, y);
@@ -2947,7 +2993,7 @@ if (obsequiosPrint != null && !obsequiosPrint.isEmpty()) {
     g2.drawLine(x, y, x + w, y); 
     y += 14;
 
-    // ---- Precargar detalles de TODOS los obsequios (igual que ya lo tienes) ----
+    // ---- Precargar detalles de TODOS los obsequios ----
     List<String> codigos = new ArrayList<>();
     for (String raw : obsequiosPrint) {
         if (raw == null) continue;
@@ -3412,6 +3458,7 @@ private static class TarjetaVentaData {
     String color;
     String obsequios;
     String observaciones;
+    String folio;
 }
 
 private static class TarjetasVentaPrinter implements Printable {
@@ -3460,81 +3507,95 @@ private static class TarjetasVentaPrinter implements Printable {
         return PAGE_EXISTS;
     }
 
-    private void dibujarTarjeta(Graphics2D g2, TarjetaVentaData t,
-                                double x, double y, double w, double h) {
+private void dibujarTarjeta(Graphics2D g2, TarjetaVentaData t,
+                            double x, double y, double w, double h) {
 
-        int ix = (int) Math.round(x);
-        int iy = (int) Math.round(y);
-        int iw = (int) Math.round(w);
-        int ih = (int) Math.round(h);
+    int ix = (int) Math.round(x);
+    int iy = (int) Math.round(y);
+    int iw = (int) Math.round(w);
+    int ih = (int) Math.round(h);
 
-        // Marco
-        g2.drawRect(ix, iy, iw, ih);
+    // Marco
+    g2.drawRect(ix, iy, iw, ih);
 
-        int margin = 10;
-        int lineH  = 12;
+    int margin = 10;
+    int lineH  = 12;
 
-        Font base = g2.getFont();
-        Font titleFont = base.deriveFont(Font.BOLD, 12f);
-        Font textFont  = base.deriveFont(10f);
+    Font base = g2.getFont();
+    Font titleFont = base.deriveFont(Font.BOLD, 12f);
+    Font textFont  = base.deriveFont(10f);
 
-        // RAZÓN SOCIAL centrada
-        g2.setFont(titleFont);
-        String rs = safe(t.razonSocial);
-        java.awt.FontMetrics fm = g2.getFontMetrics();
-        int titleX = ix + (iw - fm.stringWidth(rs)) / 2;
-        int yCursor = iy + margin + fm.getAscent();
-        g2.drawString(rs, titleX, yCursor);
+    // ===== ENCABEZADO: Razón social centrada + FOLIO a la derecha =====
+    g2.setFont(titleFont);
+    String rs = safe(t.razonSocial);
+    java.awt.FontMetrics fm = g2.getFontMetrics();
+    int yTitle = iy + margin + fm.getAscent();
 
-        // Resto de texto
-        g2.setFont(textFont);
-        yCursor += lineH * 2;
-        int textX = ix + margin;
+    // Razón social centrada
+    int titleX = ix + (iw - fm.stringWidth(rs)) / 2;
+    g2.drawString(rs, titleX, yTitle);
 
-        g2.drawString("Cliente: " + safe(t.cliente), textX, yCursor);          yCursor += lineH;
-        g2.drawString("Fecha Evento: " + safe(t.fechaEvento), textX, yCursor); yCursor += lineH;
-        g2.drawString("Fecha Compra: " + safe(t.fechaCompra), textX, yCursor); yCursor += lineH;
-        g2.drawString("Asesor: " + safe(t.asesor), textX, yCursor);            yCursor += lineH;
-
-        yCursor += lineH / 2;
-        g2.drawString("Código Artículo: " + safe(t.codigoArticulo), textX, yCursor); yCursor += lineH;
-        g2.drawString("Artículo: " + safe(t.articulo), textX, yCursor);               yCursor += lineH;
-        g2.drawString("Marca: " + safe(t.marca), textX, yCursor);                     yCursor += lineH;
-        g2.drawString("Modelo: " + safe(t.modelo), textX, yCursor);                   yCursor += lineH;
-        g2.drawString("Talla: " + safe(t.talla) + "   Color: " + safe(t.color),
-                      textX, yCursor);
-        yCursor += lineH * 2;
-
-        // Obsequios
-g2.drawString("Obsequios:", textX, yCursor);
-yCursor += lineH;
-String ob = safe(t.obsequios);
-if (!ob.isEmpty()) {
-    String[] lineas = ob.split("\\r?\\n");
-    for (String linea : lineas) {
-        if (linea.trim().isEmpty()) continue;
-        yCursor = drawWrappedSimple(
-                g2,
-                linea.trim(),
-                textX + 10,
-                yCursor,
-                iw - 2 * margin - 10
-        );
-    }
-} else {
-    yCursor += lineH;
-}
-
-
-        // Observaciones
-        yCursor += lineH / 2;
-        g2.drawString("Observaciones:", textX, yCursor);
-        yCursor += lineH;
-        String obs = safe(t.observaciones);
-        if (!obs.isEmpty()) {
-            yCursor = drawWrappedSimple(g2, obs, textX + 10, yCursor, iw - 2 * margin - 10);
+        // Folio arriba derecha
+        String folioStr = safe(t.folio);
+        if (!folioStr.isEmpty()) {
+            String etiqueta = "Folio: " + folioStr;
+            g2.setFont(textFont);
+            java.awt.FontMetrics fmF = g2.getFontMetrics();
+            int folioX = ix + iw - margin - fmF.stringWidth(etiqueta);
+            int folioY = iy + margin + fmF.getAscent();
+            g2.drawString(etiqueta, folioX, folioY);
+            g2.setFont(titleFont);
         }
+
+    // A partir de aquí cuerpo
+    g2.setFont(textFont);
+    fm = g2.getFontMetrics();
+    int yCursor = yTitle + lineH * 2;
+    int textX = ix + margin;
+
+    g2.drawString("Cliente: " + safe(t.cliente), textX, yCursor);          yCursor += lineH;
+    g2.drawString("Fecha Evento: " + safe(t.fechaEvento), textX, yCursor); yCursor += lineH;
+    g2.drawString("Fecha Compra: " + safe(t.fechaCompra), textX, yCursor); yCursor += lineH;
+    g2.drawString("Asesor: " + safe(t.asesor), textX, yCursor);            yCursor += lineH;
+
+    yCursor += lineH / 2;
+    g2.drawString("Código Artículo: " + safe(t.codigoArticulo), textX, yCursor); yCursor += lineH;
+    g2.drawString("Artículo: " + safe(t.articulo), textX, yCursor);               yCursor += lineH;
+    g2.drawString("Marca: " + safe(t.marca), textX, yCursor);                     yCursor += lineH;
+    g2.drawString("Modelo: " + safe(t.modelo), textX, yCursor);                   yCursor += lineH;
+    g2.drawString("Talla: " + safe(t.talla) + "   Color: " + safe(t.color),
+                  textX, yCursor);
+    yCursor += lineH * 2;
+
+    // Obsequios
+    g2.drawString("Obsequios:", textX, yCursor);
+    yCursor += lineH;
+    String ob = safe(t.obsequios);
+    if (!ob.isEmpty()) {
+        String[] lineas = ob.split("\\r?\\n");
+        for (String linea : lineas) {
+            if (linea.trim().isEmpty()) continue;
+            yCursor = drawWrappedSimple(
+                    g2,
+                    linea.trim(),
+                    textX + 10,
+                    yCursor,
+                    iw - 2 * margin - 10
+            );
+        }
+    } else {
+        yCursor += lineH;
     }
+
+    // Observaciones
+    yCursor += lineH / 2;
+    g2.drawString("Observaciones:", textX, yCursor);
+    yCursor += lineH;
+    String obs = safe(t.observaciones);
+    if (!obs.isEmpty()) {
+        yCursor = drawWrappedSimple(g2, obs, textX + 10, yCursor, iw - 2 * margin - 10);
+    }
+}
 
     private static String safe(String s) {
         return (s == null) ? "" : s;
@@ -3574,127 +3635,146 @@ private java.util.List<TarjetaVentaData> construirTarjetasVenta(
         String asesorNombre,
         java.util.List<NotaDetalle> detsPrint,
         java.util.List<String> obsequiosCodigos,
-        String observaciones) {
+        String observaciones,
+        String folio,
+        boolean incluirVestidos,
+        boolean incluirNoVestidos) {
 
     java.util.List<TarjetaVentaData> tarjetas = new java.util.ArrayList<>();
 
+    // Razón social que se verá en la tarjeta
     String razon = (emp.razonSocial != null && !emp.razonSocial.isBlank())
             ? emp.razonSocial
             : (emp.nombreFiscal != null ? emp.nombreFiscal : "");
 
-    String fechaEventoStr = fechaLarga(fechaEvento);
-    String fechaCompraStr = fechaLarga(fechaCompra);
+    String fechaEventoStr = (fechaEvento == null) ? "" : fechaLarga(fechaEvento);
+    String fechaCompraStr = (fechaCompra == null) ? "" : fechaLarga(fechaCompra);
+    String asesor = (asesorNombre == null) ? "" : asesorNombre;
+    String obs = (observaciones == null) ? "" : observaciones.trim();
+    String folioTxt = (folio == null) ? "" : folio.trim();
 
-    // ======================== O B S E Q U I O S ========================
+    // ===== Texto de obsequios (mismo para todas las tarjetas de la venta) =====
     String obsequiosTexto = "";
     if (obsequiosCodigos != null && !obsequiosCodigos.isEmpty()) {
-        // normalizar códigos
-        java.util.List<String> codigos = new java.util.ArrayList<>();
-        for (String raw : obsequiosCodigos) {
-            if (raw == null) continue;
-            String c = raw.trim();
-            if (!c.isEmpty()) codigos.add(c);
+        java.util.List<String> codigosLimpios = new java.util.ArrayList<>();
+        for (String c : obsequiosCodigos) {
+            if (c == null) continue;
+            String cc = c.trim();
+            if (!cc.isEmpty()) codigosLimpios.add(cc);
         }
 
-        if (!codigos.isEmpty()) {
-            java.util.Map<String,String> descPorCodigo = new java.util.HashMap<>();
+        if (!codigosLimpios.isEmpty()) {
+            java.util.Map<String, String> info = new java.util.HashMap<>();
 
             StringBuilder sql = new StringBuilder(
                     "SELECT codigo_articulo, articulo, marca, modelo, talla, color " +
                     "FROM InventarioObsequios WHERE codigo_articulo IN ("
             );
-            for (int i = 0; i < codigos.size(); i++) {
+            for (int i = 0; i < codigosLimpios.size(); i++) {
                 if (i > 0) sql.append(',');
                 sql.append('?');
             }
             sql.append(')');
 
-            try (Connection cn = Conexion.Conecta.getConnection();
-                 PreparedStatement ps = cn.prepareStatement(sql.toString())) {
+            try (java.sql.Connection cn = Conexion.Conecta.getConnection();
+                 java.sql.PreparedStatement ps = cn.prepareStatement(sql.toString())) {
 
-                for (int i = 0; i < codigos.size(); i++) {
-                    ps.setString(i + 1, codigos.get(i));
+                for (int i = 0; i < codigosLimpios.size(); i++) {
+                    ps.setString(i + 1, codigosLimpios.get(i));
                 }
 
-                try (ResultSet rs = ps.executeQuery()) {
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
-                        String c      = rs.getString("codigo_articulo");
+                        String c = rs.getString("codigo_articulo");
                         String nombre = n(rs.getString("articulo"));
                         String marca  = n(rs.getString("marca"));
                         String modelo = n(rs.getString("modelo"));
                         String talla  = n(rs.getString("talla"));
                         String color  = n(rs.getString("color"));
 
-                        StringBuilder desc = new StringBuilder();
-                        if (!nombre.isBlank()) {
-                            desc.append(nombre);
-                        }
+                        String detalle = nombre;
+                        String extra = "";
+                        if (!marca.isBlank())  extra = marca;
+                        if (!modelo.isBlank()) extra = extra.isEmpty() ? modelo : extra + " " + modelo;
+                        if (!talla.isBlank())  extra = extra.isEmpty() ? "Talla " + talla : extra + " T" + talla;
+                        if (!color.isBlank())  extra = extra.isEmpty() ? "Color " + color : extra + " " + color;
 
-                        // Marca / modelo opcional entre paréntesis
-                        String mm = "";
-                        if (!marca.isBlank()) mm = marca;
-                        if (!modelo.isBlank()) {
-                            if (!mm.isEmpty()) mm += " ";
-                            mm += modelo;
-                        }
-                        if (!mm.isEmpty()) {
-                            if (desc.length() > 0) desc.append(" ");
-                            desc.append('(').append(mm).append(')');
-                        }
-
-                        if (!talla.isBlank()) {
-                            if (desc.length() > 0) desc.append(" ");
-                            desc.append("Talla ").append(talla);
-                        }
-                        if (!color.isBlank()) {
-                            if (desc.length() > 0) desc.append(" ");
-                            desc.append("Color ").append(color);
-                        }
-
-                        descPorCodigo.put(c, desc.toString());
+                        if (!extra.isEmpty()) detalle += " (" + extra + ")";
+                        info.put(c, detalle);
                     }
                 }
-            } catch (SQLException ex) {
-                // si truena, al menos se imprimen los códigos solos
+            } catch (Exception ex) {
+                // Si truena la consulta, nos quedamos solo con códigos
             }
 
             StringBuilder sb = new StringBuilder();
-            for (String c : codigos) {
-                if (sb.length() > 0) sb.append('\n');
-                String desc = descPorCodigo.get(c);
-                if (desc == null || desc.isBlank()) {
-                    sb.append(c);
+            for (String cod : codigosLimpios) {
+                if (sb.length() > 0) sb.append("\n");
+                String det = info.get(cod);
+                if (det == null || det.isBlank()) {
+                    sb.append(cod);
                 } else {
-                    sb.append(c).append(" - ").append(desc);
+                    sb.append(cod).append(" - ").append(det);
                 }
             }
             obsequiosTexto = sb.toString();
         }
+
+        // Fallback si algo salió mal
+        if (obsequiosTexto.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (String c : obsequiosCodigos) {
+                if (c == null) continue;
+                String cc = c.trim();
+                if (cc.isEmpty()) continue;
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(cc);
+            }
+            obsequiosTexto = sb.toString();
+        }
     }
-    // ==================== FIN OBSEQUIOS =====================
 
-    String obs = (observaciones == null) ? "" : observaciones;
+    // ===== Lógica por renglón: 2 tarjetas por vestido, 1 por cualquier otro =====
+    if (detsPrint != null) {
+        for (NotaDetalle d : detsPrint) {
+            if (d == null) continue;
 
-    for (NotaDetalle d : detsPrint) {
-        String art = d.getArticulo();
-        int repeticiones = esArticuloVestido(art) ? 2 : 1;   // 2 tarjetas si es Vestido, 1 si no
+            boolean esVestido = esArticuloVestido(d.getArticulo());
+            if (esVestido && !incluirVestidos) {
+                continue; // vestidos desactivados
+            }
+            if (!esVestido && !incluirNoVestidos) {
+                continue; // otros artículos desactivados
+            }
 
-        for (int i = 0; i < repeticiones; i++) {
-            TarjetaVentaData t = new TarjetaVentaData();
-            t.razonSocial    = razon;
-            t.cliente        = clienteNombre == null ? "" : clienteNombre;
-            t.fechaEvento    = fechaEventoStr;
-            t.fechaCompra    = fechaCompraStr;
-            t.asesor         = asesorNombre == null ? "" : asesorNombre;
-            t.codigoArticulo = d.getCodigoArticulo() == null ? "" : d.getCodigoArticulo();
-            t.articulo       = art == null ? "" : art;
-            t.marca          = d.getMarca() == null ? "" : d.getMarca();
-            t.modelo         = d.getModelo() == null ? "" : d.getModelo();
-            t.talla          = d.getTalla() == null ? "" : d.getTalla();
-            t.color          = d.getColor() == null ? "" : d.getColor();
-            t.obsequios      = obsequiosTexto;   // aquí ya va "COD - DESC" por línea
-            t.observaciones  = obs;
-            tarjetas.add(t);
+            // cantidad de tarjetas para este renglón
+            int cantidadTarjetas = esVestido ? 2 : 1;
+
+            String codArt = n(d.getCodigoArticulo());
+            String articulo = n(d.getArticulo());
+            String marca    = n(d.getMarca());
+            String modelo   = n(d.getModelo());
+            String talla    = n(d.getTalla());
+            String color    = n(d.getColor());
+
+            for (int i = 0; i < cantidadTarjetas; i++) {
+                TarjetaVentaData t = new TarjetaVentaData();
+                t.razonSocial    = razon;
+                t.cliente        = n(clienteNombre);
+                t.fechaEvento    = fechaEventoStr;
+                t.fechaCompra    = fechaCompraStr;
+                t.asesor         = asesor;
+                t.codigoArticulo = codArt;
+                t.articulo       = articulo;
+                t.marca          = marca;
+                t.modelo         = modelo;
+                t.talla          = talla;
+                t.color          = color;
+                t.obsequios      = obsequiosTexto;
+                t.observaciones  = obs;
+                t.folio          = folioTxt;    // <<< AQUÍ SE AMARRA EL FOLIO >>>
+                tarjetas.add(t);
+            }
         }
     }
 
@@ -3709,21 +3789,36 @@ private void imprimirTarjetasVenta(
         String asesorNombre,
         java.util.List<NotaDetalle> detsPrint,
         java.util.List<String> obsequiosCodigos,
-        String observaciones) {
+        String observaciones,
+        String folio,
+        boolean incluirVestidos,
+        boolean incluirNoVestidos) {
 
     java.util.List<TarjetaVentaData> tarjetas = construirTarjetasVenta(
-            emp, clienteNombre, fechaEvento, fechaCompra,
-            asesorNombre, detsPrint, obsequiosCodigos, observaciones
+            emp,
+            clienteNombre,
+            fechaEvento,
+            fechaCompra,
+            asesorNombre,
+            detsPrint,
+            obsequiosCodigos,
+            observaciones,
+            folio,
+            incluirVestidos,
+            incluirNoVestidos
     );
 
-    if (tarjetas.isEmpty()) return;
+    if (tarjetas == null || tarjetas.isEmpty()) {
+        return; // nada que imprimir
+    }
 
     try {
         TarjetasVentaPrinter.imprimir(this, tarjetas);
     } catch (PrinterException ex) {
         JOptionPane.showMessageDialog(this,
-                "Las tarjetas no se pudieron imprimir: " + ex.getMessage(),
-                "Impresión de tarjetas", JOptionPane.WARNING_MESSAGE);
+                "La venta se registró, pero no se pudieron imprimir las tarjetas:\n" + ex.getMessage(),
+                "Impresión de tarjetas",
+                JOptionPane.WARNING_MESSAGE);
     }
 }
 // ================== REIMPRESIÓN DE VENTA CRÉDITO ==================
@@ -3967,7 +4062,10 @@ if (!yaTieneModistasEnDetalle) {
                         asesorNombre,
                         detsPrint,
                         obsequiosTarjetas,
-                        obsTarjetas
+                        obsTarjetas,
+                        folioImpresion,
+                        true,
+                        true
                 );
 
                 JOptionPane.showMessageDialog(
@@ -4032,4 +4130,159 @@ private void rellenarDevolucionDesdeBD(Nota nota, PagoFormas p) {
         ex.printStackTrace();
     }
 }
+private void seleccionarClientePorApellido() {
+    Window owner = SwingUtilities.getWindowAncestor(this);
+    DialogBusquedaCliente dlg = new DialogBusquedaCliente(owner);
+    dlg.setLocationRelativeTo(this);
+    dlg.setVisible(true);
+
+    ClienteResumen cr = dlg.getSeleccionado();
+    if (cr != null) {
+        // Tel principal del cliente
+        String tel = Utilidades.TelefonosUI.soloDigitos(cr.getTelefono1());
+        if (tel != null && !tel.isEmpty()) {
+            // Forzar a que se recargue aunque sea el mismo teléfono
+            lastTelefonoConsultado = null;
+            txtTelefono.setText(tel);
+            // El DocumentListener ya llama a cargarCliente(), pero por si acaso:
+            cargarCliente();
+        }
+    }
+}
+private static class DialogBusquedaCliente extends JDialog {
+
+    private JTextField txtApellido;
+    private JTable tabla;
+    private DefaultTableModel modelo;
+    private java.util.List<ClienteResumen> resultados = new ArrayList<>();
+    private ClienteResumen seleccionado;
+
+    public DialogBusquedaCliente(Window owner) {
+        super(owner, "Buscar cliente por apellido", ModalityType.APPLICATION_MODAL);
+        construirUI();
+    }
+
+    private void construirUI() {
+        JPanel main = new JPanel(new BorderLayout(8, 8));
+        main.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Filtro
+        JPanel pnlFiltro = new JPanel(new BorderLayout(5, 0));
+        pnlFiltro.add(new JLabel("Apellidos:"), BorderLayout.WEST);
+        txtApellido = new JTextField();
+        pnlFiltro.add(txtApellido, BorderLayout.CENTER);
+
+        JButton btnBuscar = new JButton("Buscar");
+        pnlFiltro.add(btnBuscar, BorderLayout.EAST);
+
+        main.add(pnlFiltro, BorderLayout.NORTH);
+
+        // Tabla
+        modelo = new DefaultTableModel(
+                new Object[]{"Nombre completo", "Teléfono", "Teléfono 2", "Evento", "Prueba 1", "Prueba 2", "Entrega"},
+                0
+        ) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
+        tabla = new JTable(modelo);
+        tabla.setRowHeight(22);
+        tabla.setAutoCreateRowSorter(true);
+
+        main.add(new JScrollPane(tabla), BorderLayout.CENTER);
+
+        // Botones abajo
+        JPanel pnlBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnSeleccionar = new JButton("Seleccionar");
+        JButton btnCerrar = new JButton("Cerrar");
+        pnlBotones.add(btnCerrar);
+        pnlBotones.add(btnSeleccionar);
+
+        main.add(pnlBotones, BorderLayout.SOUTH);
+
+        setContentPane(main);
+        setSize(800, 400);
+        setLocationRelativeTo(getOwner());
+
+        // Eventos
+        btnBuscar.addActionListener(_e -> buscar());
+        btnSeleccionar.addActionListener(_e -> seleccionarActual());
+        btnCerrar.addActionListener(_e -> dispose());
+
+        // Doble clic en la tabla
+        tabla.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && tabla.getSelectedRow() >= 0) {
+                    seleccionarActual();
+                }
+            }
+        });
+
+        // Enter en el campo de apellido = buscar
+        txtApellido.addActionListener(_e -> buscar());
+    }
+
+    private void buscar() {
+        String filtro = txtApellido.getText().trim();
+        if (filtro.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Escribe al menos una parte de los apellidos.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            clienteDAO dao = new clienteDAO();
+            resultados = dao.buscarOpcionesPorApellidoPaterno(filtro);  // <-- método que agregamos al DAO
+            modelo.setRowCount(0);
+
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+            for (ClienteResumen cr : resultados) {
+                modelo.addRow(new Object[]{
+                        cr.getNombreCompleto(),
+                        cr.getTelefono1(),
+                        cr.getTelefono2(),
+                        cr.getFechaEvento()   == null ? "" : cr.getFechaEvento().format(fmt),
+                        cr.getFechaPrueba1()  == null ? "" : cr.getFechaPrueba1().format(fmt),
+                        cr.getFechaPrueba2()  == null ? "" : cr.getFechaPrueba2().format(fmt),
+                        cr.getFechaEntrega()  == null ? "" : cr.getFechaEntrega().format(fmt)
+                });
+            }
+
+            if (resultados.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "No se encontraron clientes con esos apellidos.",
+                        "Buscar cliente", JOptionPane.INFORMATION_MESSAGE);
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al buscar clientes: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void seleccionarActual() {
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Selecciona un cliente de la tabla.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int modelRow = tabla.convertRowIndexToModel(row);
+        seleccionado = resultados.get(modelRow);
+        dispose();
+    }
+
+    public ClienteResumen getSeleccionado() {
+        return seleccionado;
+    }
+}
+
 }

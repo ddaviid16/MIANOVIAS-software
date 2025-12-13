@@ -7,10 +7,8 @@ import java.awt.Component;
 import java.awt.Dialog;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.Cursor;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import javax.swing.KeyStroke;
 
 
 import java.awt.Frame;
@@ -104,6 +102,7 @@ public class VentaCreditoPanel extends JPanel {
     private JTextField txtFechaEvento, txtFechaPrueba1, txtFechaPrueba2, txtFechaEntrega, txtUltimaNota;
     private JComboBox<Modelo.Asesor> cbAsesor;
     private JButton btnRegistrarCliente;
+    private JButton btnBuscarCliente;
 
     private JButton btnCondiciones;
     private JButton btnObservaciones;
@@ -232,7 +231,13 @@ private String fechaLarga(LocalDate fecha) {
         btnRegistrarCliente = new JButton("Registrar cliente");
         btnRegistrarCliente.setVisible(false);
         btnRegistrarCliente.addActionListener(_e -> abrirFormularioCliente());
+        // Buscar por apellido
+        btnBuscarCliente = new JButton("Buscar por apellido…");
+        btnBuscarCliente.addActionListener(_e -> seleccionarClientePorApellido());
+
+        // Misma fila: registrar + buscar
         addCell(top, c, 0, y, btnRegistrarCliente, 1, false);
+        addCell(top, c, 1, y, btnBuscarCliente, 1, false);
         y++;
 
         // Asesor
@@ -1526,7 +1531,8 @@ LocalDate fechaCompraTarjetas = fechaVenta;
                     sel.getNombreCompleto(),
                     detsPrint,
                     obsequiosTarjetas,
-                    obsTarjetas
+                    obsTarjetas,
+                    folioImpresion
             );
 
             // Y luego el mensaje de éxito, SIN otra lambda
@@ -2473,7 +2479,7 @@ private Printable construirPrintableEmpresarial(
             if (!fEntrega.isEmpty())
                 yRight = drawWrapped(g2, labelIf("Fecha de entrega: ", fEntrega), x + leftW + gapCols, yRight + 2, rightW);
             if (asesorNombre != null && !asesorNombre.isBlank())
-                yRight = drawWrapped(g2, labelIf("Asesor/a: ", asesorNombre), x + leftW + gapCols, yRight + 2, rightW);
+                yRight = drawWrapped(g2, labelIf("Asesora: ", asesorNombre), x + leftW + gapCols, yRight + 2, rightW);
 
             y = Math.max(yLeft, yRight) + 10;
 
@@ -3228,6 +3234,7 @@ private static int drawFieldLine(Graphics2D g2, int x, int y, int w, String labe
 // ===== Tarjetas por artículo (¼ de hoja carta) =====
 private static class TarjetaVentaData {
     String razonSocial;
+    String folio;
     String cliente;
     String fechaEvento;
     String fechaCompra;
@@ -3310,14 +3317,27 @@ private static class TarjetasVentaPrinter implements Printable {
         g2.setFont(titleFont);
         String rs = safe(t.razonSocial);
         java.awt.FontMetrics fm = g2.getFontMetrics();
+        int titleY = iy + margin + fm.getAscent();
         int titleX = ix + (iw - fm.stringWidth(rs)) / 2;
-        int yCursor = iy + margin + fm.getAscent();
-        g2.drawString(rs, titleX, yCursor);
+        g2.drawString(rs, titleX, titleY);
+
+        // Folio arriba derecha
+        String folioStr = safe(t.folio);
+        if (!folioStr.isEmpty()) {
+            String etiqueta = "Folio: " + folioStr;
+            g2.setFont(textFont);
+            java.awt.FontMetrics fmF = g2.getFontMetrics();
+            int folioX = ix + iw - margin - fmF.stringWidth(etiqueta);
+            int folioY = iy + margin + fmF.getAscent();
+            g2.drawString(etiqueta, folioX, folioY);
+            g2.setFont(titleFont);
+        }
 
         // Resto de texto
         g2.setFont(textFont);
-        yCursor += lineH * 2;
+        int yCursor = titleY + lineH * 2;
         int textX = ix + margin;
+
 
         g2.drawString("Cliente: " + safe(t.cliente), textX, yCursor);          yCursor += lineH;
         g2.drawString("Fecha Evento: " + safe(t.fechaEvento), textX, yCursor); yCursor += lineH;
@@ -3391,7 +3411,7 @@ private java.util.List<TarjetaVentaData> construirTarjetasVenta(
         String asesorNombre,
         java.util.List<NotaDetalle> detsPrint,
         java.util.List<String> obsequiosCodigos,
-        String observaciones) {
+        String observaciones, String folio) {
 
     java.util.List<TarjetaVentaData> tarjetas = new java.util.ArrayList<>();
 
@@ -3501,6 +3521,7 @@ private java.util.List<TarjetaVentaData> construirTarjetasVenta(
             TarjetaVentaData t = new TarjetaVentaData();
             t.razonSocial    = razon;
             t.cliente        = clienteNombre == null ? "" : clienteNombre;
+            t.folio          = (folio == null ? "" : folio);  // <- NUEVO
             t.fechaEvento    = fechaEventoStr;
             t.fechaCompra    = fechaCompraStr;
             t.asesor         = asesorNombre == null ? "" : asesorNombre;
@@ -3527,11 +3548,11 @@ private void imprimirTarjetasVenta(
         String asesorNombre,
         java.util.List<NotaDetalle> detsPrint,
         java.util.List<String> obsequiosCodigos,
-        String observaciones) {
+        String observaciones, String folio) {
 
     java.util.List<TarjetaVentaData> tarjetas = construirTarjetasVenta(
             emp, clienteNombre, fechaEvento, fechaCompra,
-            asesorNombre, detsPrint, obsequiosCodigos, observaciones
+            asesorNombre, detsPrint, obsequiosCodigos, observaciones, folio
     );
 
     if (tarjetas.isEmpty()) return;
@@ -3565,6 +3586,9 @@ public static void reimprimirNotaCreditoDesdeDatos(
     VentaCreditoPanel dummy = new VentaCreditoPanel();
 
     LocalDate fechaVenta = null;
+String folioTxt = (nota.getFolio() == null || nota.getFolio().isBlank())
+        ? "—"
+        : nota.getFolio();
 
 // 1) Preferir la fecha de la nota (fecha de venta real)
 // Usa aquí el/los getters reales que tengas en tu clase Nota
@@ -3785,7 +3809,8 @@ if (!yaTieneModistasEnDetalle) {
                         asesorNombre,
                         detsPrint,
                         obsequiosTarjetas,
-                        obsTarjetas
+                        obsTarjetas,
+                        folioTxt
                 );
 
                 JOptionPane.showMessageDialog(
@@ -3848,6 +3873,160 @@ private void rellenarDevolucionDesdeBD(Nota nota, PagoFormas p) {
     } catch (SQLException ex) {
         // No revientes la reimpresión por esto, sólo log
         ex.printStackTrace();
+    }
+}
+private void seleccionarClientePorApellido() {
+    Window owner = SwingUtilities.getWindowAncestor(this);
+    DialogBusquedaCliente dlg = new DialogBusquedaCliente(owner);
+    dlg.setLocationRelativeTo(this);
+    dlg.setVisible(true);
+
+    ClienteResumen cr = dlg.getSeleccionado();
+    if (cr != null) {
+        // Tel principal del cliente
+        String tel = Utilidades.TelefonosUI.soloDigitos(cr.getTelefono1());
+        if (tel != null && !tel.isEmpty()) {
+            // Forzar a que se recargue aunque sea el mismo teléfono
+            lastTelefonoConsultado = null;
+            txtTelefono.setText(tel);
+            // El DocumentListener ya llama a cargarCliente(), pero por si acaso:
+            cargarCliente();
+        }
+    }
+}
+private static class DialogBusquedaCliente extends JDialog {
+
+    private JTextField txtApellido;
+    private JTable tabla;
+    private DefaultTableModel modelo;
+    private java.util.List<ClienteResumen> resultados = new ArrayList<>();
+    private ClienteResumen seleccionado;
+
+    public DialogBusquedaCliente(Window owner) {
+        super(owner, "Buscar cliente por apellido", ModalityType.APPLICATION_MODAL);
+        construirUI();
+    }
+
+    private void construirUI() {
+        JPanel main = new JPanel(new BorderLayout(8, 8));
+        main.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Filtro
+        JPanel pnlFiltro = new JPanel(new BorderLayout(5, 0));
+        pnlFiltro.add(new JLabel("Apellidos:"), BorderLayout.WEST);
+        txtApellido = new JTextField();
+        pnlFiltro.add(txtApellido, BorderLayout.CENTER);
+
+        JButton btnBuscar = new JButton("Buscar");
+        pnlFiltro.add(btnBuscar, BorderLayout.EAST);
+
+        main.add(pnlFiltro, BorderLayout.NORTH);
+
+        // Tabla
+        modelo = new DefaultTableModel(
+                new Object[]{"Nombre completo", "Teléfono", "Teléfono 2", "Evento", "Prueba 1", "Prueba 2", "Entrega"},
+                0
+        ) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
+        tabla = new JTable(modelo);
+        tabla.setRowHeight(22);
+        tabla.setAutoCreateRowSorter(true);
+
+        main.add(new JScrollPane(tabla), BorderLayout.CENTER);
+
+        // Botones abajo
+        JPanel pnlBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnSeleccionar = new JButton("Seleccionar");
+        JButton btnCerrar = new JButton("Cerrar");
+        pnlBotones.add(btnCerrar);
+        pnlBotones.add(btnSeleccionar);
+
+        main.add(pnlBotones, BorderLayout.SOUTH);
+
+        setContentPane(main);
+        setSize(800, 400);
+        setLocationRelativeTo(getOwner());
+
+        // Eventos
+        btnBuscar.addActionListener(_e -> buscar());
+        btnSeleccionar.addActionListener(_e -> seleccionarActual());
+        btnCerrar.addActionListener(_e -> dispose());
+
+        // Doble clic en la tabla
+        tabla.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && tabla.getSelectedRow() >= 0) {
+                    seleccionarActual();
+                }
+            }
+        });
+
+        // Enter en el campo de apellido = buscar
+        txtApellido.addActionListener(_e -> buscar());
+    }
+
+    private void buscar() {
+        String filtro = txtApellido.getText().trim();
+        if (filtro.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Escribe al menos una parte de los apellidos.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            clienteDAO dao = new clienteDAO();
+            resultados = dao.buscarOpcionesPorApellidoPaterno(filtro);  // <-- método que agregamos al DAO
+            modelo.setRowCount(0);
+
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+            for (ClienteResumen cr : resultados) {
+                modelo.addRow(new Object[]{
+                        cr.getNombreCompleto(),
+                        cr.getTelefono1(),
+                        cr.getTelefono2(),
+                        cr.getFechaEvento()   == null ? "" : cr.getFechaEvento().format(fmt),
+                        cr.getFechaPrueba1()  == null ? "" : cr.getFechaPrueba1().format(fmt),
+                        cr.getFechaPrueba2()  == null ? "" : cr.getFechaPrueba2().format(fmt),
+                        cr.getFechaEntrega()  == null ? "" : cr.getFechaEntrega().format(fmt)
+                });
+            }
+
+            if (resultados.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "No se encontraron clientes con esos apellidos.",
+                        "Buscar cliente", JOptionPane.INFORMATION_MESSAGE);
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al buscar clientes: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void seleccionarActual() {
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Selecciona un cliente de la tabla.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int modelRow = tabla.convertRowIndexToModel(row);
+        seleccionado = resultados.get(modelRow);
+        dispose();
+    }
+
+    public ClienteResumen getSeleccionado() {
+        return seleccionado;
     }
 }
 

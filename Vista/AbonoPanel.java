@@ -1,5 +1,15 @@
 package Vista;
 
+import java.awt.FlowLayout;
+import java.awt.Window;
+
+import javax.swing.JTable;
+import javax.swing.table.DefaultTableModel;
+
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -25,6 +35,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import javax.imageio.ImageIO;
@@ -104,6 +115,12 @@ public class AbonoPanel extends JPanel {
         addCell(top,c,1,y,txtTelefono,1,true);
         addCell(top,c,2,y,new JLabel("Nombre:"),1,false);
         addCell(top,c,3,y,txtNombre,1,false); 
+        y++;
+        
+        // Botón para abrir el diálogo de búsqueda de clientes
+        JButton btBuscarCliente = new JButton("Buscar por apellido");
+        btBuscarCliente.addActionListener(_e -> seleccionarClientePorApellido());
+        addCell(top, c, 2, y, btBuscarCliente, 1, false);
         y++;
 
         // recarga automática al escribir o perder el foco
@@ -330,16 +347,23 @@ private void guardarAbono() {
         p.setReferenciaDV(dvSel.folio);
     }
 
-    AbonoService svc = new AbonoService();
-    try (Connection cn = Conexion.Conecta.getConnection()) {
-        cn.setAutoCommit(false);
-        AbonoService.ResultadoAbono res = svc.registrarAbono(cn, sel.getNumeroNota(), p);
+AbonoService svc = new AbonoService();
+try (Connection cn = Conexion.Conecta.getConnection()) {
+    cn.setAutoCommit(false);
+    AbonoService.ResultadoAbono res = svc.registrarAbono(cn, sel.getNumeroNota(), p);
 
-        EmpresaInfo emp = cargarEmpresaInfo();
-        List<NotaDetalle> dets = new NotasDAO().listarDetalleDeNota(sel.getNumeroNota());
-        String folioPrint = (res.folio == null || res.folio.isBlank()) ? "—" : res.folio;
+    EmpresaInfo emp = cargarEmpresaInfo();
+    List<NotaDetalle> dets = new NotasDAO().listarDetalleDeNota(sel.getNumeroNota());
+    String folioPrint = (res.folio == null || res.folio.isBlank()) ? "—" : res.folio;
 
-                Printable prn = construirPrintableAbono(emp, sel, dets, p, abono, res.saldoNuevo, folioPrint, cajeraCodigo, cajeraNombre);
+    // saldo = saldo ANTERIOR al abono (lo definiste arriba)
+    Printable prn = construirPrintableAbono(
+            emp, sel, dets, p,
+            abono,
+            saldo,         // ← saldo anterior
+            res.saldoNuevo,
+            folioPrint, cajeraCodigo, cajeraNombre);
+
 
         if (Math.abs(res.saldoNuevo) <= 0.005) {
             // --- LIQUIDADO ---
@@ -373,7 +397,9 @@ private void guardarAbono() {
         }
 
         cn.commit();
-        cargarClienteYNotas();
+        // Después de registrar e imprimir el abono, dejamos la UI lista para el siguiente cliente
+        limpiar();
+
 
     } catch (Exception ex) {
         try (Connection c2 = Conexion.Conecta.getConnection()) {
@@ -607,12 +633,33 @@ private String safeDate(java.sql.Date d) {
     return d.toLocalDate().format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
 }
 
+// Fecha larga con mes en español, estilo "12 de diciembre de 2025"
+private static final Locale LOCALE_ES_MX = Locale.of("es", "MX");
+    private static final DateTimeFormatter MX_LARGO =
+        DateTimeFormatter.ofPattern("dd-MMMM-yyyy", LOCALE_ES_MX);
+private String fechaLarga(LocalDate f) {
+    if (f == null) return "";
+    return f.format(MX_LARGO);
+}
 
 // AGREGA TODOS ESTOS MÉTODOS DE AYUDA (helpers)
 private static void centerText(Graphics2D g2, String text, int x, int w, int y) {
     java.awt.FontMetrics fm = g2.getFontMetrics();
     int cx = x + (w - fm.stringWidth(text)) / 2;
     g2.drawString(text, cx, y);
+}
+/** Formatea teléfono para impresión tipo 123-456-7890 */
+private String formatearTelefonoImpresion(String tel) {
+    if (tel == null) return "";
+    String dig = tel.replaceAll("\\D+", "");
+    if (dig.isEmpty()) return "";
+    if (dig.length() == 10) {
+        return dig.substring(0, 3) + "-" + dig.substring(3, 6) + "-" + dig.substring(6);
+    } else if (dig.length() == 7) {
+        return dig.substring(0, 3) + "-" + dig.substring(3);
+    }
+    // Si no coincide con longitudes típicas, regresamos los dígitos "pelones"
+    return dig;
 }
 
 private static int drawWrappedSimple(Graphics2D g2, String text, int x, int y, int maxWidth) {
@@ -1094,17 +1141,21 @@ private Printable construirPrintableAbono(
         EmpresaInfo emp,
         Nota notaBase,                 // contiene total/saldo/telefono/numero
         List<NotaDetalle> dets,        // detalle de artículos vendidos
-        PagoFormas p,              // lo que se abonó por forma
+        PagoFormas p,                  // lo que se abonó por forma
         double abonoRealizado,         // suma de pagos capturados
+        double saldoAnterior,          // saldo antes del abono
         double saldoRestante,          // nuevo saldo después del abono
         String folioTxt,
-        int cajeraCodigo, 
+        int cajeraCodigo,
         String cajeraNombre) {
 
-    final DateTimeFormatter MX = DateTimeFormatter.ofPattern("dd-MM-yyyy");
-    final String tel1     = (notaBase.getTelefono() == null) ? "" : notaBase.getTelefono();
-    final String fechaHoy = LocalDate.now().format(MX);
-    final double total    = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal();
+    // Teléfono tal como viene en la nota
+    final String tel1Raw    = (notaBase.getTelefono() == null) ? "" : notaBase.getTelefono();
+    // Teléfono formateado para impresión (123-456-7890)
+    final String fTel1Print = formatearTelefonoImpresion(tel1Raw);
+    // Fecha de abono con mes en español
+    final String fechaHoy   = fechaLarga(LocalDate.now());
+    final double total      = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal();
 
     final double tc = p.getTarjetaCredito()   == null ? 0d : p.getTarjetaCredito();
     final double td = p.getTarjetaDebito()    == null ? 0d : p.getTarjetaDebito();
@@ -1114,26 +1165,37 @@ private Printable construirPrintableAbono(
     final double ef = p.getEfectivo()         == null ? 0d : p.getEfectivo();
 
     // Cliente (nombre/tel2 y pruebas si existen)
-    String cliNombre  = "";
-    String cliTel2    = "";
-    String cliPrueba1 = "", cliPrueba2 = "";
+    String cliNombre      = "";
+    String cliTel2        = "";
+    String cliPrueba1     = "";
+    String cliPrueba2     = "";
+    String cliFechaEvento = "";
+
+    // Buscar resumen del cliente
     try {
         clienteDAO cdao = new clienteDAO();
-        ClienteResumen cr = cdao.buscarResumenPorTelefono(tel1);
+        ClienteResumen cr = cdao.buscarResumenPorTelefono(tel1Raw);
         if (cr != null) {
-            cliNombre  = cr.getNombreCompleto() == null ? "" : cr.getNombreCompleto();
-            cliTel2    = cr.getTelefono2() == null ? "" : cr.getTelefono2();
-            if (cr.getFechaPrueba1()!=null) cliPrueba1 = cr.getFechaPrueba1().format(MX);
-            if (cr.getFechaPrueba2()!=null) cliPrueba2 = cr.getFechaPrueba2().format(MX);
+            cliNombre = (cr.getNombreCompleto() == null) ? "" : cr.getNombreCompleto();
+
+            cliTel2 = (cr.getTelefono2() == null) ? "" : cr.getTelefono2();
+            cliTel2 = formatearTelefonoImpresion(cliTel2);
+
+            if (cr.getFechaEvento()  != null) cliFechaEvento = fechaLarga(cr.getFechaEvento());
+            if (cr.getFechaPrueba1() != null) cliPrueba1     = fechaLarga(cr.getFechaPrueba1());
+            if (cr.getFechaPrueba2() != null) cliPrueba2     = fechaLarga(cr.getFechaPrueba2());
         }
     } catch (Exception ignore) { }
 
+    final String folio           = (folioTxt == null || folioTxt.isBlank()) ? "—" : folioTxt;
+    final String fCajeraCodigo   = (cajeraCodigo == 0 ? "" : String.valueOf(cajeraCodigo).trim());
+    final String fCajeraNombre   = (cajeraNombre == null ? "" : cajeraNombre.trim());
+    final String fCliNombre      = cliNombre;
+    final String fCliTel2        = cliTel2;
+    final String fCliPrueba1     = cliPrueba1;
+    final String fCliPrueba2     = cliPrueba2;
+    final String fCliFechaEvento = cliFechaEvento;
 
-    final String folio = (folioTxt == null || folioTxt.isBlank()) ? "—" : folioTxt;
-    final String fCajeraCodigo = (cajeraCodigo == 0 ? "" : String.valueOf(cajeraCodigo).trim());
-    
-    final String fCajeraNombre = (cajeraNombre == null ? "" : cajeraNombre.trim());
-    final String fCliNombre = cliNombre, fCliTel2 = cliTel2, fCliPrueba1 = cliPrueba1, fCliPrueba2 = cliPrueba2;
 
     return new Printable() {
         @Override public int print(Graphics g, PageFormat pf, int pageIndex) throws PrinterException {
@@ -1180,9 +1242,12 @@ private Printable construirPrintableAbono(
                     (emp.cp == null || emp.cp.isBlank()) ? "" : ("CP " + emp.cp),
                     emp.ciudad, emp.estado);
             yy = drawWrapped(g2, dir, leftTextX, yy + 2, infoTextWidth);
+            String telEmpPrint = formatearTelefonoImpresion(emp.telefono);
+            String waEmpPrint  = formatearTelefonoImpresion(emp.whatsapp);
             yy = drawWrapped(g2, joinNonBlank("   ",
-                    labelIf("Tel: ", emp.telefono),
-                    labelIf("WhatsApp: ", emp.whatsapp)), leftTextX, yy + 2, infoTextWidth);
+            labelIf("Tel: ", telEmpPrint),
+            labelIf("WhatsApp: ", waEmpPrint)), leftTextX, yy + 2, infoTextWidth);
+
             // === CONTACTO EN COLUMNA A LA DERECHA (debajo del folio) ===
             final int rightColW = 120;               // ancho de la columna derecha
             final int xRight    = x + w - rightColW; // X de la columna
@@ -1236,10 +1301,14 @@ private Printable construirPrintableAbono(
             g2.setFont(fText);
             yLeft  = drawWrapped(g2, labelIf("Nombre: ", safe(fCliNombre)), x, yLeft, leftW);
             yLeft  = drawWrapped(g2, joinNonBlank("   ",
-                    labelIf("Teléfono: ", safe(tel1)),
+                    labelIf("Teléfono: ", safe(fTel1Print)),
                     labelIf("Teléfono 2: ", safe(fCliTel2))), x, yLeft + 2, leftW);
 
             yRight = drawWrapped(g2, labelIf("Fecha de abono: ", fechaHoy), x + leftW + gapCols, yRight, rightW);
+            if (!fCliFechaEvento.isBlank()) {
+            yRight = drawWrapped(g2, labelIf("Fecha de evento: ", fCliFechaEvento),
+                                x + leftW + gapCols, yRight + 2, rightW);
+                }
             if (!fCliPrueba1.isBlank())
                 yRight = drawWrapped(g2, labelIf("Fecha de prueba 1: ", fCliPrueba1), x + leftW + gapCols, yRight + 2, rightW);
             if (!fCliPrueba2.isBlank())
@@ -1313,6 +1382,10 @@ try {
             int yInicioTotales = y - 24; // solo hubo una línea (TOTAL)
             drawWrapped(g2, "Abono en letra: " + abonoLetra, x, yInicioTotales, anchoLetras);  // Imprime el abono en letras
             y += 22;
+
+            // Saldo anterior (antes del abono actual)
+            rightAlign(g2, "Saldo anterior: $" + fmt2(saldoAnterior), x, w, y);
+            y += 14;
 
             g2.setFont(fText);
             rightAlign(g2, "Abono: $" + fmt2(abonoRealizado), x, w, y); // <— aquí dice ABONO
@@ -1491,6 +1564,164 @@ private int drawIconLine(Graphics2D g2, BufferedImage icon, String text,
             return y + 12;
         }
     };
+}
+private void seleccionarClientePorApellido() {
+    Window owner = SwingUtilities.getWindowAncestor(this);
+    DialogBusquedaCliente dlg = new DialogBusquedaCliente(owner);
+    dlg.setLocationRelativeTo(this);
+    dlg.setVisible(true);
+
+    ClienteResumen cr = dlg.getSeleccionado();
+    if (cr != null) {
+        // Tel principal del cliente
+        String tel = Utilidades.TelefonosUI.soloDigitos(cr.getTelefono1());
+        if (tel != null && !tel.isEmpty()) {
+            // Forzamos a que se recargue aunque sea el mismo teléfono
+            lastTel = null;
+            txtTelefono.setText(tel);
+            // Nuestro listener ya llama a cargarClienteYNotas,
+            // pero llamamos directo también para asegurarnos.
+            cargarClienteYNotas();
+        }
+    }
+}
+// ===================
+// Diálogo búsqueda cliente por apellido
+// ===================
+private static class DialogBusquedaCliente extends JDialog {
+
+    private JTextField txtApellido;
+    private JTable tabla;
+    private DefaultTableModel modelo;
+    private java.util.List<ClienteResumen> resultados = new java.util.ArrayList<>();
+    private ClienteResumen seleccionado;
+
+    public DialogBusquedaCliente(Window owner) {
+        super(owner, "Buscar cliente por apellido", ModalityType.APPLICATION_MODAL);
+        construirUI();
+    }
+
+    private void construirUI() {
+        JPanel main = new JPanel(new BorderLayout(8, 8));
+        main.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Filtro
+        JPanel pnlFiltro = new JPanel(new BorderLayout(5, 0));
+        pnlFiltro.add(new JLabel("Apellidos:"), BorderLayout.WEST);
+        txtApellido = new JTextField();
+        pnlFiltro.add(txtApellido, BorderLayout.CENTER);
+
+        JButton btnBuscar = new JButton("Buscar");
+        pnlFiltro.add(btnBuscar, BorderLayout.EAST);
+
+        main.add(pnlFiltro, BorderLayout.NORTH);
+
+        // Tabla
+        modelo = new DefaultTableModel(
+                new Object[]{"Nombre completo", "Teléfono", "Teléfono 2", "Evento", "Prueba 1", "Prueba 2", "Entrega"},
+                0
+        ) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
+        tabla = new JTable(modelo);
+        tabla.setRowHeight(22);
+        tabla.setAutoCreateRowSorter(true);
+
+        main.add(new JScrollPane(tabla), BorderLayout.CENTER);
+
+        // Botones abajo
+        JPanel pnlBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnSeleccionar = new JButton("Seleccionar");
+        JButton btnCerrar = new JButton("Cerrar");
+        pnlBotones.add(btnCerrar);
+        pnlBotones.add(btnSeleccionar);
+
+        main.add(pnlBotones, BorderLayout.SOUTH);
+
+        setContentPane(main);
+        setSize(800, 400);
+        setLocationRelativeTo(getOwner());
+
+        // Eventos
+        btnBuscar.addActionListener(_e -> buscar());
+        btnSeleccionar.addActionListener(_e -> seleccionarActual());
+        btnCerrar.addActionListener(_e -> dispose());
+
+        // Doble clic en la tabla
+        tabla.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && tabla.getSelectedRow() >= 0) {
+                    seleccionarActual();
+                }
+            }
+        });
+
+        // Enter en el campo de apellido = buscar
+        txtApellido.addActionListener(_e -> buscar());
+    }
+
+    private void buscar() {
+        String filtro = txtApellido.getText().trim();
+        if (filtro.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Escribe al menos una parte de los apellidos.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            clienteDAO dao = new clienteDAO();
+            resultados = dao.buscarOpcionesPorApellidoPaterno(filtro);  // método que ya usas en ventas
+            modelo.setRowCount(0);
+
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+            for (ClienteResumen cr : resultados) {
+                modelo.addRow(new Object[]{
+                        cr.getNombreCompleto(),
+                        cr.getTelefono1(),
+                        cr.getTelefono2(),
+                        cr.getFechaEvento()   == null ? "" : cr.getFechaEvento().format(fmt),
+                        cr.getFechaPrueba1()  == null ? "" : cr.getFechaPrueba1().format(fmt),
+                        cr.getFechaPrueba2()  == null ? "" : cr.getFechaPrueba2().format(fmt),
+                        cr.getFechaEntrega()  == null ? "" : cr.getFechaEntrega().format(fmt)
+                });
+            }
+
+            if (resultados.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "No se encontraron clientes con esos apellidos.",
+                        "Buscar cliente", JOptionPane.INFORMATION_MESSAGE);
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al buscar clientes: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void seleccionarActual() {
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Selecciona un cliente de la tabla.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int modelRow = tabla.convertRowIndexToModel(row);
+        seleccionado = resultados.get(modelRow);
+        dispose();
+    }
+
+    public ClienteResumen getSeleccionado() {
+        return seleccionado;
+    }
 }
 
 }

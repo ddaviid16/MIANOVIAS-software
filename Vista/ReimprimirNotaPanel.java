@@ -27,7 +27,6 @@ import javax.swing.table.TableRowSorter;
     import java.time.LocalDate;
     import java.util.ArrayList;
     import java.util.List;
-    import java.util.Locale;
     import java.util.function.BiConsumer;
 
     // === imports de tus modelos/daos usados por las utilidades de impresión ===
@@ -62,11 +61,15 @@ import javax.swing.table.TableRowSorter;
         this.cajeraCodigo = codigoEmpleado;
         this.cajeraNombre = nombreCompleto;
     }
-        private static final Locale LOCALE_ES_MX = Locale.of("es", "MX");
-    // Formato de fecha con mes en letras, estilo "04-Diciembre-2025"
-    private static final java.time.format.DateTimeFormatter MX_DATE =
-            java.time.format.DateTimeFormatter.ofPattern("dd-MMMM-yyyy", LOCALE_ES_MX);
+// Fecha larga con mes en español, estilo "12-diciembre-2025"
+private static final java.util.Locale LOCALE_ES_MX = java.util.Locale.of("es", "MX");
+private static final java.time.format.DateTimeFormatter MX_LARGO =
+        java.time.format.DateTimeFormatter.ofPattern("dd-MMMM-yyyy", LOCALE_ES_MX);
 
+private String fechaLarga(java.time.LocalDate f) {
+    if (f == null) return "";
+    return f.format(MX_LARGO);
+}
     /** Formatea teléfonos a 123-456-7890 si tienen 10 dígitos; si no, los deja como vienen. */
     private static String formatTelefono10(String valor) {
         if (valor == null) return "";
@@ -80,7 +83,7 @@ import javax.swing.table.TableRowSorter;
     /** dd-MMMM-yyyy con mes capitalizado: 05-Diciembre-2025 */
     private static String formatFechaLarga(LocalDate fecha) {
         if (fecha == null) return "";
-        String base = MX_DATE.format(fecha);   // ej. "05-diciembre-2025"
+        String base = MX_LARGO.format(fecha);   // ej. "05-diciembre-2025"
         String[] parts = base.split("-");
         if (parts.length < 3) {
             return base;
@@ -95,6 +98,8 @@ import javax.swing.table.TableRowSorter;
 
         private final JTextField txtTelefono = new JTextField();
         private final JButton btBuscar = new JButton("Buscar");
+
+        private final JButton btBuscarApellido = new JButton("Buscar por apellido");
 
        // Tabla de cabecera (notas)
         private final DefaultTableModel modelNotas = new DefaultTableModel(
@@ -143,17 +148,32 @@ import javax.swing.table.TableRowSorter;
             setLayout(new BorderLayout(8, 8));
             setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
             TelefonosUI.instalar(txtTelefono, 10);
+
             // Filtro superior
             JPanel filtro = new JPanel(new GridBagLayout());
             GridBagConstraints c = new GridBagConstraints();
             c.insets = new Insets(4,4,4,4);
             c.fill = GridBagConstraints.HORIZONTAL;
+
+            // Etiqueta "Teléfono:"
             c.weightx = 0;
+            c.gridx = 0;
             filtro.add(new JLabel("Teléfono:"), c);
-            c.weightx = 1; c.gridx = 1;
+
+            // Campo de teléfono
+            c.weightx = 1;
+            c.gridx = 1;
             filtro.add(txtTelefono, c);
-            c.weightx = 0; c.gridx = 2;
+
+            // Botón Buscar (por teléfono)
+            c.weightx = 0;
+            c.gridx = 2;
             filtro.add(btBuscar, c);
+
+            // Botón Buscar por apellido
+            c.gridx = 3;
+            filtro.add(btBuscarApellido, c);
+
             add(filtro, BorderLayout.NORTH);
 
             // Master/Detail
@@ -183,6 +203,7 @@ import javax.swing.table.TableRowSorter;
 
         private void hookEvents() {
             btBuscar.addActionListener(_e -> cargarNotas());
+            btBuscarApellido.addActionListener(_e -> seleccionarClientePorApellido());
             txtTelefono.addActionListener(_e -> cargarNotas());
 
             tbNotas.getSelectionModel().addListSelectionListener(_e -> {
@@ -838,7 +859,11 @@ private void cargarNotas() {
                 } else {
                     saldoPosterior = saldoAbono;
                 }
-
+                double saldoAnterior = saldoPosterior + abonoReal;
+                // opcional: por seguridad, que no pase del total de la venta
+                if (nota.getTotal() != null && saldoAnterior > nota.getTotal() + 0.01) {
+                saldoAnterior = nota.getTotal();
+            }
                 PagoFormas pagosAbono =
                         cargarPagoFormasDesdeDAO(numeroNota, abonoReal, saldoPosterior, "ABONO");
 
@@ -849,6 +874,7 @@ private void cargarNotas() {
                         pagosAbono,
                         abonoReal,
                         saldoPosterior,
+                        saldoAnterior,
                         folio,
                         observacionesOriginal,
                         fechaNota,
@@ -1668,7 +1694,7 @@ private NotaHead leerNotaHead(int numeroNota) {
                     if (!fEntrega.isEmpty())
                         yRight2 = drawWrapped(g2, labelIf("Fecha de entrega: ", fEntrega), x + leftW + gapCols, yRight2 + 2, rightW);
                     if (asesorNombre != null && !asesorNombre.isBlank())
-                        yRight2 = drawWrapped(g2, labelIf("Asesor/a: ", asesorNombre), x + leftW + gapCols, yRight2 + 2, rightW);
+                        yRight2 = drawWrapped(g2, labelIf("Asesora: ", asesorNombre), x + leftW + gapCols, yRight2 + 2, rightW);
 
                     y = Math.max(yLeft, yRight2) + 10;
 
@@ -2465,7 +2491,7 @@ private NotaHead leerNotaHead(int numeroNota) {
                     if (!fEntrega.isEmpty())
                         yRight2 = drawWrapped(g2, labelIf("Fecha de entrega: ", fEntrega), x + leftW + gapCols, yRight2 + 2, rightW);
                     if (asesorNombre != null && !asesorNombre.isBlank())
-                        yRight2 = drawWrapped(g2, labelIf("Asesor/a: ", asesorNombre), x + leftW + gapCols, yRight2 + 2, rightW);
+                        yRight2 = drawWrapped(g2, labelIf("Asesora: ", asesorNombre), x + leftW + gapCols, yRight2 + 2, rightW);
 
                     y = Math.max(yLeft, yRight2) + 10;
 
@@ -2912,15 +2938,21 @@ private NotaHead leerNotaHead(int numeroNota) {
                 Modelo.PagoFormas pagos,               // lo que se abonó por forma
                 double abonoRealizado,                 // suma de pagos capturados
                 double saldoRestante,                  // nuevo saldo después del abono
+                double saldoAnterior,                  // saldo antes del abono
                 String folioTxt, String observacionesTexto, java.time.LocalDate fechaNotaAbono, int cajeraCodigo, String cajeraNombre) {
 
-            final java.time.format.DateTimeFormatter MX = java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy");
-            final String tel1     = (notaBase.getTelefono() == null) ? "" : notaBase.getTelefono();
-            final String fechaAbonoStr =
-            (fechaNotaAbono != null) ? fechaNotaAbono.format(MX)
-                                    : java.time.LocalDate.now().format(MX);
+            // Teléfono crudo de la nota
+final String tel1Raw  = (notaBase.getTelefono() == null) ? "" : notaBase.getTelefono();
+// Teléfono formateado para impresión
+final String fTel1Print = formatTelefono10(tel1Raw);
 
-            final double total    = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal();
+// Fecha de abono con mes en español
+final String fechaAbonoStr = fechaLarga(
+        (fechaNotaAbono != null) ? fechaNotaAbono : java.time.LocalDate.now()
+);
+
+final double total    = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal();
+
 
             final double tc = pagos.getTarjetaCredito()   == null ? 0d : pagos.getTarjetaCredito();
             final double td = pagos.getTarjetaDebito()    == null ? 0d : pagos.getTarjetaDebito();
@@ -2929,43 +2961,38 @@ private NotaHead leerNotaHead(int numeroNota) {
             final double dp = pagos.getDeposito()         == null ? 0d : pagos.getDeposito();
             final double ef = pagos.getEfectivo()         == null ? 0d : pagos.getEfectivo();
 
-            String cliNombre  = "";
-            String cliTel2    = "";
-            String cliPrueba1 = "", cliPrueba2 = "";
+            String cliNombre      = "";
+            String cliTel2        = "";
+            String cliPrueba1     = "";
+            String cliPrueba2     = "";
+            String cliFechaEvento = "";
+
             try {
                 Controlador.clienteDAO cdao = new Controlador.clienteDAO();
-                Modelo.ClienteResumen cr = cdao.buscarResumenPorTelefono(tel1);
+                Modelo.ClienteResumen cr = cdao.buscarResumenPorTelefono(tel1Raw);
                 if (cr != null) {
-                    cliNombre  = cr.getNombreCompleto() == null ? "" : cr.getNombreCompleto();
-                    cliTel2    = cr.getTelefono2() == null ? "" : cr.getTelefono2();
-                    if (cr.getFechaPrueba1()!=null) cliPrueba1 = cr.getFechaPrueba1().format(MX);
-                    if (cr.getFechaPrueba2()!=null) cliPrueba2 = cr.getFechaPrueba2().format(MX);
+                    cliNombre = (cr.getNombreCompleto() == null) ? "" : cr.getNombreCompleto();
+
+                    cliTel2 = (cr.getTelefono2() == null) ? "" : cr.getTelefono2();
+                    cliTel2 = formatTelefono10(cliTel2);
+
+                    if (cr.getFechaEvento()  != null) cliFechaEvento = fechaLarga(cr.getFechaEvento());
+                    if (cr.getFechaPrueba1() != null) cliPrueba1     = fechaLarga(cr.getFechaPrueba1());
+                    if (cr.getFechaPrueba2() != null) cliPrueba2     = fechaLarga(cr.getFechaPrueba2());
                 }
             } catch (Exception ignore) { }
 
-            String medBusto = "", medCintura = "", medCadera = "";
             try {
                 Controlador.clienteDAO cdao = new Controlador.clienteDAO();
-                java.util.Map<String,String> raw = cdao.detalleGenericoPorTelefono(tel1);
+                java.util.Map<String,String> raw = cdao.detalleGenericoPorTelefono(tel1Raw);
                 if (raw != null) {
-                    for (java.util.Map.Entry<String,String> e : raw.entrySet()) {
-                        String k = e.getKey() == null ? "" : e.getKey().toLowerCase();
-                        String v = e.getValue() == null ? "" : e.getValue();
-                        if (k.equals("busto"))      medBusto   = v;
-                        else if (k.equals("cintura")) medCintura = v;
-                        else if (k.equals("cadera"))  medCadera  = v;
-                    }
                 }
             } catch (Exception ignore) { }
 
-            StringBuilder _med = new StringBuilder();
-            if (!medBusto.isBlank())   { _med.append("Busto: ").append(medBusto); }
-            if (!medCintura.isBlank()){ if (_med.length()>0) _med.append("   "); _med.append("Cintura: ").append(medCintura); }
-            if (!medCadera.isBlank())  { if (_med.length()>0) _med.append("   "); _med.append("Cadera: ").append(medCadera); }
-            final String medidasFmt = _med.toString();
 
             final String folio = (folioTxt == null || folioTxt.isBlank()) ? "—" : folioTxt;
             final String fCliNombre = cliNombre, fCliTel2 = cliTel2, fCliPrueba1 = cliPrueba1, fCliPrueba2 = cliPrueba2;
+            final String fCliFechaEvento = cliFechaEvento;
 
             return new Printable() {
                 @Override public int print(Graphics g, PageFormat pf, int pageIndex) throws PrinterException {
@@ -3009,9 +3036,12 @@ private NotaHead leerNotaHead(int numeroNota) {
                             (emp.cp == null || emp.cp.isBlank()) ? "" : ("CP " + emp.cp),
                             emp.ciudad, emp.estado);
                     yy = drawWrapped(g2, dir, leftTextX, yy + 2, infoTextWidth);
+                    String telEmpPrint = formatTelefono10(emp.telefono);
+                    String waEmpPrint  = formatTelefono10(emp.whatsapp);
                     yy = drawWrapped(g2, joinNonBlank("   ",
-                            labelIf("Tel: ", emp.telefono),
-                            labelIf("WhatsApp: ", emp.whatsapp)), leftTextX, yy + 2, infoTextWidth);
+                            labelIf("Tel: ", telEmpPrint),
+                            labelIf("WhatsApp: ", waEmpPrint)), leftTextX, yy + 2, infoTextWidth);
+
 
                     g2.setFont(fH1);
                     rightAlign(g2, "FOLIO: " + folio, x, w, y + 2);
@@ -3039,7 +3069,7 @@ private NotaHead leerNotaHead(int numeroNota) {
                     int afterTail = y + usedHeader;
 
                     g2.setFont(fTitle);
-                    center(g2, "RECIBO DE ABONO", x, w, afterTail + 14);
+                    center(g2, "NOTA DE ABONO", x, w, afterTail + 14);
                     y = afterTail + 32;
 
                     g2.setFont(fSection);
@@ -3056,13 +3086,13 @@ private NotaHead leerNotaHead(int numeroNota) {
                     g2.setFont(fText);
                     yLeft  = drawWrapped(g2, labelIf("Nombre: ", safe(fCliNombre)), x, yLeft, leftW);
                     yLeft  = drawWrapped(g2, joinNonBlank("   ",
-                            labelIf("Teléfono: ", safe(tel1)),
+                            labelIf("Teléfono: ", safe(fTel1Print)),
                             labelIf("Teléfono 2: ", safe(fCliTel2))), x, yLeft + 2, leftW);
-                    if (!medidasFmt.isBlank()) {
-                        yLeft = drawWrapped(g2, medidasFmt, x, yLeft + 2, leftW);
-                    }
 
                     yRight2 = drawWrapped(g2, labelIf("Fecha de abono: ", fechaAbonoStr), x + leftW + gapCols, yRight2, rightW);
+                    if (!fCliFechaEvento.isBlank())
+                    yRight2 = drawWrapped(g2, labelIf("Fecha de evento: ", fCliFechaEvento), x + leftW + gapCols, yRight2 + 2, rightW);
+
                     if (!fCliPrueba1.isBlank())
                         yRight2 = drawWrapped(g2, labelIf("Fecha de prueba 1: ", fCliPrueba1), x + leftW + gapCols, yRight2 + 2, rightW);
                     if (!fCliPrueba2.isBlank())
@@ -3133,6 +3163,10 @@ private NotaHead leerNotaHead(int numeroNota) {
                     int yInicioTotales = y - 24; // solo hubo una línea (TOTAL)
                     drawWrapped(g2, "Abono en letra: " + abonoLetra, x, yInicioTotales, anchoLetras);  // Imprime el abono en letras
                     y += 22;
+
+                    // Saldo anterior (antes del abono actual)
+                    rightAlign(g2, "Saldo anterior: $" + fmt2(saldoAnterior), x, w, y);
+                    y += 14;
 
                     g2.setFont(fText);
                     rightAlign(g2, "Abono: $" + fmt2(abonoRealizado), x, w, y);
@@ -3900,6 +3934,159 @@ private void ocultarColumnaNumeroNota() {
     col.setMinWidth(0);
     col.setMaxWidth(0);
     col.setPreferredWidth(0);
+}
+private void seleccionarClientePorApellido() {
+    java.awt.Window owner = SwingUtilities.getWindowAncestor(this);
+    DialogBusquedaCliente dlg = new DialogBusquedaCliente(owner);
+    dlg.setLocationRelativeTo(this);
+    dlg.setVisible(true);
+
+    ClienteResumen cr = dlg.getSeleccionado();
+    if (cr != null) {
+        String tel = TelefonosUI.soloDigitos(cr.getTelefono1());
+        if (tel != null && !tel.isEmpty()) {
+            txtTelefono.setText(tel);
+            // aquí recargamos las notas de ese cliente
+            cargarNotas();
+        }
+    }
+}
+/** Diálogo para buscar cliente por apellido y devolver un ClienteResumen. */
+private static class DialogBusquedaCliente extends JDialog {
+
+    private JTextField txtApellido;
+    private JTable tabla;
+    private DefaultTableModel modelo;
+    private java.util.List<ClienteResumen> resultados = new java.util.ArrayList<>();
+    private ClienteResumen seleccionado;
+
+    public DialogBusquedaCliente(java.awt.Window owner) {
+        super(owner, "Buscar cliente por apellido", ModalityType.APPLICATION_MODAL);
+        construirUI();
+    }
+
+    private void construirUI() {
+        JPanel main = new JPanel(new BorderLayout(8, 8));
+        main.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Filtro
+        JPanel pnlFiltro = new JPanel(new BorderLayout(5, 0));
+        pnlFiltro.add(new JLabel("Apellidos:"), BorderLayout.WEST);
+        txtApellido = new JTextField();
+        pnlFiltro.add(txtApellido, BorderLayout.CENTER);
+
+        JButton btnBuscar = new JButton("Buscar");
+        pnlFiltro.add(btnBuscar, BorderLayout.EAST);
+
+        main.add(pnlFiltro, BorderLayout.NORTH);
+
+        // Tabla
+        modelo = new DefaultTableModel(
+                new Object[]{"Nombre completo", "Teléfono", "Teléfono 2", "Evento", "Prueba 1", "Prueba 2", "Entrega"},
+                0
+        ) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
+        tabla = new JTable(modelo);
+        tabla.setRowHeight(22);
+        tabla.setAutoCreateRowSorter(true);
+
+        main.add(new JScrollPane(tabla), BorderLayout.CENTER);
+
+        // Botones abajo
+        JPanel pnlBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnSeleccionar = new JButton("Seleccionar");
+        JButton btnCerrar = new JButton("Cerrar");
+        pnlBotones.add(btnCerrar);
+        pnlBotones.add(btnSeleccionar);
+
+        main.add(pnlBotones, BorderLayout.SOUTH);
+
+        setContentPane(main);
+        setSize(800, 400);
+        setLocationRelativeTo(getOwner());
+
+        // Eventos
+        btnBuscar.addActionListener(_e -> buscar());
+        btnSeleccionar.addActionListener(_e -> seleccionarActual());
+        btnCerrar.addActionListener(_e -> dispose());
+
+        // Doble clic en la tabla
+        tabla.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2 && tabla.getSelectedRow() >= 0) {
+                    seleccionarActual();
+                }
+            }
+        });
+
+        // Enter en el campo de apellido = buscar
+        txtApellido.addActionListener(_e -> buscar());
+    }
+
+    private void buscar() {
+        String filtro = txtApellido.getText().trim();
+        if (filtro.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Escribe al menos una parte de los apellidos.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            Controlador.clienteDAO dao = new Controlador.clienteDAO();
+            resultados = dao.buscarOpcionesPorApellidoPaterno(filtro);  // ya lo tienes en tu DAO
+            modelo.setRowCount(0);
+
+            java.time.format.DateTimeFormatter fmt =
+                    java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+            for (ClienteResumen cr : resultados) {
+                modelo.addRow(new Object[]{
+                        cr.getNombreCompleto(),
+                        cr.getTelefono1(),
+                        cr.getTelefono2(),
+                        cr.getFechaEvento()   == null ? "" : cr.getFechaEvento().format(fmt),
+                        cr.getFechaPrueba1()  == null ? "" : cr.getFechaPrueba1().format(fmt),
+                        cr.getFechaPrueba2()  == null ? "" : cr.getFechaPrueba2().format(fmt),
+                        cr.getFechaEntrega()  == null ? "" : cr.getFechaEntrega().format(fmt)
+                });
+            }
+
+            if (resultados.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "No se encontraron clientes con esos apellidos.",
+                        "Buscar cliente", JOptionPane.INFORMATION_MESSAGE);
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al buscar clientes: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void seleccionarActual() {
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Selecciona un cliente de la tabla.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int modelRow = tabla.convertRowIndexToModel(row);
+        seleccionado = resultados.get(modelRow);
+        dispose();
+    }
+
+    public ClienteResumen getSeleccionado() {
+        return seleccionado;
+    }
 }
 
     }

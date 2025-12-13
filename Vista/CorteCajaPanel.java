@@ -17,6 +17,11 @@ import java.sql.SQLException;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.util.Locale;
+import java.awt.print.PageFormat;
+import java.awt.print.Printable;
+import java.awt.print.PrinterException;
+import java.awt.print.PrinterJob;
+
 
 /** Corte de caja: lee sistema (formas_pago) y permite conteo manual. */
 public class CorteCajaPanel extends JPanel {
@@ -39,6 +44,8 @@ public class CorteCajaPanel extends JPanel {
     private final JTextField sysTransf  = ro();
     private final JTextField sysDepo    = ro();
     private final JTextField sysEfec    = ro();
+    private JScrollPane scrollPrincipal;
+
 
     // Manual (editables)
     private final JFormattedTextField manDebito  = moneyField();
@@ -180,22 +187,29 @@ private void actualizarTextoFecha() {
         content.add(south, BorderLayout.SOUTH);
 
         // Scroll que envuelve todo el contenido
-        JScrollPane scroll = new JScrollPane(
+        scrollPrincipal = new JScrollPane(
                 content,
                 ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
         );
-        scroll.setBorder(null);
-        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPrincipal.setBorder(null);
+        scrollPrincipal.getVerticalScrollBar().setUnitIncrement(16);
 
         // Este es el ÚNICO componente que va en el CENTER del CorteCajaPanel
-        add(scroll, BorderLayout.CENTER);
+        add(scrollPrincipal, BorderLayout.CENTER);
+
 
 
 
         JButton btGuardar = new JButton("Guardar corte");
         btGuardar.addActionListener(_e -> guardar());
         south.add(btGuardar);
+
+        // Botón imprimir
+        JButton btImprimir = new JButton("Imprimir");
+        btImprimir.addActionListener(_e -> imprimir());
+        south.add(btImprimir);
+
 
         // Export CSV button
         JButton btExportar = new JButton("Exportar CSV");
@@ -667,6 +681,71 @@ static class DayPopup extends JPopupMenu {
         pack();
         revalidate();
         repaint();
+    }
+}
+private void imprimir() {
+    // Toma el contenido scrollable (grid + tabla detalle + botones)
+    if (scrollPrincipal == null) {
+        JOptionPane.showMessageDialog(this,
+                "No hay contenido para imprimir.",
+                "Imprimir", JOptionPane.WARNING_MESSAGE);
+        return;
+    }
+
+    // Componente raíz dentro del scroll
+    Component comp = scrollPrincipal.getViewport().getView();
+
+    PrinterJob job = PrinterJob.getPrinterJob();
+    job.setJobName("Corte de caja " + selectedDate);
+
+    job.setPrintable(new Printable() {
+        @Override
+        public int print(Graphics graphics, PageFormat pageFormat, int pageIndex)
+                throws PrinterException {
+
+            if (pageIndex > 0) {
+                return NO_SUCH_PAGE;
+            }
+
+            Graphics2D g2 = (Graphics2D) graphics;
+            // Margen de impresión
+            g2.translate(pageFormat.getImageableX(), pageFormat.getImageableY());
+
+            // Tamaño del contenido vs área imprimible
+            double pw = pageFormat.getImageableWidth();
+            double ph = pageFormat.getImageableHeight();
+            double cw = comp.getWidth();
+            double ch = comp.getHeight();
+
+            if (cw <= 0 || ch <= 0) {
+                return NO_SUCH_PAGE;
+            }
+
+            double scaleX = pw / cw;
+            double scaleY = ph / ch;
+            double scale = Math.min(scaleX, scaleY);
+
+            // Solo reducir, no hacer más grande
+            if (scale > 1.0) scale = 1.0;
+
+            g2.scale(scale, scale);
+
+            // Imprimir TODO el contenido tal cual se ve
+            comp.printAll(g2);
+
+            return PAGE_EXISTS;
+        }
+    });
+
+    // Diálogo estándar de impresión
+    if (job.printDialog()) {
+        try {
+            job.print();
+        } catch (PrinterException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al imprimir: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 }
 
