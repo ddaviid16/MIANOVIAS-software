@@ -18,7 +18,7 @@ public class FormasPagoDAO {
         public Double deposito;
         public Double devolucion;
         public String referenciaDV;      // texto libre en formas_pago.referencia_dv
-        public String tipoOperacion;     // CN/CR/AB/DV, si lo manejas
+        public String tipoOperacion;
         public String status;            // A/C
         public Timestamp fecha;
     }

@@ -730,7 +730,7 @@ private void imprimir() {
 
             g2.scale(scale, scale);
 
-            // Imprimir TODO el contenido tal cual se ve
+            // Imprimir todo el contenido tal cual se ve
             comp.printAll(g2);
 
             return PAGE_EXISTS;
