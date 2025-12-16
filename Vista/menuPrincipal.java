@@ -156,12 +156,12 @@ public class menuPrincipal extends JFrame {
         JPanel center = new JPanel(new GridLayout(2, 3, 18, 18));
         center.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JButton btReportes   = botonGrande("Reportes");
+        JButton btReportes   = botonGrande("📊 Reportes");
 
-        JButton btEmpresa     = botonGrande("Empresa");
-        JButton btClientes    = botonGrande("Clientes");
-        JButton btInventario  = botonGrande("Inventario");
-        JButton btOperaciones = botonGrande("Operaciones");
+        JButton btEmpresa     = botonGrande("🏣 Empresa");
+        JButton btClientes    = botonGrande("👥 Clientes");
+        JButton btInventario  = botonGrande("📦 Inventario");
+        JButton btOperaciones = botonGrande("⚙️ Operaciones");
 
         btEmpresa.addActionListener(_e   -> showCard(CARD_EMPRESA,   "Empresa"));
         btClientes.addActionListener(_e  -> showCard(CARD_CLIENTES,  "Clientes"));

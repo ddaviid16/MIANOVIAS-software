@@ -969,5 +969,42 @@ public String obtenerNombreAsesor(int idAsesor) throws SQLException {
         }
     }
 }
+    /**
+     * Suma el saldo de todos los créditos activos (tipo 'CR')
+     * de un cliente identificado por teléfono.
+     *
+     * Equivale a:
+     *   SELECT SUM(saldo)
+     *   FROM Notas
+     *   WHERE telefono = ? AND tipo = 'CR' AND status = 'A';
+     */
+    public double obtenerSaldoGlobalCreditosPorTelefono(String telefono) throws SQLException {
+        if (telefono == null || telefono.isBlank()) return 0.0;
+
+        String sql =
+            "SELECT SUM(saldo) AS saldo_global " +
+            "FROM Notas " +
+            "WHERE telefono = ? " +
+            "  AND tipo = 'CR' " +
+            "  AND status = 'A'";
+
+        try (Connection cn = Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+
+            ps.setString(1, telefono);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return 0.0;
+
+                try {
+                    java.math.BigDecimal bd = rs.getBigDecimal("saldo_global");
+                    return (bd == null ? 0.0 : bd.doubleValue());
+                } catch (Throwable t) {
+                    double v = rs.getDouble("saldo_global");
+                    return rs.wasNull() ? 0.0 : v;
+                }
+            }
+        }
+    }
 
     }
