@@ -423,6 +423,7 @@ public List<Modelo.NotaDetalle> listarDetalleDeNota(int numeroNota) throws SQLEx
         "          'A' AS status " +
         "   FROM Pedidos p " +
         "   WHERE p.numero_nota = ? " +
+        "   AND COALESCE(p.status,'A') = 'A' " +
         "   UNION ALL " +
         // 3) MANUFACTURAS ligadas a la nota
         "   SELECT 3 AS ord, m.id_manufactura AS id, NULL AS codigo_articulo, " +

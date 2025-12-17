@@ -105,8 +105,10 @@ public class PedidosDAO {
                 "FROM Pedidos p " +
                 "LEFT JOIN Notas n ON n.numero_nota = p.numero_nota " +
                 "WHERE (UPPER(p.articulo) = 'VESTIDO' OR UPPER(p.articulo) LIKE 'VESTIDO%') " +
+                "  AND COALESCE(p.status,'A') = 'A' " +   // <- SOLO activos
                 "  AND COALESCE(p.fecha_evento, p.fecha_registro, CURRENT_DATE) >= ? " +
                 "  AND COALESCE(p.fecha_evento, p.fecha_registro, CURRENT_DATE) <  ? ";
+
 
             try (PreparedStatement ps = cn.prepareStatement(sqlP)) {
                 ps.setDate(1, Date.valueOf(ini));

@@ -7,7 +7,6 @@ import Utilidades.EventBus;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.text.NumberFormatter;
 import java.awt.*;
 import java.math.BigDecimal;
 import java.sql.SQLException;
@@ -28,7 +27,7 @@ public class PagoGastosPanel extends JPanel {
     }
 
     private final JTextField txtFecha = ro();
-    private final JFormattedTextField txtMonto = moneyField();
+    private final JTextField txtMonto = new JTextField();
     private final JTextField txtMotivo = new JTextField();
     private final JTextField txtEfectivoDia = ro();
 
@@ -226,7 +225,7 @@ addCell(form, c, 2, y, btExportar, 1, false);
             new PagoGastosDAO().registrar(java.time.LocalDateTime.now(), efec, retiro, motivo);
             JOptionPane.showMessageDialog(this, "Retiro registrado correctamente.");
             txtMotivo.setText("");
-            txtMonto.setValue(null);
+            txtMonto.setText("");
             cargarDia(LocalDate.now());
             actualizarDisponibleDeHoy();
 
@@ -275,18 +274,6 @@ addCell(form, c, 2, y, btExportar, 1, false);
         p.add(comp, c); c.gridwidth = 1;
     }
 
-    private static JFormattedTextField moneyField() {
-        NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
-        nf.setMinimumFractionDigits(2);
-        nf.setMaximumFractionDigits(2);
-        NumberFormatter fmt = new NumberFormatter(nf);
-        fmt.setValueClass(Double.class);
-        fmt.setAllowsInvalid(false);
-        fmt.setMinimum(0.00);
-        JFormattedTextField f = new JFormattedTextField(fmt);
-        f.setColumns(12);
-        return f;
-    }
 
     private static BigDecimal parseMoney(JTextField f) {
         try {

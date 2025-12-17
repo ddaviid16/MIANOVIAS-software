@@ -1249,23 +1249,89 @@ private List<PagoLinea> construirPagos(NotasDAO ndao, List<NotasDAO.NotaResumen>
     }
     return out;
 }
-/** Lee las observaciones de una nota específica. */
+/** Lee las observaciones de una nota específica.
+ *  Primero busca en notas_observaciones; si no hay, cae a Notas.observaciones.
+ */
 private String leerObservacionesDeNota(int numeroNota) {
-    final String sql = "SELECT observaciones FROM Notas WHERE numero_nota = ?";
-    try (java.sql.Connection cn = Conexion.Conecta.getConnection();
-         java.sql.PreparedStatement ps = cn.prepareStatement(sql)) {
-        ps.setInt(1, numeroNota);
-        try (java.sql.ResultSet rs = ps.executeQuery()) {
-            if (rs.next()) {
-                String obs = rs.getString(1);
-                if (obs == null) return "";
-                // Normalizar espacios / saltos de línea
-                obs = obs.replaceAll("\\s+", " ").trim();
-                return obs;
+    try (java.sql.Connection cn = Conexion.Conecta.getConnection()) {
+
+        String obs = null;
+
+        // 1) Tabla notas_observaciones (la nueva)
+        final String sql1 = "SELECT observaciones FROM notas_observaciones WHERE numero_nota = ?";
+        try (java.sql.PreparedStatement ps = cn.prepareStatement(sql1)) {
+            ps.setInt(1, numeroNota);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    obs = rs.getString(1);
+                }
             }
         }
+
+        // 2) Si está vacío, intentamos en Notas.observaciones (compatibilidad)
+        if (obs == null || obs.trim().isEmpty()) {
+            final String sql2 = "SELECT observaciones FROM Notas WHERE numero_nota = ?";
+            try (java.sql.PreparedStatement ps = cn.prepareStatement(sql2)) {
+                ps.setInt(1, numeroNota);
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        obs = rs.getString(1);
+                    }
+                }
+            }
+        }
+
+        if (obs == null) return "";
+        // Normalizar espacios / saltos de línea
+        obs = obs.replaceAll("\\s+", " ").trim();
+        return obs;
+
     } catch (Exception ignore) {
-        // Si falla, simplemente no ponemos observación de esa nota
+        // Si falla no reventamos nada, sólo devolvemos vacío
+    }
+    return "";
+}
+/**
+ * Lee, si existe, el registro de saldo migrado del cliente (tabla con
+ * columnas telefono1, saldo_migrado, fecha_saldo, obsequios, observacion)
+ * y lo convierte en un texto para el cuadro de observaciones.
+ */
+private String leerSaldoMigradoObservaciones(String telefono) {
+    if (telefono == null || telefono.isBlank()) return "";
+
+    final String sql =
+        "SELECT obsequios, observacion " +
+        "FROM HistorialCliente " +        // <-- cambia al nombre real de tu tabla
+        "WHERE telefono1 = ? LIMIT 1";
+
+    try (java.sql.Connection cn = Conexion.Conecta.getConnection();
+         java.sql.PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setString(1, telefono);
+        try (java.sql.ResultSet rs = ps.executeQuery()) {
+            if (!rs.next()) return "";
+
+            String obsequios          = rs.getString("obsequios");
+            String observacion        = rs.getString("observacion");
+
+            StringBuilder sb = new StringBuilder();
+
+            if (!isBlank(obsequios)) {
+                if (sb.length() > 0) sb.append("  |  ");
+                sb.append("Obsequios: ")
+                  .append(obsequios.trim());
+            }
+            if (!isBlank(observacion)) {
+                if (sb.length() > 0) sb.append("  |  ");
+                sb.append(observacion.trim());
+            }
+
+            String out = sb.toString().replaceAll("\\s+", " ").trim();
+            return out;
+        }
+
+    } catch (Exception ignore) {
+        // Si truena, simplemente no agregamos este bloque
     }
     return "";
 }
@@ -1374,11 +1440,16 @@ private void imprimirHojaDetalleCliente() {
             fechaEntrega = cr.getFechaEntrega();
             horaPrueba1 = safe(cr.getHoraPrueba1());
             horaEntrega = safe(cr.getHoraEntrega());
-            asesora = firstNonBlank(cr.getAsesoraEntrega(), cr.getAsesoraCita1(), cr.getAsesoraCita2());
+            asesora = obtenerNombreAsesoraPorTelefono(tel);
         } else {
             fechaEvento = parseDate(cli.getFechaEvento());
             fechaPrueba1 = parseDate(cli.getFechaPrueba1());
             fechaEntrega = parseDate(cli.getFechaEntrega());
+        }
+
+        // Si no hay asesora en el calendario, la tomamos de la tabla Notas -> asesor
+        if (isBlank(asesora)) {
+            asesora = obtenerNombreAsesoraPorTelefono(tel);
         }
 
         String nombreCompleto;
@@ -1393,37 +1464,56 @@ private void imprimirHojaDetalleCliente() {
         String celular = safe(cli.getTelefono1());
         String telefono2 = safe(cli.getTelefono2());
 
-Double busto = cli.getBusto();
-Double cintura = cli.getCintura();
-Double cadera = cli.getCadera();
+        Double busto = cli.getBusto();
+        Double cintura = cli.getCintura();
+        Double cadera = cli.getCadera();
 
-// ===== Obsequios + observación del cliente =====
+        // ===== Obsequios + observaciones del cliente + notas + saldo migrado =====
 
-// Obsequios de la operación seleccionada (pestaña "Obsequios")
-String textoObsequios = resumenObsequiosSeleccionados();
+        // Obsequios de la operación seleccionada (pestaña "Obsequios")
+        String textoObsequios = resumenObsequiosSeleccionados();
 
-// Observación general del cliente (campo "Observaciones" del cliente)
-String obsCliente = valorInfo("Observaciones"); // viene de la tabla superior
-// Si por alguna razón no estuviera en la tabla, al menos evitamos null
-obsCliente = safe(obsCliente);
+        // Observación general del cliente (campo "Observaciones" del cliente)
+        String obsCliente = valorInfo("Observaciones"); // viene de la tabla superior
+        obsCliente = safe(obsCliente);
 
-StringBuilder obsBuilder = new StringBuilder();
+        // Observaciones de TODAS las notas (tabla notas_observaciones / Notas)
+        String obsNotas = construirObservacionesNotas(notas);
 
-if (!isBlank(textoObsequios)) {
-    obsBuilder.append("Obsequios: ")
-              .append(textoObsequios);
-}
+        // Datos de migración de saldo (si existe registro para este teléfono)
+        String obsMigrado = leerSaldoMigradoObservaciones(tel);
 
-if (!isBlank(obsCliente)) {
-    if (obsBuilder.length() > 0) {
-        obsBuilder.append("  |  ");
-    }
-    obsBuilder.append("Observaciones del cliente: ")
-              .append(obsCliente);
-}
+        StringBuilder obsBuilder = new StringBuilder();
 
-// Lo que se enviará a la hoja impresa
-String observaciones = obsBuilder.toString();
+        // 1) Obsequios de la nota seleccionada
+        if (!isBlank(textoObsequios)) {
+            obsBuilder.append("Obsequios: ")
+                    .append(textoObsequios);
+        }
+
+        // 2) Observaciones generales del cliente
+        if (!isBlank(obsCliente)) {
+            if (obsBuilder.length() > 0) obsBuilder.append("  |  ");
+            obsBuilder.append("Observaciones del cliente: ")
+                    .append(obsCliente);
+        }
+
+        // 3) Observaciones capturadas por nota (notas_observaciones)
+        if (!isBlank(obsNotas)) {
+            if (obsBuilder.length() > 0) obsBuilder.append("  |  ");
+            obsBuilder.append("Observación de folio ")
+                    .append(obsNotas);
+        }
+
+        // 4) Saldo migrado + obsequios + observación de la tabla de migración
+        if (!isBlank(obsMigrado)) {
+            if (obsBuilder.length() > 0) obsBuilder.append("  |  ");
+            obsBuilder.append(obsMigrado);
+        }
+
+        // Texto final que se manda a la hoja impresa
+        String observaciones = obsBuilder.toString();
+
 
 
 
@@ -1836,8 +1926,21 @@ private static class HojaDetallePrintable implements Printable {
             int midX = xTable + tableWidth / 2;
             g2.drawLine(midX, y, midX, y + headerHeight);
 
+            // Calculamos el ancho máximo de las etiquetas de la columna izquierda
+            g2.setFont(fLabel);
+            FontMetrics fmLabel = g2.getFontMetrics();
+            int leftMaxLabelWidth = 0;
+            for (EncabezadoLinea f : filas) {
+                if (f.labelL != null && !f.labelL.isBlank()) {
+                    int wLabel = fmLabel.stringWidth(f.labelL);
+                    if (wLabel > leftMaxLabelWidth) {
+                        leftMaxLabelWidth = wLabel;
+                    }
+                }
+            }
+
             int col1LabelX = xTable + 6;
-            int col1ValueX = xTable + tableWidth / 4;
+            int col1ValueX = col1LabelX + leftMaxLabelWidth + 6; // ← aquí se recorre a la IZQUIERDA
             int col2LabelX = midX + 6;
             int col2ValueX = midX + tableWidth / 4;
 
@@ -1868,6 +1971,7 @@ private static class HojaDetallePrintable implements Printable {
                 }
             }
         }
+
 
         y = y + headerHeight + 26;
 
@@ -1924,10 +2028,10 @@ private static class HojaDetallePrintable implements Printable {
         Font fNormal = new Font("SansSerif", Font.PLAIN, 8);
 
         // Columnas de COMPRAS
-        int colFolio   = (int) (tableWidth * 0.08);
+        int colFolio   = (int) (tableWidth * 0.12);
         int colFecha   = (int) (tableWidth * 0.09);
         int colCodigo  = (int) (tableWidth * 0.09);
-        int colArticulo= (int) (tableWidth * 0.19);
+        int colArticulo= (int) (tableWidth * 0.16);
         int colModelo  = (int) (tableWidth * 0.11);
         int colTalla   = (int) (tableWidth * 0.06);
         int colColor   = (int) (tableWidth * 0.08);
@@ -2614,6 +2718,35 @@ private static class DialogBusquedaCliente extends JDialog {
     public ClienteResumen getSeleccionado() {
         return seleccionado;
     }
+}
+/** Devuelve el nombre de la asesora asociada al último movimiento del cliente. */
+private String obtenerNombreAsesoraPorTelefono(String telefono) {
+    if (telefono == null || telefono.isBlank()) return "";
+
+    final String sql =
+            "SELECT a.nombre_completo " +
+            "FROM Notas n " +
+            "JOIN asesor a ON a.numero_empleado = n.asesor " +
+            "WHERE n.telefono = ? " +
+            "  AND n.asesor IS NOT NULL " +
+            "ORDER BY n.fecha_registro DESC, n.numero_nota DESC " +
+            "LIMIT 1";
+
+    try (java.sql.Connection cn = Conexion.Conecta.getConnection();
+         java.sql.PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setString(1, telefono);
+
+        try (java.sql.ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                String nom = rs.getString(1);
+                return (nom == null) ? "" : nom.trim();
+            }
+        }
+    } catch (Exception ignore) {
+        // Si truena, no reventamos nada; simplemente devolvemos vacío.
+    }
+    return "";
 }
 
 }

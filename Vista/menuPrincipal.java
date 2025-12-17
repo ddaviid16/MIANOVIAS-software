@@ -122,6 +122,7 @@ public class menuPrincipal extends JFrame {
         mainPanel.add(new CambioFechaEventoPanel(),   "Cambio de fecha de evento");
         mainPanel.add(new HojaEntregaPanel(),         "Hoja de entrega");
         mainPanel.add(new AgregarObsequiosNotaPanel(), "Agregar obsequios a nota");
+        mainPanel.add(new CambioCodigoArticuloPanel(), "Cambio de código de artículo");
 
         // Submenú Empresa (mismo patrón que Operaciones)
         mainPanel.add(new EmpresaSubmenuPanel(card -> showCard(card, tituloDe(card))), CARD_EMPRESA);
@@ -135,7 +136,13 @@ public class menuPrincipal extends JFrame {
         // Tarjetas destino:
         mainPanel.add(new PagoGastosPanel(),          ReportesPanel.CARD_REP_GASTOS);
         mainPanel.add(new CorteCajaPanel(),           ReportesPanel.CARD_REP_CORTE);
-        mainPanel.add(new ReimprimirNotaPanel(),      ReportesPanel.CARD_REP_REIMPR);
+        ReimprimirNotaPanel reimprimirNotaPanel = new ReimprimirNotaPanel();
+        if (usuarioActual != null) {
+            reimprimirNotaPanel.setCajeraActual(
+                usuarioActual.getNumeroEmpleado(),
+                usuarioActual.getNombreCompleto()
+            );
+        }
         mainPanel.add(new DetalleClienteReportePanel(), ReportesPanel.CARD_REP_DETCLI);
         mainPanel.add(new EntregasVestidosPanel(),    ReportesPanel.CARD_REP_ENTREGAS);
         mainPanel.add(new ArticulosAPedirPanel(),     ReportesPanel.CARD_REP_PEDIR);
@@ -339,6 +346,7 @@ public class menuPrincipal extends JFrame {
             case "Empleados":
             case "Hoja de entrega":
             case "Agregar obsequios a nota":
+            case "Cambio de código de artículo":
             
                 return card;
         }

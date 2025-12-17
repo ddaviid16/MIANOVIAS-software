@@ -8,7 +8,6 @@ public class OperacionesPanel extends JPanel {
 
     private final Consumer<String> navigate; // recibe el id de la tarjeta
 
-    
     private static final String CARD_VENTA_CONTADO   = "Venta de contado";
     private static final String CARD_VENTA_CREDITO   = "Venta de crédito";
     private static final String CARD_ABONO           = "Abono";
@@ -17,14 +16,13 @@ public class OperacionesPanel extends JPanel {
     private static final String CARD_CAMBIO_FECHA    = "Cambio de fecha de evento";
     private static final String CARD_HOJA_ENTREGA    = "Hoja de entrega";
     private static final String CARD_AGREGAR_OBSEQUIOS = "Agregar obsequios a nota";
-    
+    private static final String CARD_CAMBIO_CODIGO_ART    = "Cambio de código de artículo";
 
     public OperacionesPanel(Consumer<String> navigate) {
         this.navigate = navigate;
         setLayout(new BorderLayout());
 
-
-        JPanel center = new JPanel(new GridLayout(2, 3, 18, 18));
+        JPanel center = new JPanel(new GridLayout(2, 4, 18, 18));
         center.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
         JButton btContado     = botonGrande("Venta de Contado");
@@ -35,6 +33,7 @@ public class OperacionesPanel extends JPanel {
         JButton btCambioFecha = botonGrande("Cambio de Fecha de Evento");
         JButton btHojaEntrega = botonGrande("Hoja de entrega");
         JButton btAgregarObsequios = botonGrande("Agregar obsequios a nota");
+        JButton btCambioCodigoArticulo = botonGrande("Cambio de código de artículo");
 
         // Navegación (cambia por tus constantes si son distintas)
         btContado.addActionListener(_e    -> navigate.accept(CARD_VENTA_CONTADO));
@@ -45,7 +44,8 @@ public class OperacionesPanel extends JPanel {
         btCambioFecha.addActionListener(_e-> navigate.accept(CARD_CAMBIO_FECHA));
         btHojaEntrega.addActionListener(_e-> navigate.accept(CARD_HOJA_ENTREGA));
         btAgregarObsequios.addActionListener(_e -> navigate.accept(CARD_AGREGAR_OBSEQUIOS));
-
+        btCambioCodigoArticulo.addActionListener(_e -> navigate.accept(CARD_CAMBIO_CODIGO_ART));
+        
 
         center.add(btContado);
         center.add(btCredito);
@@ -55,6 +55,7 @@ public class OperacionesPanel extends JPanel {
         center.add(btCambioFecha);
         center.add(btHojaEntrega);
         center.add(btAgregarObsequios);
+        center.add(btCambioCodigoArticulo);
 
         add(center, BorderLayout.CENTER);
     }
