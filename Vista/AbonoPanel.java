@@ -1156,6 +1156,24 @@ private Printable construirPrintableAbono(
     // Fecha de abono con mes en español
     final String fechaHoy   = fechaLarga(LocalDate.now());
     final double total      = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal();
+    // Total de la compra y saldo actual del crédito (después del abono)
+    final double totalCompraCredito   = total;
+    final double saldoPorPagarActual  = saldoRestante;
+
+    // Pagos efectuados a la nota de crédito: total - saldo actual
+    final double pagosEfectuados = totalCompraCredito - saldoPorPagarActual;
+
+    // Folio de la nota de crédito a la que se está abonando
+    final String folioNotaCredito;
+    {
+        String f = (notaBase.getFolio() == null) ? "" : notaBase.getFolio().trim();
+        if (f.isEmpty()) {
+            // Si no tiene folio textual, usamos el número de nota
+            f = String.valueOf(notaBase.getNumeroNota());
+        }
+        folioNotaCredito = f;
+    }
+
 
     final double tc = p.getTarjetaCredito()   == null ? 0d : p.getTarjetaCredito();
     final double td = p.getTarjetaDebito()    == null ? 0d : p.getTarjetaDebito();
@@ -1369,30 +1387,42 @@ try {
 } catch (Exception ignore) {}
             y += 6; g2.drawLine(x, y, x + w, y); y += 16;
 
+            // ===== Totales (zona superior derecha) =====
 
-            // Totales (a la derecha)
+            // yTot = línea base de la sección de totales
+            int yTot = y;
+
+            // Total de la compra (nota de crédito)
             g2.setFont(fH1);
-            rightAlign(g2, "TOTAL: $" + fmt2(total), x, w, y);
-            y += 22;
+            rightAlign(g2, "TOTAL DE COMPRA: $" + fmt2(total), x, w, yTot);
 
+            // Pagos efectuados a la nota de crédito: total - saldo actual
             g2.setFont(fText);
-            String abonoLetra = numeroALetras(abonoRealizado);  // Convierte el abono a letras
+            String txtPagosEfectuados = "Pagos efectuados a la nota " 
+                    + folioNotaCredito + ": $" + fmt2(pagosEfectuados);
+            rightAlign(g2, txtPagosEfectuados, x, w, yTot + 14);
+
+            // Abono en letra, alineado a la izquierda en la misma zona
+            String abonoLetra = numeroALetras(abonoRealizado);
             int anchoLetras = w - 230;
-            
-            int yInicioTotales = y - 24; // solo hubo una línea (TOTAL)
-            drawWrapped(g2, "Abono en letra: " + abonoLetra, x, yInicioTotales, anchoLetras);  // Imprime el abono en letras
-            y += 22;
+            int yAbonoTexto = yTot - 2; // ligeramente arriba para no chocar con los números
+            drawWrapped(g2, "Abono en letra: " + abonoLetra, x, yAbonoTexto, anchoLetras);
+
+            // Avanzamos y para el resto de la sección de saldos
+            y = yTot + 32;
+
+
 
             // Saldo anterior (antes del abono actual)
-            rightAlign(g2, "Saldo anterior: $" + fmt2(saldoAnterior), x, w, y);
+            rightAlign(g2, "Saldo por pagar: $" + fmt2(saldoAnterior), x, w, y);
             y += 14;
 
             g2.setFont(fText);
-            rightAlign(g2, "Abono: $" + fmt2(abonoRealizado), x, w, y); // <— aquí dice ABONO
+            rightAlign(g2, "Su abono: $" + fmt2(abonoRealizado), x, w, y); // <— aquí dice ABONO
             y += 14;
 
             g2.setFont(fH1);
-            rightAlign(g2, "SALDO RESTANTE: $" + fmt2(saldoRestante), x, w, y);
+            rightAlign(g2, "NUEVO SALDO RESTANTE: $" + fmt2(saldoRestante), x, w, y);
             y += 22;
 
             if (Math.abs(saldoRestante) < 0.005) {
