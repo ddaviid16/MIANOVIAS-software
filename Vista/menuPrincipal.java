@@ -121,6 +121,7 @@ public class menuPrincipal extends JFrame {
         mainPanel.add(new CancelarNotaPanel(),        "Cancelación de notas");
         mainPanel.add(new CambioFechaEventoPanel(),   "Cambio de fecha de evento");
         mainPanel.add(new HojaEntregaPanel(),         "Hoja de entrega");
+        mainPanel.add(new AgregarObsequiosNotaPanel(), "Agregar obsequios a nota");
 
         // Submenú Empresa (mismo patrón que Operaciones)
         mainPanel.add(new EmpresaSubmenuPanel(card -> showCard(card, tituloDe(card))), CARD_EMPRESA);
@@ -156,12 +157,12 @@ public class menuPrincipal extends JFrame {
         JPanel center = new JPanel(new GridLayout(2, 3, 18, 18));
         center.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JButton btReportes   = botonGrande("📊 Reportes");
+        JButton btReportes   = botonGrande("Reportes");
 
-        JButton btEmpresa     = botonGrande("🏣 Empresa");
-        JButton btClientes    = botonGrande("👥 Clientes");
-        JButton btInventario  = botonGrande("📦 Inventario");
-        JButton btOperaciones = botonGrande("⚙️ Operaciones");
+        JButton btEmpresa     = botonGrande("Empresa");
+        JButton btClientes    = botonGrande("Clientes");
+        JButton btInventario  = botonGrande("Inventario");
+        JButton btOperaciones = botonGrande("Operaciones");
 
         btEmpresa.addActionListener(_e   -> showCard(CARD_EMPRESA,   "Empresa"));
         btClientes.addActionListener(_e  -> showCard(CARD_CLIENTES,  "Clientes"));
@@ -337,6 +338,7 @@ public class menuPrincipal extends JFrame {
             case "Asignación de Folios":
             case "Empleados":
             case "Hoja de entrega":
+            case "Agregar obsequios a nota":
             
                 return card;
         }

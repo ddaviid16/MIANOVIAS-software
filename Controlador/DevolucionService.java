@@ -132,28 +132,32 @@ public class DevolucionService {
                     }
                 }
 
-                // 4) Copia renglones de Nota_Detalle a la DV y elimina del origen
-                int piezasMovidas = 0;
-                if (idsDetalle != null && !idsDetalle.isEmpty()) {
-                    try (PreparedStatement ins = cn.prepareStatement(
-                            "INSERT INTO Nota_Detalle (numero_nota, articulo, marca, modelo, talla, color, " +
-                            " precio, descuento, subtotal, codigo_articulo, status) " +
-                            "SELECT ?, articulo, marca, modelo, talla, color, precio, descuento, subtotal, codigo_articulo, 'A' " +
-                            "FROM Nota_Detalle WHERE id=?");
-                         PreparedStatement del = cn.prepareStatement(
-                            "DELETE FROM Nota_Detalle WHERE id=?")) {
+                // 4) Copia renglones de Nota_Detalle a la DV y marca origen como CANCELADO (status='C')
+int piezasMovidas = 0;
+if (idsDetalle != null && !idsDetalle.isEmpty()) {
+    try (PreparedStatement ins = cn.prepareStatement(
+            "INSERT INTO Nota_Detalle (numero_nota, articulo, marca, modelo, talla, color, " +
+            " precio, descuento, subtotal, codigo_articulo, status) " +
+            "SELECT ?, articulo, marca, modelo, talla, color, precio, descuento, subtotal, codigo_articulo, 'A' " +
+            "FROM Nota_Detalle WHERE id=?");
+         PreparedStatement upd = cn.prepareStatement(
+            "UPDATE Nota_Detalle SET status='D' WHERE id=?")) {
 
-                        for (Integer id : idsDetalle) {
-                            if (id == null) continue;
-                            ins.setInt(1, numeroNotaDV);
-                            ins.setInt(2, id);
-                            piezasMovidas += ins.executeUpdate();
+        for (Integer id : idsDetalle) {
+            if (id == null) continue;
 
-                            del.setInt(1, id);
-                            del.executeUpdate();
-                        }
-                    }
-                }
+            // Copiamos el renglón a la nota DV
+            ins.setInt(1, numeroNotaDV);
+            ins.setInt(2, id);
+            piezasMovidas += ins.executeUpdate();
+
+            // Marcamos el renglón de la nota original como CANCELADO
+            upd.setInt(1, id);
+            upd.executeUpdate();
+        }
+    }
+}
+
 
                 // 5) Regresa existencia al inventario (solo artículos con código)
                 if (!codigos.isEmpty()) {

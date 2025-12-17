@@ -702,5 +702,65 @@ public List<ClienteResumen> buscarOpcionesPorApellidoPaterno(String apellido1) t
         }
     }
 }
+public List<ClienteResumen> buscarOpcionesPorNombreOApellidos(String filtro) throws SQLException {
+    List<ClienteResumen> lista = new ArrayList<>();
+
+    String sql =
+        "SELECT " +
+        "  telefono1, telefono2, " +
+        "  nombre, apellido_paterno, apellido_materno, " +
+        "  fecha_evento, fecha_prueba1, fecha_prueba2, fecha_entrega " + // deja aquí las columnas que ya tenías
+        "FROM clientes " +
+        "WHERE " +
+        "      nombre LIKE ? " +
+        "   OR apellido_paterno LIKE ? " +
+        "   OR apellido_materno LIKE ? " +
+        "   OR CONCAT_WS(' ', nombre, apellido_paterno, apellido_materno) LIKE ? " +
+        "ORDER BY apellido_paterno, apellido_materno, nombre";
+
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        String like = "%" + filtro + "%";
+
+        ps.setString(1, like);  // nombre
+        ps.setString(2, like);  // apellido_paterno
+        ps.setString(3, like);  // apellido_materno
+        ps.setString(4, like);  // nombre completo
+
+        try (ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ClienteResumen cr = new ClienteResumen();
+
+                cr.setTelefono1(rs.getString("telefono1"));
+                cr.setTelefono2(rs.getString("telefono2"));
+
+                String nombre  = rs.getString("nombre");
+                String apPat   = rs.getString("apellido_paterno");
+                String apMat   = rs.getString("apellido_materno");
+
+                cr.setNombreCompleto(
+                        (nombre == null ? "" : nombre.trim()) + " " +
+                        (apPat  == null ? "" : apPat.trim())  + " " +
+                        (apMat  == null ? "" : apMat.trim())
+                );
+
+                // Estas ya las tienes en tu otro método, solo copialas:
+                cr.setFechaEvento(rs.getDate("fecha_evento") == null ? null :
+                        rs.getDate("fecha_evento").toLocalDate());
+                cr.setFechaPrueba1(rs.getDate("fecha_prueba1") == null ? null :
+                        rs.getDate("fecha_prueba1").toLocalDate());
+                cr.setFechaPrueba2(rs.getDate("fecha_prueba2") == null ? null :
+                        rs.getDate("fecha_prueba2").toLocalDate());
+                cr.setFechaEntrega(rs.getDate("fecha_entrega") == null ? null :
+                        rs.getDate("fecha_entrega").toLocalDate());
+
+                lista.add(cr);
+            }
+        }
+    }
+
+    return lista;
+}
 
 }

@@ -16,9 +16,16 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.text.AbstractDocument;
+
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+
+
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.sql.SQLException;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 public class CancelarNotaPanel extends JPanel {
@@ -28,7 +35,7 @@ public class CancelarNotaPanel extends JPanel {
     private final JTextField txtUlt   = ro();
     private final JComboBox<Nota> cbNotas = new JComboBox<>();
     private final JTextArea txtMotivo = new JTextArea(3, 40);
-
+    private final JButton btnBuscarCliente = new JButton("Buscar por nombre o apellido…");
     private final DefaultTableModel model;
     private final JTable tb;
 
@@ -45,26 +52,47 @@ public class CancelarNotaPanel extends JPanel {
         c.insets = new Insets(6,6,6,6);
         c.fill = GridBagConstraints.HORIZONTAL;
         c.weightx = 1;
-        int y=0;
+int y = 0;
 
-        addCell(top,c,0,y,new JLabel("Teléfono:"),1,false);
-        addCell(top,c,1,y,txtTel,1,true);
-        addCell(top,c,2,y,new JLabel("Nombre:"),1,false);
-        addCell(top,c,3,y,txtNom,1,true); y++;
+// ==== Fila 0: teléfono + nombre
+addCell(top, c, 0, y, new JLabel("Teléfono:"), 1, false);
+addCell(top, c, 1, y, txtTel, 1, true);
+addCell(top, c, 2, y, new JLabel("Nombre:"), 1, false);
+addCell(top, c, 3, y, txtNom, 1, true);
+y++;
 
-        addCell(top,c,2,y,new JLabel("Nota a cancelar:"),1,false);
-        cbNotas.setRenderer(new DefaultListCellRenderer(){
-            @Override public Component getListCellRendererComponent(JList<?> list,Object value,int index,boolean isSelected,boolean cellHasFocus){
-                super.getListCellRendererComponent(list,value,index,isSelected,cellHasFocus);
-                if (value instanceof Nota n) {
-                    setText((n.getFolio()==null?"s/folio":n.getFolio()) +
-                            "  ["+n.getTipo()+"]  Total: " + fmt(n.getTotal()) + "  Saldo: " + fmt(n.getSaldo()));
-                } else if (value==null) setText("— Selecciona —");
-                return this;
-            }
-        });
-        cbNotas.addActionListener(_e -> cargarDetalle());
-        addCell(top,c,3,y,cbNotas,1,true); y++;
+// ==== Fila 1: botón de búsqueda + nota a cancelar
+btnBuscarCliente.addActionListener(_e -> seleccionarClientePorApellido());
+// botón más compacto
+btnBuscarCliente.setMargin(new Insets(2, 8, 2, 8));
+
+// Debajo del campo Teléfono
+addCell(top, c, 1, y, btnBuscarCliente, 1, false);
+
+// Debajo de la etiqueta "Nombre"
+addCell(top, c, 2, y, new JLabel("Nota a cancelar:"), 1, false);
+
+// Debajo del campo Nombre
+cbNotas.setRenderer(new DefaultListCellRenderer() {
+    @Override
+    public Component getListCellRendererComponent(
+            JList<?> list, Object value, int index,
+            boolean isSelected, boolean cellHasFocus) {
+        super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+        if (value instanceof Nota n) {
+            setText((n.getFolio() == null ? "s/folio" : n.getFolio()) +
+                    "  [" + n.getTipo() + "]  Total: " + fmt(n.getTotal()) +
+                    "  Saldo: " + fmt(n.getSaldo()));
+        } else if (value == null) {
+            setText("— Selecciona —");
+        }
+        return this;
+    }
+});
+cbNotas.addActionListener(_e -> cargarDetalle());
+addCell(top, c, 3, y, cbNotas, 1, true);
+y++;
+
 
         add(top, BorderLayout.NORTH);
 
@@ -263,4 +291,156 @@ private void cancelarNota(ActionEvent ev) {
         @Override default void removeUpdate(javax.swing.event.DocumentEvent e){ on(); }
         @Override default void changedUpdate(javax.swing.event.DocumentEvent e){ on(); }
     }
+private void seleccionarClientePorApellido() {
+    Window owner = SwingUtilities.getWindowAncestor(this);
+    DialogBusquedaCliente dlg = new DialogBusquedaCliente(owner);
+    dlg.setLocationRelativeTo(this);
+    dlg.setVisible(true);
+
+    ClienteResumen cr = dlg.getSeleccionado();
+    if (cr != null) {
+        // Tel principal del cliente
+        String tel = TelefonosUI.soloDigitos(cr.getTelefono1());
+        if (tel != null && !tel.isEmpty()) {
+            // Esto dispara el DocumentListener que ya llama a cargarClienteYNotas()
+            txtTel.setText(tel);
+        }
+    }
+}
+private static class DialogBusquedaCliente extends JDialog {
+
+    private JTextField txtApellido;
+    private JTable tabla;
+    private DefaultTableModel modelo;
+    private java.util.List<ClienteResumen> resultados = new ArrayList<>();
+    private ClienteResumen seleccionado;
+
+    public DialogBusquedaCliente(Window owner) {
+        super(owner, "Buscar cliente por nombre o apellido", ModalityType.APPLICATION_MODAL);
+        construirUI();
+    }
+
+    private void construirUI() {
+        JPanel main = new JPanel(new BorderLayout(8, 8));
+        main.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Filtro
+        JPanel pnlFiltro = new JPanel(new BorderLayout(5, 0));
+        pnlFiltro.add(new JLabel("Nombre o apellido:"), BorderLayout.WEST);
+        txtApellido = new JTextField();
+        pnlFiltro.add(txtApellido, BorderLayout.CENTER);
+
+        JButton btnBuscar = new JButton("Buscar");
+        pnlFiltro.add(btnBuscar, BorderLayout.EAST);
+
+        main.add(pnlFiltro, BorderLayout.NORTH);
+
+        // Tabla
+        modelo = new DefaultTableModel(
+                new Object[]{"Nombre completo", "Teléfono", "Teléfono 2", "Evento", "Prueba 1", "Prueba 2", "Entrega"},
+                0
+        ) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
+        tabla = new JTable(modelo);
+        tabla.setRowHeight(22);
+        tabla.setAutoCreateRowSorter(true);
+
+        main.add(new JScrollPane(tabla), BorderLayout.CENTER);
+
+        // Botones abajo
+        JPanel pnlBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnSeleccionar = new JButton("Seleccionar");
+        JButton btnCerrar = new JButton("Cancelar");
+        pnlBotones.add(btnCerrar);
+        pnlBotones.add(btnSeleccionar);
+
+        main.add(pnlBotones, BorderLayout.SOUTH);
+
+        setContentPane(main);
+        setSize(800, 400);
+        setLocationRelativeTo(getOwner());
+
+        // Eventos
+        btnBuscar.addActionListener(_e -> buscar());
+        btnSeleccionar.addActionListener(_e -> seleccionarActual());
+        btnCerrar.addActionListener(_e -> dispose());
+
+        // Doble clic en la tabla
+        tabla.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && tabla.getSelectedRow() >= 0) {
+                    seleccionarActual();
+                }
+            }
+        });
+
+        // Enter en el campo de apellido = buscar
+        txtApellido.addActionListener(_e -> buscar());
+    }
+
+    private void buscar() {
+        String filtro = txtApellido.getText().trim();
+        if (filtro.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Escribe al menos una parte del nombre o apellido.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            clienteDAO dao = new clienteDAO();
+            resultados = dao.buscarOpcionesPorNombreOApellidos(filtro);  // <-- método que agregamos al DAO
+            modelo.setRowCount(0);
+
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+            for (ClienteResumen cr : resultados) {
+                modelo.addRow(new Object[]{
+                        cr.getNombreCompleto(),
+                        cr.getTelefono1(),
+                        cr.getTelefono2(),
+                        cr.getFechaEvento()   == null ? "" : cr.getFechaEvento().format(fmt),
+                        cr.getFechaPrueba1()  == null ? "" : cr.getFechaPrueba1().format(fmt),
+                        cr.getFechaPrueba2()  == null ? "" : cr.getFechaPrueba2().format(fmt),
+                        cr.getFechaEntrega()  == null ? "" : cr.getFechaEntrega().format(fmt)
+                });
+            }
+
+            if (resultados.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "No se encontraron clientes con ese nombre o apellido.",
+                        "Buscar cliente", JOptionPane.INFORMATION_MESSAGE);
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al buscar clientes: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void seleccionarActual() {
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Selecciona un cliente de la tabla.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int modelRow = tabla.convertRowIndexToModel(row);
+        seleccionado = resultados.get(modelRow);
+        dispose();
+    }
+
+    public ClienteResumen getSeleccionado() {
+        return seleccionado;
+    }
+}
+
 }

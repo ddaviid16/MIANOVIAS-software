@@ -5,7 +5,6 @@ import Controlador.PagoGastosDAO;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.text.NumberFormatter;
 import java.awt.*;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -21,6 +20,11 @@ import java.awt.print.PageFormat;
 import java.awt.print.Printable;
 import java.awt.print.PrinterException;
 import java.awt.print.PrinterJob;
+import javax.swing.text.AbstractDocument;
+import javax.swing.text.DocumentFilter;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.BadLocationException;
+
 
 
 /** Corte de caja: lee sistema (formas_pago) y permite conteo manual. */
@@ -320,12 +324,9 @@ private void exportarCSV() {
     }
 }
 
-
-
     private LocalDate obtenerFechaSeleccionada() {
     return selectedDate;
 }
-
 
     private void cargarIngresosOperacion(LocalDate fecha) {
 
@@ -374,56 +375,53 @@ private void exportarCSV() {
         }
     }
 
-
-    private void cargarDatosPorFecha() {
+private void cargarDatosPorFecha() {
     try {
-        LocalDate fecha = LocalDate.parse(selectedDate.toString().trim());
         LocalDate f = obtenerFechaSeleccionada();
         cargarSistemaYRetiros(f);
         cargarIngresosOperacion(f);
         cargarDetalleDia(f);
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this,
+                "Fecha inválida o error al cargar: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
 
+private void cargarSistemaYRetiros(LocalDate fecha) {
+    try {
+        CorteCajaDAO dao = new CorteCajaDAO();
 
+        // Totales del sistema (formas de pago)
+        CorteCajaDAO.Totales t = dao.leerTotalesDia(fecha);
+        sysDebito.setText(fmt(t.tarjetaDebito));
+        sysCredito.setText(fmt(t.tarjetaCredito));
+        sysAmex.setText(fmt(t.americanExpress));
+        sysTransf.setText(fmt(t.transferenciaBanc));
+        sysDepo.setText(fmt(t.depositoBancario));
+        sysEfec.setText(fmt(t.efectivo));
 
-        // Si existe un corte previo en BD, cargarlo en los campos manuales
-        CorteCajaDAO.Corte corteGuardado = new CorteCajaDAO().leerCortePorFecha(fecha);
+        // Retiros del día (pago de gastos)
+        BigDecimal retiros = new PagoGastosDAO().totalRetirado(fecha);
+        txtRetirosHoy.setText(fmt(retiros));
+
+        // ¿Ya hay corte guardado en BD para esta fecha?
+        CorteCajaDAO.Corte corteGuardado = dao.leerCortePorFecha(fecha);
+
         if (corteGuardado != null) {
+            // Mostrar exactamente lo que se guardó
             manDebito.setText(fmt(corteGuardado.tarjetaDebito));
             manCredito.setText(fmt(corteGuardado.tarjetaCredito));
             manAmex.setText(fmt(corteGuardado.americanExpress));
             manTransf.setText(fmt(corteGuardado.transferenciaBanc));
             manDepo.setText(fmt(corteGuardado.depositoBancario));
             manEfec.setText(fmt(corteGuardado.efectivo));
+
+            // Retiros y efectivo neto según el corte guardado
             txtRetirosHoy.setText(fmt(corteGuardado.retiros));
             txtEfecNeto.setText(fmt(corteGuardado.efectivoNeto));
         } else {
-            // No hay corte previo: limpiar los manuales
-            manDebito.setText("");
-            manCredito.setText("");
-            manAmex.setText("");
-            manTransf.setText("");
-            manDepo.setText("");
-            manEfec.setText("");
-            txtEfecNeto.setText("");
-        }
-
-    } catch (Exception ex) {
-        JOptionPane.showMessageDialog(this, "Fecha inválida o error al cargar: " + ex.getMessage(),
-                "Error", JOptionPane.ERROR_MESSAGE);
-    }
-}
-
-    private void cargarSistemaYRetiros(LocalDate fecha) {
-        try {
-            CorteCajaDAO.Totales t = new CorteCajaDAO().leerTotalesDia(fecha);
-            sysDebito.setText(fmt(t.tarjetaDebito));
-            sysCredito.setText(fmt(t.tarjetaCredito));
-            sysAmex.setText(fmt(t.americanExpress));
-            sysTransf.setText(fmt(t.transferenciaBanc));
-            sysDepo.setText(fmt(t.depositoBancario));
-            sysEfec.setText(fmt(t.efectivo));
-
-            // Inicializa manual con lo del sistema (el operador puede corregir)
+            // No hay corte guardado: inicializar manuales desde sistema
             manDebito.setText(sysDebito.getText());
             manCredito.setText(sysCredito.getText());
             manAmex.setText(sysAmex.getText());
@@ -431,38 +429,35 @@ private void exportarCSV() {
             manDepo.setText(sysDepo.getText());
             manEfec.setText("0.00");
 
-            // Retiros hoy
-            txtRetirosHoy.setText(fmt(new PagoGastosDAO().totalRetirado(fecha)));
-
-            // cálculo inicial del neto
+            // Calcular neto con los datos actuales
             calcularNeto();
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error al cargar totales: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
         }
+
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this,
+                "Error al cargar totales: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
     }
+}
 
 private void calcularNeto() {
-    BigDecimal efSis = parse(sysEfec);      // Efectivo del sistema (formas_pago)
-    BigDecimal efMan = parseMoney(manEfec); // Efectivo contado manualmente
-    BigDecimal retiros = parse(txtRetirosHoy); // Total de retiros del día
+    BigDecimal efSis   = parse(sysEfec);      // Efectivo del sistema (ventas)
+    BigDecimal efMan   = parseMoney(manEfec); // Efectivo contado en caja
+    BigDecimal retiros = parse(txtRetirosHoy); // Retiros / pagos de gastos
 
-    if (efSis == null) efSis = BigDecimal.ZERO;
-    if (efMan == null) efMan = BigDecimal.ZERO;
+    if (efSis == null)   efSis   = BigDecimal.ZERO;
+    if (efMan == null)   efMan   = BigDecimal.ZERO;
     if (retiros == null) retiros = BigDecimal.ZERO;
 
-    // Efectivo disponible teórico del sistema (ya restando retiros)
-    BigDecimal disponibleSistema = efSis.subtract(retiros);
-    if (disponibleSistema.compareTo(BigDecimal.ZERO) < 0) disponibleSistema = BigDecimal.ZERO;
+    // Efectivo neto que *debería* haber en caja: efectivo recibido - retiros
+    BigDecimal netoTeorico = efSis.subtract(retiros);
+    if (netoTeorico.compareTo(BigDecimal.ZERO) < 0) {
+        netoTeorico = BigDecimal.ZERO;
+    }
 
-    // Efectivo neto real (lo que el usuario tiene físicamente tras restar retiros)
-    BigDecimal efectivoNeto = efMan.subtract(retiros);
-    if (efectivoNeto.compareTo(BigDecimal.ZERO) < 0) efectivoNeto = BigDecimal.ZERO;
+    // Diferencia entre lo contado y lo que debería haber
+    BigDecimal diferencia = efMan.subtract(netoTeorico);
 
-    // Diferencia entre lo que el sistema espera y lo que el usuario cuenta
-    BigDecimal diferencia = efectivoNeto.subtract(disponibleSistema);
-
-    // Determinar mensaje
     String estado;
     int cmp = diferencia.compareTo(BigDecimal.ZERO);
     if (cmp > 0) {
@@ -473,16 +468,14 @@ private void calcularNeto() {
         estado = "→ SIN DIFERENCIA";
     }
 
-    // Mostrar efectivo neto calculado y estado
-    txtEfecNeto.setText(fmt(efectivoNeto) + "   " + estado);
+    // Mostrar el neto teórico + el estado
+    txtEfecNeto.setText(fmt(netoTeorico) + "   " + estado);
 }
 private void guardar() {
-    // Verificar si la fecha seleccionada es anterior a hoy
     if (selectedDate.isBefore(LocalDate.now())) {
         int response = JOptionPane.showConfirmDialog(this,
             "Estás por guardar el corte de caja correspondiente a una fecha anterior a hoy. ¿Continuar?",
             "Confirmar corte de caja", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-
         if (response != JOptionPane.YES_OPTION) return;
     }
 
@@ -494,22 +487,31 @@ private void guardar() {
 
     try {
         CorteCajaDAO.Corte c = new CorteCajaDAO.Corte();
-        c.fecha = selectedDate; // fecha seleccionada en el calendario
-        c.tarjetaDebito = valueOrSystem(manDebito, sysDebito);
-        c.tarjetaCredito = valueOrSystem(manCredito, sysCredito);
-        c.americanExpress = valueOrSystem(manAmex, sysAmex);
-        c.transferenciaBanc = valueOrSystem(manTransf, sysTransf);
-        c.depositoBancario = valueOrSystem(manDepo, sysDepo);
+        c.fecha = selectedDate;
+
+        c.tarjetaDebito    = valueOrSystem(manDebito,  sysDebito);
+        c.tarjetaCredito   = valueOrSystem(manCredito, sysCredito);
+        c.americanExpress  = valueOrSystem(manAmex,    sysAmex);
+        c.transferenciaBanc= valueOrSystem(manTransf,  sysTransf);
+        c.depositoBancario = valueOrSystem(manDepo,    sysDepo);
+
+        // Lo que contaste en efectivo (para referencia)
         c.efectivo = valueOrSystem(manEfec, sysEfec);
 
-        // leer retiros actualizados desde BD antes de calcular y guardar
+        // Retiros del día según la fecha seleccionada
         BigDecimal retirosHoy = new PagoGastosDAO().totalRetirado(selectedDate);
+        if (retirosHoy == null) retirosHoy = BigDecimal.ZERO;
         txtRetirosHoy.setText(fmt(retirosHoy));
-        c.retiros = (retirosHoy != null) ? retirosHoy : BigDecimal.ZERO;
+        c.retiros = retirosHoy;
 
-        // El efectivo neto debe ser lo que queda físicamente tras los retiros
-        c.efectivoNeto = c.efectivo.subtract(c.retiros);
-        if (c.efectivoNeto.compareTo(BigDecimal.ZERO) < 0) c.efectivoNeto = BigDecimal.ZERO;
+        // Efectivo neto teórico = efectivo del sistema - retiros
+        BigDecimal efSis = parse(sysEfec);
+        if (efSis == null) efSis = BigDecimal.ZERO;
+
+        c.efectivoNeto = efSis.subtract(c.retiros);
+        if (c.efectivoNeto.compareTo(BigDecimal.ZERO) < 0) {
+            c.efectivoNeto = BigDecimal.ZERO;
+        }
 
         new CorteCajaDAO().guardar(c);
         JOptionPane.showMessageDialog(this, "Corte guardado correctamente.");
@@ -549,30 +551,55 @@ private void guardar() {
         c.gridx=x; c.gridy=y; c.gridwidth=span; c.weightx = growX?1:0; p.add(comp,c); c.gridwidth=1;
     }
 
-    private void recargarRetiros() {
-        try {
-            BigDecimal r = new PagoGastosDAO().totalRetirado(LocalDate.now());
-            txtRetirosHoy.setText(fmt(r));
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error cargando retiros: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
-        }
+private void recargarRetiros() {
+    try {
+        BigDecimal r = new PagoGastosDAO().totalRetirado(obtenerFechaSeleccionada());
+        txtRetirosHoy.setText(fmt(r));
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this, "Error cargando retiros: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
     }
+}
 
-    /** Campo monetario sin flechas, alineado a la izquierda. */
-    private static JFormattedTextField moneyField() {
-        NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
-        nf.setMinimumFractionDigits(2);
-        nf.setMaximumFractionDigits(2);
-        NumberFormatter fmt = new NumberFormatter(nf);
-        fmt.setValueClass(Double.class);
-        fmt.setAllowsInvalid(false);
-        fmt.setMinimum(0.00);
-        JFormattedTextField f = new JFormattedTextField(fmt);
-        f.setColumns(12);
-        f.setHorizontalAlignment(SwingConstants.LEFT); // ← izquierda
-        return f;
-    }
+/** Campo monetario simple: se escribe como texto normal, pero solo permite números y hasta 2 decimales. */
+private static JFormattedTextField moneyField() {
+    JFormattedTextField f = new JFormattedTextField();
+    f.setColumns(12);
+    f.setHorizontalAlignment(SwingConstants.LEFT);
+
+    AbstractDocument doc = (AbstractDocument) f.getDocument();
+    doc.setDocumentFilter(new DocumentFilter() {
+        @Override
+        public void insertString(FilterBypass fb, int offset, String string, AttributeSet attr)
+                throws BadLocationException {
+            if (string == null) return;
+            StringBuilder sb = new StringBuilder(fb.getDocument().getText(0, fb.getDocument().getLength()));
+            sb.insert(offset, string);
+            if (isValidNumber(sb.toString())) {
+                super.insertString(fb, offset, string, attr);
+            }
+        }
+
+        @Override
+        public void replace(FilterBypass fb, int offset, int length, String text, AttributeSet attrs)
+                throws BadLocationException {
+            StringBuilder sb = new StringBuilder(fb.getDocument().getText(0, fb.getDocument().getLength()));
+            sb.replace(offset, offset + length, text == null ? "" : text);
+            if (isValidNumber(sb.toString())) {
+                super.replace(fb, offset, length, text, attrs);
+            }
+        }
+
+        private boolean isValidNumber(String s) {
+            s = s.trim();
+            if (s.isEmpty()) return true;              // permitir vacío
+            // Solo dígitos, opcionalmente un punto y hasta 2 decimales
+            return s.matches("\\d*(\\.\\d{0,2})?");
+        }
+    });
+
+    return f;
+}
 
     private static void alinearIzquierda(JTextField... fields){
         for (JTextField t : fields) t.setHorizontalAlignment(SwingConstants.LEFT);

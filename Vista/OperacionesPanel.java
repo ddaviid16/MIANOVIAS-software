@@ -16,6 +16,7 @@ public class OperacionesPanel extends JPanel {
     private static final String CARD_CANCELACION     = "Cancelación de notas";
     private static final String CARD_CAMBIO_FECHA    = "Cambio de fecha de evento";
     private static final String CARD_HOJA_ENTREGA    = "Hoja de entrega";
+    private static final String CARD_AGREGAR_OBSEQUIOS = "Agregar obsequios a nota";
     
 
     public OperacionesPanel(Consumer<String> navigate) {
@@ -33,6 +34,7 @@ public class OperacionesPanel extends JPanel {
         JButton btCancelacion = botonGrande("Cancelación de Notas");
         JButton btCambioFecha = botonGrande("Cambio de Fecha de Evento");
         JButton btHojaEntrega = botonGrande("Hoja de entrega");
+        JButton btAgregarObsequios = botonGrande("Agregar obsequios a nota");
 
         // Navegación (cambia por tus constantes si son distintas)
         btContado.addActionListener(_e    -> navigate.accept(CARD_VENTA_CONTADO));
@@ -42,6 +44,7 @@ public class OperacionesPanel extends JPanel {
         btCancelacion.addActionListener(_e-> navigate.accept(CARD_CANCELACION));
         btCambioFecha.addActionListener(_e-> navigate.accept(CARD_CAMBIO_FECHA));
         btHojaEntrega.addActionListener(_e-> navigate.accept(CARD_HOJA_ENTREGA));
+        btAgregarObsequios.addActionListener(_e -> navigate.accept(CARD_AGREGAR_OBSEQUIOS));
 
 
         center.add(btContado);
@@ -51,6 +54,7 @@ public class OperacionesPanel extends JPanel {
         center.add(btCancelacion);
         center.add(btCambioFecha);
         center.add(btHojaEntrega);
+        center.add(btAgregarObsequios);
 
         add(center, BorderLayout.CENTER);
     }

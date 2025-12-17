@@ -101,12 +101,11 @@ public List<NotaResumen> listarNotasPorRangoResumen(java.time.LocalDate ini,
                     // Si el crédito no está en el rango de fechas, no podemos recalcularlo aquí
                     if (credito == null) continue;
 
-                    // Saldo inicial REAL del crédito = total - pagos iniciales del CR
                     Double saldoInicial = calcularSaldoInicialCredito(credito, fdao);
                     if (saldoInicial == null) continue;
 
-                    // Mostrar este saldo inicial en la fila del CR
-                    credito.saldo = saldoInicial;
+                    // OJO: **NO** tocar credito.saldo, dejamos el que viene de la BD
+                    // credito.saldo = saldoInicial;
 
                     List<NotaResumen> abonos = e.getValue();
                     abonos.sort(cmp);
@@ -115,10 +114,11 @@ public List<NotaResumen> listarNotasPorRangoResumen(java.time.LocalDate ini,
                     for (NotaResumen ab : abonos) {
                         double montoAbono = (ab.total == null ? 0.0 : ab.total);
                         saldoTmp -= montoAbono;
-                        if (Math.abs(saldoTmp) < 0.01) saldoTmp = 0.0;  // tolerancia centavos
-                        // saldo DESPUÉS de este abono
+                        if (Math.abs(saldoTmp) < 0.01) saldoTmp = 0.0;  // tolerancia
+                        // saldo DESPUÉS de este abono (solo para el AB)
                         ab.saldo = saldoTmp;
                     }
+
                 }
             }
 
@@ -402,15 +402,16 @@ public List<NotaResumen> listarNotasPorRangoResumen(java.time.LocalDate ini,
             }
         }
 
-        /** Detalle de una nota (incluye 'id'). *Se eliminó el filtro por status para no ocultar renglones*. */
 /** Detalle de una nota incluyendo también PEDIDOS y MANUFACTURAS. */
 public List<Modelo.NotaDetalle> listarDetalleDeNota(int numeroNota) throws SQLException {
     String sql =
-        "SELECT id, codigo_articulo, articulo, marca, modelo, talla, color, precio, descuento, subtotal " +
+        "SELECT id, codigo_articulo, articulo, marca, modelo, talla, color, " +
+        "       precio, descuento, subtotal, status " +
         "FROM (" +
         // 1) Renglones normales de Nota_Detalle
-        "   SELECT 1 AS ord, d.id AS id, d.codigo_articulo, d.articulo, d.marca, d.modelo, d.talla, d.color, " +
-        "          d.precio, d.descuento, d.subtotal " +
+        "   SELECT 1 AS ord, d.id AS id, d.codigo_articulo, d.articulo, d.marca, d.modelo, " +
+        "          d.talla, d.color, d.precio, d.descuento, d.subtotal, " +
+        "          COALESCE(d.status,'A') AS status " +
         "   FROM Nota_Detalle d " +
         "   WHERE d.numero_nota = ? " +
         "   UNION ALL " +
@@ -418,17 +419,19 @@ public List<Modelo.NotaDetalle> listarDetalleDeNota(int numeroNota) throws SQLEx
         "   SELECT 2 AS ord, p.id AS id, NULL AS codigo_articulo, " +
         "          CONCAT('PEDIDO – ', p.articulo) AS articulo, p.marca, p.modelo, p.talla, p.color, " +
         "          p.precio, p.descuento, " +
-        "          (p.precio - (p.precio * (p.descuento/100))) AS subtotal " +
+        "          (p.precio - (p.precio * (p.descuento/100))) AS subtotal, " +
+        "          'A' AS status " +
         "   FROM Pedidos p " +
         "   WHERE p.numero_nota = ? " +
         "   UNION ALL " +
         // 3) MANUFACTURAS ligadas a la nota
         "   SELECT 3 AS ord, m.id_manufactura AS id, NULL AS codigo_articulo, " +
-        "          CONCAT('MODISTA – ', m.articulo) AS articulo, " +   // <-- AQUÍ el cambio
-        "          '' AS marca, m.descripcion AS modelo, " +           // <-- y AQUÍ usamos descripcion
+        "          CONCAT('MODISTA – ', m.articulo) AS articulo, " +
+        "          '' AS marca, m.descripcion AS modelo, " +
         "          '' AS talla, '' AS color, " +
         "          m.precio, m.descuento, " +
-        "          (m.precio - (m.precio * (COALESCE(m.descuento,0)/100))) AS subtotal " +
+        "          (m.precio - (m.precio * (COALESCE(m.descuento,0)/100))) AS subtotal, " +
+        "          COALESCE(m.status,'A') AS status " +
         "   FROM manufacturas m " +
         "   WHERE m.numero_nota = ? AND COALESCE(m.status,'A') = 'A' " +
         ") x " +
@@ -467,6 +470,7 @@ public List<Modelo.NotaDetalle> listarDetalleDeNota(int numeroNota) throws SQLEx
                         ? null
                         : rs.getBigDecimal("subtotal").doubleValue()
                 );
+                d.setStatus(rs.getString("status"));  // <-- NUEVO
                 out.add(d);
             }
             return out;
@@ -686,12 +690,11 @@ public List<NotaResumen> listarNotasPorTelefonoResumen(String telefono) throws S
                     NotaResumen credito = creditosPorNumero.get(numCredito);
                     if (credito == null) continue;
 
-                    // Saldo inicial REAL del crédito = total - pagos iniciales del CR
                     Double saldoInicial = calcularSaldoInicialCredito(credito, fdao);
                     if (saldoInicial == null) continue;
 
-                    // Mostrar este saldo inicial en la fila del CR
-                    credito.saldo = saldoInicial;
+                    // OJO: **NO** tocar credito.saldo, dejamos el que viene de la BD
+                    // credito.saldo = saldoInicial;
 
                     List<NotaResumen> abonos = e.getValue();
                     abonos.sort(cmp);
@@ -701,9 +704,10 @@ public List<NotaResumen> listarNotasPorTelefonoResumen(String telefono) throws S
                         double montoAbono = (ab.total == null ? 0.0 : ab.total);
                         saldoTmp -= montoAbono;
                         if (Math.abs(saldoTmp) < 0.01) saldoTmp = 0.0;  // tolerancia
-                        // saldo DESPUÉS de este abono
+                        // saldo DESPUÉS de este abono (solo para el AB)
                         ab.saldo = saldoTmp;
                     }
+
                 }
             }
 
@@ -862,8 +866,6 @@ public void registrarNotaMigracion(String telefono, java.time.LocalDate fechaSal
         }
     }
 }
-// En NotasDAO
-
 /** Devuelve la fecha_evento de la nota (la mínima de los renglones activos). */
 public LocalDate obtenerFechaEventoDeNota(int numeroNota) throws SQLException {
     String sql =

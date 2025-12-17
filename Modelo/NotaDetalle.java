@@ -17,6 +17,8 @@ public class NotaDetalle {
     private Integer cantidad;
     private Double subtotal;
     private LocalDate fechaEvento;
+    private String status;
+
 
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
@@ -51,4 +53,12 @@ public class NotaDetalle {
 public void setFechaEvento(LocalDate fechaEvento) {
     this.fechaEvento = fechaEvento;
 }
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
 }

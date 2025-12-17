@@ -249,7 +249,7 @@ private String fechaLarga(LocalDate fecha) {
         btnRegistrarCliente.setVisible(false);
         btnRegistrarCliente.addActionListener(_e -> abrirFormularioCliente());
         // Buscar por apellido
-        btnBuscarCliente = new JButton("Buscar por apellido…");
+        btnBuscarCliente = new JButton("Buscar por nombre o apellido…");
         btnBuscarCliente.addActionListener(_e -> seleccionarClientePorApellido());
 
         // Misma fila: registrar + buscar
@@ -3556,7 +3556,7 @@ private void dibujarTarjeta(Graphics2D g2, TarjetaVentaData t,
     g2.drawString("Cliente: " + safe(t.cliente), textX, yCursor);          yCursor += lineH;
     g2.drawString("Fecha Evento: " + safe(t.fechaEvento), textX, yCursor); yCursor += lineH;
     g2.drawString("Fecha Compra: " + safe(t.fechaCompra), textX, yCursor); yCursor += lineH;
-    g2.drawString("Asesor: " + safe(t.asesor), textX, yCursor);            yCursor += lineH;
+    g2.drawString("Asesora: " + safe(t.asesor), textX, yCursor);            yCursor += lineH;
 
     yCursor += lineH / 2;
     g2.drawString("Código Artículo: " + safe(t.codigoArticulo), textX, yCursor); yCursor += lineH;
@@ -4158,7 +4158,7 @@ private static class DialogBusquedaCliente extends JDialog {
     private ClienteResumen seleccionado;
 
     public DialogBusquedaCliente(Window owner) {
-        super(owner, "Buscar cliente por apellido", ModalityType.APPLICATION_MODAL);
+        super(owner, "Buscar cliente por nombre o apellido", ModalityType.APPLICATION_MODAL);
         construirUI();
     }
 
@@ -4168,7 +4168,7 @@ private static class DialogBusquedaCliente extends JDialog {
 
         // Filtro
         JPanel pnlFiltro = new JPanel(new BorderLayout(5, 0));
-        pnlFiltro.add(new JLabel("Apellidos:"), BorderLayout.WEST);
+        pnlFiltro.add(new JLabel("Nombre o apellido:"), BorderLayout.WEST);
         txtApellido = new JTextField();
         pnlFiltro.add(txtApellido, BorderLayout.CENTER);
 
@@ -4197,7 +4197,7 @@ private static class DialogBusquedaCliente extends JDialog {
         // Botones abajo
         JPanel pnlBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton btnSeleccionar = new JButton("Seleccionar");
-        JButton btnCerrar = new JButton("Cerrar");
+        JButton btnCerrar = new JButton("Cancelar");
         pnlBotones.add(btnCerrar);
         pnlBotones.add(btnSeleccionar);
 
@@ -4230,14 +4230,14 @@ private static class DialogBusquedaCliente extends JDialog {
         String filtro = txtApellido.getText().trim();
         if (filtro.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                    "Escribe al menos una parte de los apellidos.",
+                    "Escribe al menos una parte del nombre o apellido.",
                     "Buscar cliente", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         try {
             clienteDAO dao = new clienteDAO();
-            resultados = dao.buscarOpcionesPorApellidoPaterno(filtro);  // <-- método que agregamos al DAO
+            resultados = dao.buscarOpcionesPorNombreOApellidos(filtro);  // <-- método que agregamos al DAO
             modelo.setRowCount(0);
 
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-yyyy");
@@ -4256,7 +4256,7 @@ private static class DialogBusquedaCliente extends JDialog {
 
             if (resultados.isEmpty()) {
                 JOptionPane.showMessageDialog(this,
-                        "No se encontraron clientes con esos apellidos.",
+                        "No se encontraron clientes con ese nombre o apellido.",
                         "Buscar cliente", JOptionPane.INFORMATION_MESSAGE);
             }
 

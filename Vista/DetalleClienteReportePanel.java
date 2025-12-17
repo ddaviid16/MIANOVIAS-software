@@ -6,6 +6,7 @@ import Utilidades.TelefonosUI;
 import Controlador.FormasPagoDAO;
 import Controlador.ExportadorCSV;
 import Controlador.FacturaDatosDAO;
+import javax.swing.table.DefaultTableCellRenderer;
 
 import java.awt.print.PrinterException;
 import java.awt.print.PrinterJob;
@@ -41,6 +42,7 @@ public class DetalleClienteReportePanel extends JPanel {
 
     private final JTextField txtTel = new JTextField();
     private final JButton btBuscar = new JButton("Buscar");
+    private final JButton btBuscarNombre = new JButton("Buscar por nombre");
     private final JButton btExportar = new JButton("Exportar CSV");
         // Estado de las notas del cliente cargado
     private List<NotasDAO.NotaResumen> notasCliente = new ArrayList<>();
@@ -50,7 +52,7 @@ public class DetalleClienteReportePanel extends JPanel {
     private final JButton btImprimir = new JButton("Imprimir hoja detalle");
 
     // Saldo global fuera de la tabla
-    private final JLabel lbSaldoGlobal = new JLabel("Saldo global créditos: $ 0.00");
+    private final JLabel lbSaldoGlobal = new JLabel("Saldo total: $ 0.00");
 
 
     // ===== Datos del cliente (clave/valor) =====
@@ -81,16 +83,21 @@ public class DetalleClienteReportePanel extends JPanel {
         cm.removeColumn(cm.getColumn(viewIndex));
     }
 
-    // ===== Detalle de la nota seleccionada =====
+// ===== Detalle de la nota seleccionada =====
 private final DefaultTableModel modelDet = new DefaultTableModel(
-        new String[]{"Código", "Artículo", "Marca", "Modelo", "Talla", "Color", "Precio", "%Desc", "Subtotal"}, 0) {
+        new String[]{"Código", "Artículo", "Marca", "Modelo", "Talla", "Color",
+                     "Precio", "%Desc", "Subtotal", "Status"}, 0) {
     @Override public boolean isCellEditable(int r, int c) { return false; }
 
     @Override public Class<?> getColumnClass(int c) {
-        // Ya no asumimos que el código es numérico; soporta varchar
-        return (c >= 6 ? Double.class : String.class);
+        // 6,7,8 son numéricos; el resto texto
+        return switch (c) {
+            case 6, 7, 8 -> Double.class;
+            default -> String.class;
+        };
     }
 };
+
 
     private final JTable tbDet = new JTable(modelDet);
 
@@ -178,6 +185,7 @@ private static final String[] ORDEN_INFO = {
         north.add(new JLabel("Teléfono:"));
         north.add(txtTel);
         north.add(btBuscar);
+        north.add(btBuscarNombre);
         north.add(btExportar);
         north.add(btImprimir);
         add(north, BorderLayout.NORTH);
@@ -212,7 +220,13 @@ private static final String[] ORDEN_INFO = {
         tbDet.setRowHeight(22);
         tbPago.setRowHeight(22);
         tbObsequios.setRowHeight(22);
-        tbFactura.setRowHeight(22);
+        tbFactura.setRowHeight(22);        
+        // Ocultar columna Status del detalle (sigue estando en el modelo)
+        ocultarColumnaVista(tbDet, 9); // índice de "Status" en la vista
+
+        // Pintar en rojo los renglones devueltos (status = 'C')
+        instalarRendererDetalle();
+
 
         // --- Tab "Detalle"
         JScrollPane spDet = new JScrollPane(tbDet);
@@ -264,6 +278,7 @@ private static final String[] ORDEN_INFO = {
 
         // Eventos
         btBuscar.addActionListener(_e -> buscar());
+        btBuscarNombre.addActionListener(_e -> seleccionarClientePorApellido());  // ← NUEVO
         btExportar.addActionListener(_e -> {
             if (Utilidades.SeguridadUI.pedirYValidarClave(this)) {
                 exportarCSVCliente();
@@ -288,7 +303,7 @@ private static final String[] ORDEN_INFO = {
         modelObsequios.setRowCount(0);
         modelFactura.setRowCount(0);
         lbAbonaA.setText(" ");
-        lbSaldoGlobal.setText("Saldo global créditos: $ 0.00");
+        lbSaldoGlobal.setText("Saldo total: $ 0.00");
     }
 
 
@@ -375,7 +390,7 @@ private void buscar() {
 
     // === 3) Saldo global del cliente (créditos) fuera de la tabla ===
     String txtSaldo = formatMoney(saldoGlobalCreditos);
-    lbSaldoGlobal.setText("Saldo global créditos: " + txtSaldo);
+    lbSaldoGlobal.setText("Saldo total: " + txtSaldo);
 
 
 }
@@ -417,7 +432,8 @@ private void cargarDetalleYFechasDeNotaSeleccionada() {
                     safe(d.getColor()),
                     z(d.getPrecio()),
                     z(d.getDescuento()),
-                    z(d.getSubtotal())
+                    z(d.getSubtotal()),
+                    safe(d.getStatus())  // <-- NUEVO, queda oculta
             });
         }
 
@@ -901,6 +917,7 @@ private static String formatMoney(double v) {
 }
 /** Línea para la tabla de COMPRAS del formato impreso. */
 private static class CompraLinea {
+    int numeroNota;
     String folio;
     LocalDate fecha;
     String codigoArticulo;
@@ -911,8 +928,10 @@ private static class CompraLinea {
     Double precio;
     Double descuento;
     Double precioPagar;
-    boolean esDevolucion;
+    boolean esDevolucion;    // ya no se usa para DV, pero lo dejo por compatibilidad
+    String status;           // "D" devuelto, "C" nota cancelada, "" normal
 }
+
 /** Fila de la tabla de datos del encabezado (parte superior). */
 private static class EncabezadoLinea {
     final String labelL;
@@ -930,6 +949,7 @@ private static class EncabezadoLinea {
 
 /** Línea para la tabla de PAGOS / DEVOLUCIONES del formato impreso. */
 private static class PagoLinea {
+    int numeroNota;
     String folio;
     LocalDate fecha;
     String concepto;
@@ -1027,70 +1047,80 @@ private String firstNonBlank(String... vals) {
     return "";
 }
 
-/** Construye las líneas de COMPRAS Y DEVOLUCIONES a partir de las notas CN/CR/DV del cliente. */
 private List<CompraLinea> construirCompras(NotasDAO ndao, List<NotasDAO.NotaResumen> notas) throws SQLException {
     List<CompraLinea> out = new ArrayList<>();
     if (notas == null) return out;
 
     for (NotasDAO.NotaResumen r : notas) {
-        String tipo = safeUpper(r.tipo);
-        boolean esDev = "DV".equals(tipo);
+        if (r == null) continue;
 
-        // Solo nos interesan contado, crédito y devoluciones
-        if (!"CN".equals(tipo) && !"CR".equals(tipo) && !"DV".equals(tipo)) continue;
+        String tipo       = safeUpper(r.tipo);
+        String statusNota = safeUpper(r.status);
+
+        // Solo contado y crédito; las devoluciones van en PAGOS
+        if (!"CN".equals(tipo) && !"CR".equals(tipo)) continue;
+
+        // NOTAS CANCELADAS: NO se muestran en la hoja
+        if ("C".equals(statusNota)) continue;
 
         List<Modelo.NotaDetalle> dets = ndao.listarDetalleDeNota(r.numero);
 
         if (dets == null || dets.isEmpty()) {
-            // Sin detalle: hacemos un renglón resumen
+            // Sin detalle: renglón resumen de la nota (solo si no está cancelada)
             CompraLinea c = new CompraLinea();
-            c.folio = folioDeNota(r);
-            c.fecha = r.fecha;
-            c.codigoArticulo = "";
-            c.modelo = "";
-            c.talla = "";
-            c.color = "";
-            c.descuento = 0.0;
+            c.numeroNota      = r.numero;
+            c.folio           = folioDeNota(r);
+            c.fecha           = r.fecha;
+            c.codigoArticulo  = "";
+            c.modelo          = "";
+            c.talla           = "";
+            c.color           = "";
+            c.descuento       = 0.0;
+            c.status          = "";   // nada de 'C' aquí
 
-            if (esDev) {
-                c.articulo = "Devolución";
-                double total = z(r.total);
-                c.precio = -total;
-                c.precioPagar = -total;   // resta al total
-                c.esDevolucion = true;
-            } else {
-                c.articulo = "Venta " + (tipo.equals("CN") ? "contado" : "crédito");
-                double total = z(r.total);
-                c.precio = total;
-                c.precioPagar = total;
-                c.esDevolucion = false;
-            }
+            c.articulo        = "Venta " + ("CN".equals(tipo) ? "contado" : "crédito");
+            double total      = z(r.total);
+            c.precio          = total;
+            c.precioPagar     = total;
+            c.esDevolucion    = false;
+
             out.add(c);
         } else {
             // Con detalle: una fila por renglón
             for (Modelo.NotaDetalle d : dets) {
+                // Renglones cancelados: tampoco se muestran
+                String stDet = safeUpper(d.getStatus());
+                if ("C".equals(stDet)) {
+                    continue;
+                }
+
                 CompraLinea c = new CompraLinea();
-                c.folio = folioDeNota(r);
-                c.fecha = r.fecha;
-                c.codigoArticulo = String.valueOf(d.getCodigoArticulo()); // varchar o numérico
-                c.articulo = safe(d.getArticulo());
-                c.modelo = safe(d.getModelo());
-                c.talla = safe(d.getTalla());
-                c.color = safe(d.getColor());
-                c.descuento = z(d.getDescuento());
+                c.numeroNota     = r.numero;
+                c.folio          = folioDeNota(r);
+                c.fecha          = r.fecha;
+                c.codigoArticulo = String.valueOf(d.getCodigoArticulo());
+                c.articulo       = safe(d.getArticulo());
+                c.modelo         = safe(d.getModelo());
+                c.talla          = safe(d.getTalla());
+                c.color          = safe(d.getColor());
+                c.descuento      = z(d.getDescuento());
+
+                // Status visual: D devuelto, A activo
+                String stFinal;
+                if ("D".equals(stDet)) {
+                    stFinal = "D";
+                } else {
+                    stFinal = "A";
+                }
+                c.status = stFinal;
 
                 double precio = z(d.getPrecio());
-                double sub = z(d.getSubtotal());
+                double sub    = z(d.getSubtotal());
 
-                if (esDev) {
-                    c.precio = -precio;
-                    c.precioPagar = -sub;   // devolución resta
-                    c.esDevolucion = true;
-                } else {
-                    c.precio = precio;
-                    c.precioPagar = sub;
-                    c.esDevolucion = false;
-                }
+                c.precio      = precio;
+                c.precioPagar = sub;
+                c.esDevolucion = false;
+
                 out.add(c);
             }
         }
@@ -1103,7 +1133,13 @@ private List<PagoLinea> construirPagos(NotasDAO ndao, List<NotasDAO.NotaResumen>
     if (notas == null) return out;
 
     for (NotasDAO.NotaResumen r : notas) {
-        String tipo = safeUpper(r.tipo);
+        if (r == null) continue;
+
+        String tipo   = safeUpper(r.tipo);
+        String status = safeUpper(r.status);
+
+        // Movimientos cancelados: fuera de la impresión
+        if ("C".equals(status)) continue;
 
         if ("CR".equals(tipo)) {
             // Pago inicial: total - saldo
@@ -1112,18 +1148,20 @@ private List<PagoLinea> construirPagos(NotasDAO ndao, List<NotasDAO.NotaResumen>
             double enganche = total - saldo;
             if (enganche > 0.005) {
                 PagoLinea p = new PagoLinea();
-                p.folio = folioDeNota(r);
-                p.fecha = r.fecha;
-                p.concepto = "Pago inicial de la nota";
-                p.importe = enganche;
-                p.saldo = saldo;
+                p.numeroNota = r.numero;
+                p.folio      = folioDeNota(r);
+                p.fecha      = r.fecha;
+                p.concepto   = "Pago inicial de la nota";
+                p.importe    = enganche;
+                p.saldo      = saldo;
                 p.esDevolucion = false;
                 out.add(p);
             }
         } else if ("AB".equals(tipo)) {
             PagoLinea p = new PagoLinea();
-            p.folio = folioDeNota(r);
-            p.fecha = r.fecha;
+            p.numeroNota = r.numero;
+            p.folio      = folioDeNota(r);
+            p.fecha      = r.fecha;
 
             String folioCR = obtenerFolioCreditoAbonado(r.numero);
             if (folioCR == null || folioCR.isBlank()) {
@@ -1132,13 +1170,82 @@ private List<PagoLinea> construirPagos(NotasDAO ndao, List<NotasDAO.NotaResumen>
                 p.concepto = "Abono a " + folioCR;
             }
 
-            p.importe = z(r.total);
-            p.saldo   = z(r.saldo);   // saldo después de este abono
+            p.importe      = z(r.total);
+            p.saldo        = z(r.saldo);
             p.esDevolucion = false;
             out.add(p);
-        } else if ("DV".equals(tipo)) {
-            // Las devoluciones sólo van en la tabla de compras/devoluciones
+
+                } else if ("DV".equals(tipo)) {
+            // Devoluciones en negativo
+            PagoLinea p = new PagoLinea();
+            p.numeroNota = r.numero;
+            p.folio      = folioDeNota(r);
+            p.fecha      = r.fecha;
+
+            String descDev = "";
+            try {
+                List<Modelo.NotaDetalle> dets = ndao.listarDetalleDeNota(r.numero);
+                if (dets != null && !dets.isEmpty()) {
+                    // Usamos LinkedHashSet para evitar duplicados y respetar el orden
+                    java.util.LinkedHashSet<String> arts = new java.util.LinkedHashSet<>();
+
+                    for (Modelo.NotaDetalle d : dets) {
+                        String cod   = (d.getCodigoArticulo() == null
+                                        ? ""
+                                        : String.valueOf(d.getCodigoArticulo()));
+                        String art   = safe(d.getArticulo());
+                        String mod   = safe(d.getModelo());
+                        String talla = safe(d.getTalla());
+                        String color = safe(d.getColor());
+
+                        StringBuilder sb = new StringBuilder();
+
+                        if (!isBlank(cod)) {
+                            sb.append(cod);
+                        }
+                        if (!isBlank(art)) {
+                            if (sb.length() > 0) sb.append(", ");
+                            sb.append(art);
+                        }
+                        if (!isBlank(mod)) {
+                            if (sb.length() > 0) sb.append(", ");
+                            sb.append(mod);
+                        }
+                        if (!isBlank(talla)) {
+                            if (sb.length() > 0) sb.append(", ");
+                            sb.append(talla);
+                        }
+                        if (!isBlank(color)) {
+                            if (sb.length() > 0) sb.append(", ");
+                            sb.append(color);
+                        }
+
+                        if (sb.length() > 0) {
+                            arts.add(sb.toString());
+                        }
+                    }
+
+                    if (!arts.isEmpty()) {
+                        // Si la devolución trae varios renglones, los separamos con " | "
+                        descDev = String.join(" | ", arts);
+                    }
+                }
+            } catch (SQLException ex) {
+                // texto genérico si truena
+            }
+
+            if (isBlank(descDev)) {
+                descDev = "artículo";
+            }
+
+            p.concepto     = "Devolución - " + descDev;
+            double total   = z(r.total);
+            p.importe      = -Math.abs(total);
+            p.saldo        = null;
+            p.esDevolucion = true;
+            out.add(p);
         }
+
     }
     return out;
 }
@@ -1214,50 +1321,43 @@ private void imprimirHojaDetalleCliente() {
 
         ClienteResumen cr = cdao.buscarResumenPorTelefono(tel);
 
-        // Notas del cliente (si no las tenemos en memoria, las consultamos)
-        List<NotasDAO.NotaResumen> notas;
-        if (notasCliente != null && !notasCliente.isEmpty()) {
-            notas = notasCliente;
-        } else {
-            NotasDAO ndao = new NotasDAO();
-            notas = ndao.listarNotasPorTelefonoResumen(tel);
-        }
-
         NotasDAO ndao2 = new NotasDAO();
+        // Siempre leer lo más fresco de la BD al imprimir
+        List<NotasDAO.NotaResumen> notas = ndao2.listarNotasPorTelefonoResumen(tel);
+
         List<CompraLinea> compras = construirCompras(ndao2, notas);
-        List<PagoLinea> pagos = construirPagos(ndao2, notas);
+        List<PagoLinea> pagos   = construirPagos(ndao2, notas);
+        String desgloseSaldos   = construirDesgloseSaldos(notas);
 
         double saldoGlobal = obtenerSaldoGlobalCreditos(tel);
 
-                
+        // Nota de crédito inicial (para folio de apartado y fecha de operación)
+        NotasDAO.NotaResumen notaCreditoInicial = elegirPrimerCredito(notas);
+        // Si por alguna razón no hay CR, caemos al criterio anterior
+        NotasDAO.NotaResumen notaPrincipal = (notaCreditoInicial != null)
+                ? notaCreditoInicial
+                : elegirNotaPrincipal(notas);
 
-// Nota de crédito inicial (para folio de apartado y fecha de operación)
-NotasDAO.NotaResumen notaCreditoInicial = elegirPrimerCredito(notas);
-// Si por alguna razón no hay CR, caemos al criterio anterior
-NotasDAO.NotaResumen notaPrincipal = (notaCreditoInicial != null)
-        ? notaCreditoInicial
-        : elegirNotaPrincipal(notas);
+        String folioPrincipal = "";
+        String modeloVestido = "";
+        String tallaVestido = "";
+        String colorVestido = "";
+        LocalDate fechaOperacion = null;
 
-String folioPrincipal = "";
-String modeloVestido = "";
-String tallaVestido = "";
-String colorVestido = "";
-LocalDate fechaOperacion = null;
+        if (notaPrincipal != null) {
+            folioPrincipal = folioDeNota(notaPrincipal); // Folio de apartado
+            fechaOperacion = notaPrincipal.fecha;        // Fecha de operación
 
-if (notaPrincipal != null) {
-    folioPrincipal = folioDeNota(notaPrincipal); // Folio de apartado
-    fechaOperacion = notaPrincipal.fecha;        // Fecha de operación
-
-    try {
-        List<Modelo.NotaDetalle> dets = ndao2.listarDetalleDeNota(notaPrincipal.numero);
-        if (!dets.isEmpty()) {
-            Modelo.NotaDetalle d0 = dets.get(0);
-            modeloVestido = safe(d0.getModelo());
-            tallaVestido = safe(d0.getTalla());
-            colorVestido = safe(d0.getColor());
+            try {
+                List<Modelo.NotaDetalle> dets = ndao2.listarDetalleDeNota(notaPrincipal.numero);
+                if (!dets.isEmpty()) {
+                    Modelo.NotaDetalle d0 = dets.get(0);
+                    modeloVestido = safe(d0.getModelo());
+                    tallaVestido = safe(d0.getTalla());
+                    colorVestido = safe(d0.getColor());
+                }
+            } catch (SQLException ignore) { }
         }
-    } catch (SQLException ignore) { }
-}
 
 
         // Datos de calendario del cliente
@@ -1352,7 +1452,8 @@ String observaciones = obsBuilder.toString();
                 saldoGlobal,
                 observaciones,
                 compras,
-                pagos
+                pagos,
+                desgloseSaldos
         );
         job.setPrintable(printable);
 
@@ -1393,13 +1494,15 @@ private static class HojaDetallePrintable implements Printable {
     private final String observaciones;
     private final List<CompraLinea> compras;
     private final List<PagoLinea> pagos;
+    private final String desgloseSaldos;
 
     // Lista lineal de líneas a imprimir (compras + pagos)
     private List<LineaMov> lineas;
 
     // Totales para los renglones "TOTAL ..."
     private double totalComprasMov = 0.0;
-    private double totalPagosMov   = 0.0;
+    private double totalPagos        = 0.0;  // sólo pagos (CR/AB)
+    private double totalDevoluciones = 0.0;  // sólo devoluciones (DV)
 
     private static final DateTimeFormatter DF_IMP =
             DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -1407,6 +1510,10 @@ private static class HojaDetallePrintable implements Printable {
     private static final int TOP_MARGIN    = 30;
     private static final int BOTTOM_MARGIN = 30;
     private static final int ROW_HEIGHT    = 12;
+    // 2 mm adicionales de margen izquierdo
+    private static final double MM_TO_POINTS = 72.0 / 25.4;
+    private static final int EXTRA_LEFT_MARGIN = (int) Math.round(2 * MM_TO_POINTS);
+
 
     /** Tipo de línea dentro de la tabla de movimientos. */
     private static class LineaMov {
@@ -1419,7 +1526,8 @@ private static class HojaDetallePrintable implements Printable {
             TITLE_PAGOS,
             HEADER_PAGOS,
             ROW_PAGO,
-            TOTAL_PAGOS
+            TOTAL_PAGOS,
+            SALDOS_RESUMEN
         }
         final Tipo tipo;
         final CompraLinea compra;
@@ -1463,7 +1571,8 @@ private static class HojaDetallePrintable implements Printable {
             double saldoGlobal,
             String observaciones,
             List<CompraLinea> compras,
-            List<PagoLinea> pagos
+            List<PagoLinea> pagos,
+            String desgloseSaldos
     ) {
         this.nombreCompleto = nombreCompleto;
         this.celular = celular;
@@ -1487,6 +1596,7 @@ private static class HojaDetallePrintable implements Printable {
         this.observaciones = observaciones;
         this.compras = (compras == null) ? Collections.emptyList() : compras;
         this.pagos   = (pagos   == null) ? Collections.emptyList()   : pagos;
+        this.desgloseSaldos = (desgloseSaldos == null ? "" : desgloseSaldos.trim());
     }
 
     @Override
@@ -1531,7 +1641,7 @@ private static class HojaDetallePrintable implements Printable {
         // Encabezado pequeño de continuación
         Font fTituloCont = new Font("SansSerif", Font.BOLD, 12);
         g2.setFont(fTituloCont);
-        g2.drawString("MOVIMIENTOS (continuación)", 20, y);
+        g2.drawString("MOVIMIENTOS (continuación)", 20 + EXTRA_LEFT_MARGIN, y);
         y += 18;
 
         int disponible = h - BOTTOM_MARGIN - y;
@@ -1552,11 +1662,7 @@ private static class HojaDetallePrintable implements Printable {
 
         // Ordenar compras por fecha y folio
         List<CompraLinea> comprasOrdenadas = new ArrayList<>(compras);
-        comprasOrdenadas.sort(
-                Comparator
-                        .comparing((CompraLinea c) -> c.fecha, Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(c -> c.folio == null ? "" : c.folio)
-        );
+        comprasOrdenadas.sort(Comparator.comparingInt(c -> c.numeroNota));
 
         totalComprasMov = 0.0;
         for (CompraLinea c : comprasOrdenadas) {
@@ -1577,16 +1683,20 @@ private static class HojaDetallePrintable implements Printable {
 
         // Ordenar pagos por fecha y folio
         List<PagoLinea> pagosOrdenados = new ArrayList<>(pagos);
-        pagosOrdenados.sort(
-                Comparator
-                        .comparing((PagoLinea p) -> p.fecha, Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(p -> p.folio == null ? "" : p.folio)
-        );
+        pagosOrdenados.sort(Comparator.comparingInt(p -> p.numeroNota));
 
-        totalPagosMov = 0.0;
+        totalPagos        = 0.0;
+        totalDevoluciones = 0.0;
+
         for (PagoLinea p : pagosOrdenados) {
             if (p != null && p.importe != null) {
-                totalPagosMov += p.importe;
+                if (p.esDevolucion) {
+                    // En PagoLinea ya guardaste las devoluciones en negativo,
+                    // para el total queremos el monto positivo
+                    totalDevoluciones += Math.abs(p.importe);
+                } else {
+                    totalPagos += p.importe;
+                }
             }
         }
 
@@ -1597,6 +1707,12 @@ private static class HojaDetallePrintable implements Printable {
                 lineas.add(new LineaMov(LineaMov.Tipo.ROW_PAGO, p));
             }
             lineas.add(new LineaMov(LineaMov.Tipo.TOTAL_PAGOS));
+        }
+
+
+        // Resumen de saldos pendientes por nota (fuera del recuadro de pagos)
+        if (desgloseSaldos != null && !desgloseSaldos.isBlank()) {
+            lineas.add(new LineaMov(LineaMov.Tipo.SALDOS_RESUMEN));
         }
     }
 
@@ -1661,10 +1777,11 @@ private static class HojaDetallePrintable implements Printable {
         y += 22;
 
         // Saldo global arriba derecha
-        int xTable = 20;
-        int tableWidth = w - 40;
+        int xTable = 20 + EXTRA_LEFT_MARGIN;
+        int tableWidth = w - 40 - EXTRA_LEFT_MARGIN;
 
-        String lblSaldo = "Saldo global créditos:";
+
+        String lblSaldo = "Saldo total:";
         String valSaldo = formatMoney(saldoGlobal);
 
         if (draw) {
@@ -1755,8 +1872,9 @@ private static class HojaDetallePrintable implements Printable {
         y = y + headerHeight + 26;
 
         // Observaciones + medidas para ajuste
-        int xLeft = 20;
-        int anchoTotal = w - 40;
+        int xLeft = 20 + EXTRA_LEFT_MARGIN;
+        int anchoTotal = w - 40 - EXTRA_LEFT_MARGIN;
+
         int anchoObs = (int) (anchoTotal * 0.65);
         int anchoMed = anchoTotal - anchoObs - 10;
         if (anchoMed < 120) anchoMed = 120;
@@ -1797,32 +1915,34 @@ private static class HojaDetallePrintable implements Printable {
     /** Dibuja las líneas de movimientos desde firstIndex, máximo maxLines líneas. */
     private void drawMovimientos(Graphics2D g2, PageFormat pf, int startY, int firstIndex, int maxLines) {
         int w = (int) pf.getImageableWidth();
-        int x = 20;
-        int tableWidth = w - 40;
+        int x = 20 + EXTRA_LEFT_MARGIN;
+        int tableWidth = w - 40 - EXTRA_LEFT_MARGIN;
+
 
         Font fTitulo = new Font("SansSerif", Font.BOLD, 12);
         Font fHeader = new Font("SansSerif", Font.BOLD, 8);
         Font fNormal = new Font("SansSerif", Font.PLAIN, 8);
 
         // Columnas de COMPRAS
-        int colFolio   = (int) (tableWidth * 0.09);
-        int colFecha   = (int) (tableWidth * 0.11);
-        int colCodigo  = (int) (tableWidth * 0.11);
-        int colArticulo= (int) (tableWidth * 0.20);
-        int colModelo  = (int) (tableWidth * 0.12);
+        int colFolio   = (int) (tableWidth * 0.08);
+        int colFecha   = (int) (tableWidth * 0.09);
+        int colCodigo  = (int) (tableWidth * 0.09);
+        int colArticulo= (int) (tableWidth * 0.19);
+        int colModelo  = (int) (tableWidth * 0.11);
         int colTalla   = (int) (tableWidth * 0.06);
-        int colColor   = (int) (tableWidth * 0.09);
+        int colColor   = (int) (tableWidth * 0.08);
+        int colStatusC = (int) (tableWidth * 0.05);
         int colPrecio  = (int) (tableWidth * 0.09);
-        int colDesc    = (int) (tableWidth * 0.06);
+        int colDesc    = (int) (tableWidth * 0.05);
         int colPagar   = tableWidth - (colFolio + colFecha + colCodigo + colArticulo +
-                                       colModelo + colTalla + colColor + colPrecio + colDesc);
+                                    colModelo + colTalla + colColor + colStatusC + colPrecio + colDesc);
 
-        // Columnas de PAGOS
-        int colFolio2   = (int) (tableWidth * 0.13);
-        int colFecha2   = (int) (tableWidth * 0.17);
-        int colConcepto = (int) (tableWidth * 0.42);
-        int colImporte  = (int) (tableWidth * 0.14);
-        int colSaldo    = tableWidth - (colFolio2 + colFecha2 + colConcepto + colImporte);
+        // Columnas de PAGOS (pagos + devoluciones, sin saldo)
+        int colFolio2   = (int) (tableWidth * 0.15);
+        int colFecha2   = (int) (tableWidth * 0.18);
+        int colConcepto = (int) (tableWidth * 0.47);
+        int colImporte  = tableWidth - (colFolio2 + colFecha2 + colConcepto);
+
 
         int y = startY;
         int printed = 0;
@@ -1832,7 +1952,7 @@ private static class HojaDetallePrintable implements Printable {
             switch (ln.tipo) {
                 case TITLE_COMPRAS: {
                     g2.setFont(fTitulo);
-                    g2.drawString("COMPRAS Y DEVOLUCIONES", x, y);
+                    g2.drawString("COMPRAS", x, y);
                     break;
                 }
                 case HEADER_COMPRAS: {
@@ -1845,6 +1965,7 @@ private static class HojaDetallePrintable implements Printable {
                     g2.drawString("Modelo",   xx, y); xx += colModelo;
                     g2.drawString("Talla",    xx, y); xx += colTalla;
                     g2.drawString("Color",    xx, y); xx += colColor;
+                    g2.drawString("St",       xx, y); xx += colStatusC;
                     g2.drawString("Precio",   xx, y); xx += colPrecio;
                     g2.drawString("Desc%",    xx, y); xx += colDesc;
                     g2.drawString("A pagar",  xx, y);
@@ -1853,6 +1974,7 @@ private static class HojaDetallePrintable implements Printable {
                     g2.drawLine(x, headerBottom, x + tableWidth, headerBottom);
                     break;
                 }
+
                 case ROW_COMPRA: {
                     g2.setFont(fNormal);
                     CompraLinea c = ln.compra;
@@ -1861,11 +1983,12 @@ private static class HojaDetallePrintable implements Printable {
                     g2.drawString(formatDate(c.fecha),                    xx, y); xx += colFecha;
                     g2.drawString(valueOrEmpty(c.codigoArticulo),         xx, y); xx += colCodigo;
                     g2.drawString(trimTo(g2, valueOrEmpty(c.articulo),
-                                         colArticulo - 4),                 xx, y); xx += colArticulo;
+                                        colArticulo - 4),                 xx, y); xx += colArticulo;
                     g2.drawString(trimTo(g2, valueOrEmpty(c.modelo),
-                                         colModelo - 4),                   xx, y); xx += colModelo;
+                                        colModelo - 4),                   xx, y); xx += colModelo;
                     g2.drawString(valueOrEmpty(c.talla),                  xx, y); xx += colTalla;
                     g2.drawString(valueOrEmpty(c.color),                  xx, y); xx += colColor;
+                    g2.drawString(valueOrEmpty(c.status),                 xx, y); xx += colStatusC;
                     g2.drawString(formatMoney(c.precio),                  xx, y); xx += colPrecio;
                     g2.drawString(formatPercent(c.descuento),             xx, y); xx += colDesc;
                     g2.drawString(formatMoney(c.precioPagar),             xx, y);
@@ -1873,7 +1996,7 @@ private static class HojaDetallePrintable implements Printable {
                 }
                 case TOTAL_COMPRAS: {
                     g2.setFont(fTitulo.deriveFont(10f));
-                    g2.drawString("TOTAL COMPRAS Y DEVOLUCIONES: " +
+                    g2.drawString("TOTAL COMPRAS:" +
                                   formatMoney(totalComprasMov), x, y);
                     break;
                 }
@@ -1883,7 +2006,7 @@ private static class HojaDetallePrintable implements Printable {
                 }
                 case TITLE_PAGOS: {
                     g2.setFont(fTitulo);
-                    g2.drawString("PAGOS", x, y);
+                    g2.drawString("PAGOS Y DEVOLUCIONES", x, y);
                     break;
                 }
                 case HEADER_PAGOS: {
@@ -1893,7 +2016,6 @@ private static class HojaDetallePrintable implements Printable {
                     g2.drawString("Fecha pago", xx, y); xx += colFecha2;
                     g2.drawString("Concepto",   xx, y); xx += colConcepto;
                     g2.drawString("Importe",    xx, y); xx += colImporte;
-                    g2.drawString("Saldo",      xx, y);
                     int headerBottom = y + 3;
                     g2.drawLine(x, headerBottom, x + tableWidth, headerBottom);
                     break;
@@ -1905,16 +2027,34 @@ private static class HojaDetallePrintable implements Printable {
                     g2.drawString(valueOrEmpty(p.folio),            xx, y); xx += colFolio2;
                     g2.drawString(formatDate(p.fecha),              xx, y); xx += colFecha2;
                     g2.drawString(trimTo(g2, valueOrEmpty(p.concepto),
-                                         colConcepto - 4),          xx, y); xx += colConcepto;
-                    g2.drawString(formatMoney(p.importe),           xx, y); xx += colImporte;
-                    g2.drawString(formatMoney(p.saldo),             xx, y);
+                                        colConcepto - 4),          xx, y); xx += colConcepto;
+                    g2.drawString(formatMoney(p.importe),           xx, y);
                     break;
                 }
                 case TOTAL_PAGOS: {
                     g2.setFont(fTitulo.deriveFont(10f));
-                    g2.drawString("TOTAL PAGOS: " + formatMoney(totalPagosMov), x, y);
+
+                    String txt = "TOTAL PAGOS: " + formatMoney(totalPagos)
+                            + "    TOTAL DEVOLUCIONES: " + formatMoney(totalDevoluciones);
+
+                    g2.drawString(txt, x, y);
                     break;
                 }
+
+                case SALDOS_RESUMEN: {
+                    if (desgloseSaldos != null && !desgloseSaldos.isBlank()) {
+                        g2.setFont(fTitulo.deriveFont(9f));
+                        String txt = "Saldos pendientes por nota: " + desgloseSaldos;
+                        if (saldoGlobal > 0.005) {
+                            txt += "   |   Saldo total: " + formatMoney(saldoGlobal);
+                        }
+                        // Envolver dentro del ancho de la tabla, usando la misma altura de fila
+                        drawWrappedText(g2, txt, x, y, tableWidth, ROW_HEIGHT);
+                    }
+                    break;
+                }
+
+
             }
             y += ROW_HEIGHT;
             printed++;
@@ -2270,5 +2410,210 @@ private String construirResumenObsequiosCliente(List<NotasDAO.NotaResumen> notas
             return 0.0;
         }
     }
+/** Pinta en rojo los renglones cuyo status = 'C' en el detalle de la nota. */
+private void instalarRendererDetalle() {
+    tbDet.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+        @Override
+        public Component getTableCellRendererComponent(
+                JTable table, Object value, boolean isSelected,
+                boolean hasFocus, int row, int column) {
+
+            Component c = super.getTableCellRendererComponent(
+                    table, value, isSelected, hasFocus, row, column);
+
+            int modelRow = table.convertRowIndexToModel(row);
+            int statusColModel = modelDet.getColumnCount() - 1; // última col = Status
+            Object stObj = modelDet.getValueAt(modelRow, statusColModel);
+            String status = (stObj == null ? "" : stObj.toString().trim().toUpperCase());
+
+            if (!isSelected) {
+                if ("C".equals(status)) {
+                    // Rojo clarito para no quemar las retinas
+                    c.setBackground(new Color(255, 222, 3));
+                } else {
+                    c.setBackground(Color.WHITE);
+                }
+            }
+
+            return c;
+        }
+    });
+}
+/** Devuelve texto "CR 1234 $100.00  |  CR 5678 $50.00" con créditos con saldo pendiente. */
+private String construirDesgloseSaldos(List<NotasDAO.NotaResumen> notas) {
+    if (notas == null || notas.isEmpty()) return "";
+    List<String> partes = new ArrayList<>();
+
+    for (NotasDAO.NotaResumen r : notas) {
+        if (r == null) continue;
+
+        String tipo = safeUpper(r.tipo);
+        String status = safeUpper(r.status);
+        if (!"CR".equals(tipo)) continue;   // sólo créditos
+        if ("C".equals(status)) continue;   // ignorar cancelados
+
+        Double saldo = r.saldo;
+        if (saldo == null) continue;
+        if (saldo <= 0.005) continue;       // prácticamente cero
+
+        String folio = folioDeNota(r);
+        partes.add(folio + " " + formatMoney(saldo));
+    }
+
+    return String.join("  |  ", partes);
+}
+/** Abre un diálogo para buscar cliente por nombre/apellidos y carga su teléfono en el panel. */
+private void seleccionarClientePorApellido() {
+    java.awt.Window owner = SwingUtilities.getWindowAncestor(this);
+    DialogBusquedaCliente dlg = new DialogBusquedaCliente(owner);
+    dlg.setLocationRelativeTo(this);
+    dlg.setVisible(true);
+
+    ClienteResumen cr = dlg.getSeleccionado();
+    if (cr != null) {
+        String tel = Utilidades.TelefonosUI.soloDigitos(cr.getTelefono1());
+        if (tel != null && !tel.isEmpty()) {
+            txtTel.setText(tel);
+            // usamos el mismo flujo que si hubieras escrito el teléfono a mano
+            buscar();
+        }
+    }
+}
+/** Diálogo modal para buscar cliente por nombre o apellidos. */
+private static class DialogBusquedaCliente extends JDialog {
+
+    private JTextField txtApellido;
+    private JTable tabla;
+    private javax.swing.table.DefaultTableModel modelo;
+    private java.util.List<ClienteResumen> resultados = new java.util.ArrayList<>();
+    private ClienteResumen seleccionado;
+
+    public DialogBusquedaCliente(java.awt.Window owner) {
+        super(owner, "Buscar cliente por nombre/apellidos", ModalityType.APPLICATION_MODAL);
+        construirUI();
+    }
+
+    private void construirUI() {
+        JPanel main = new JPanel(new BorderLayout(8, 8));
+        main.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Filtro
+        JPanel pnlFiltro = new JPanel(new BorderLayout(5, 0));
+        pnlFiltro.add(new JLabel("Nombre / Apellidos:"), BorderLayout.WEST);
+        txtApellido = new JTextField();
+        pnlFiltro.add(txtApellido, BorderLayout.CENTER);
+
+        JButton btnBuscar = new JButton("Buscar");
+        pnlFiltro.add(btnBuscar, BorderLayout.EAST);
+
+        main.add(pnlFiltro, BorderLayout.NORTH);
+
+        // Tabla
+        modelo = new javax.swing.table.DefaultTableModel(
+                new Object[]{"Nombre completo", "Teléfono", "Teléfono 2", "Evento", "Prueba 1", "Prueba 2", "Entrega"},
+                0
+        ) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
+        tabla = new JTable(modelo);
+        tabla.setRowHeight(22);
+        tabla.setAutoCreateRowSorter(true);
+
+        main.add(new JScrollPane(tabla), BorderLayout.CENTER);
+
+        // Botones abajo
+        JPanel pnlBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnSeleccionar = new JButton("Seleccionar");
+        JButton btnCerrar = new JButton("Cancelar");
+        pnlBotones.add(btnCerrar);
+        pnlBotones.add(btnSeleccionar);
+
+        main.add(pnlBotones, BorderLayout.SOUTH);
+
+        setContentPane(main);
+        setSize(800, 400);
+        setLocationRelativeTo(getOwner());
+
+        // Eventos
+        btnBuscar.addActionListener(_e -> buscar());
+        btnSeleccionar.addActionListener(_e -> seleccionarActual());
+        btnCerrar.addActionListener(_e -> dispose());
+
+        // Doble clic en la tabla
+        tabla.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2 && tabla.getSelectedRow() >= 0) {
+                    seleccionarActual();
+                }
+            }
+        });
+
+        // Enter en el campo de búsqueda = buscar
+        txtApellido.addActionListener(_e -> buscar());
+    }
+
+    private void buscar() {
+        String filtro = txtApellido.getText().trim();
+        if (filtro.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Escribe al menos una parte del nombre o apellidos.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            clienteDAO dao = new clienteDAO();
+            resultados = dao.buscarOpcionesPorNombreOApellidos(filtro);  // ya lo usas en otros paneles
+            modelo.setRowCount(0);
+
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+            for (ClienteResumen cr : resultados) {
+                modelo.addRow(new Object[]{
+                        cr.getNombreCompleto(),
+                        cr.getTelefono1(),
+                        cr.getTelefono2(),
+                        cr.getFechaEvento()   == null ? "" : cr.getFechaEvento().format(fmt),
+                        cr.getFechaPrueba1()  == null ? "" : cr.getFechaPrueba1().format(fmt),
+                        cr.getFechaPrueba2()  == null ? "" : cr.getFechaPrueba2().format(fmt),
+                        cr.getFechaEntrega()  == null ? "" : cr.getFechaEntrega().format(fmt)
+                });
+            }
+
+            if (resultados.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "No se encontraron clientes con ese nombre/apellido.",
+                        "Buscar cliente", JOptionPane.INFORMATION_MESSAGE);
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al buscar clientes: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void seleccionarActual() {
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Selecciona un cliente de la tabla.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int modelRow = tabla.convertRowIndexToModel(row);
+        seleccionado = resultados.get(modelRow);
+        dispose();
+    }
+
+    public ClienteResumen getSeleccionado() {
+        return seleccionado;
+    }
+}
 
 }
