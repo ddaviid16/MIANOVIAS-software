@@ -23,11 +23,14 @@ import javax.swing.table.TableRowSorter;
     import java.sql.PreparedStatement;
     import java.sql.ResultSet;
     import java.sql.SQLException;
-    import java.text.Normalizer;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.text.Normalizer;
     import java.time.LocalDate;
     import java.util.ArrayList;
     import java.util.List;
-    import java.util.function.BiConsumer;
+import java.util.Locale;
+import java.util.function.BiConsumer;
 
     // === imports de tus modelos/daos usados por las utilidades de impresión ===
     import Controlador.EmpresaDAO;
@@ -4088,5 +4091,14 @@ private static class DialogBusquedaCliente extends JDialog {
         return seleccionado;
     }
 }
+private static final DecimalFormat MONEY_FMT;
+static {
+    DecimalFormatSymbols s = new DecimalFormatSymbols(Locale.US);
+    s.setGroupingSeparator(',');
+    s.setDecimalSeparator('.');
+    MONEY_FMT = new DecimalFormat("#,##0.00", s);
+}
+private static String fmtMoneda(double v) { synchronized (MONEY_FMT) { return MONEY_FMT.format(v); } }
+private static String fmtMoneda(Double v) { if (v == null) v = 0d; return fmtMoneda(v.doubleValue()); }
 
     }

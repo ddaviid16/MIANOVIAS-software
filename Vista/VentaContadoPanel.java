@@ -28,6 +28,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -166,32 +168,15 @@ public class VentaContadoPanel extends JPanel {
 
 
 
-    private final DateTimeFormatter MX = DateTimeFormatter.ofPattern("dd-MM-yyyy");
-    private static final Locale LOCALE_ES_MX = Locale.of("es", "MX");
+
+// Fecha larga con mes en español, estilo "12 de diciembre de 2025"
+private static final Locale LOCALE_ES_MX = Locale.of("es", "MX");
     private static final DateTimeFormatter MX_LARGO =
         DateTimeFormatter.ofPattern("dd-MMMM-yyyy", LOCALE_ES_MX);
-
-/** 29-Noviembre-2025 */
-private String fechaLarga(LocalDate fecha) {
-    if (fecha == null) return "";
-    // "29-noviembre-2025"
-    String raw = fecha.format(MX_LARGO);
-
-    int guion1 = raw.indexOf('-');
-    int guion2 = raw.lastIndexOf('-');
-    if (guion1 <= 0 || guion2 <= guion1) return raw;
-
-    String dia  = raw.substring(0, guion1);
-    String mes  = raw.substring(guion1 + 1, guion2);  // "noviembre"
-    String anio = raw.substring(guion2 + 1);
-
-    mes = mes.isEmpty()
-            ? mes
-            : mes.substring(0, 1).toUpperCase(LOCALE_ES_MX) + mes.substring(1);
-
-    return dia + "-" + mes + "-" + anio;
+private String fechaLarga(LocalDate f) {
+    if (f == null) return "";
+    return f.format(MX_LARGO);
 }
-
     private String lastTelefonoConsultado = null;
     private boolean updatingTable = false;
 
@@ -360,7 +345,7 @@ private String fechaLarga(LocalDate fecha) {
     if (!esAdmin) {
         fechaVentaSeleccionada = null;
         if (lblFechaVenta != null) {
-            lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
+            lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX_LARGO));
         }
     }
 });
@@ -507,7 +492,7 @@ txtMontoDV.getDocument().addDocumentListener((SimpleDocListener) () -> {
         addCell(bottom,d,2,r,btnCondiciones,1,false);
         addCell(bottom,d,3,r,btGuardar,1,false);
         r++;
-        lblFechaVenta = new JLabel("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
+        lblFechaVenta = new JLabel("Fecha de venta: " + getFechaVentaEfectiva().format(MX_LARGO));
         btnCambiarFechaVenta = new JButton("Cambiar fecha venta");
         btnCambiarFechaVenta.setVisible(false); // solo se ve con "admin"
         btnCambiarFechaVenta.addActionListener(_e -> cambiarFechaVenta());
@@ -578,7 +563,7 @@ private Map<String,String> construirCtxMemoPreliminar() {
 
     ctx.put("FOLIO", "");            // aún no lo tenemos
     ctx.put("NUMERO_NOTA", "");      // aún no lo tenemos
-    ctx.put("FECHA", getFechaVentaEfectiva().format(MX));
+    ctx.put("FECHA", getFechaVentaEfectiva().format(MX_LARGO));
 
     // Fechas visibles para el cliente
     ctx.put("FECHA_ENTREGA", n(txtFechaEntrega.getText()));
@@ -698,9 +683,9 @@ private Map<String,String> construirVarsDesdeUI() {
 
     // Cliente
     v.put("cliente_nombre", n(txtNombreCompleto.getText()));
-    v.put("fecha_compra", getFechaVentaEfectiva().format(MX));
+    v.put("fecha_compra", getFechaVentaEfectiva().format(MX_LARGO));
     LocalDate fe = fechaPreferida();
-    v.put("fecha_evento", fe == null ? "" : fe.format(MX));
+    v.put("fecha_evento", fe == null ? "" : fe.format(MX_LARGO));
 
     // Artículo principal del carrito (si hay)
     String modelo = "", marca = "", color = "", talla = "", codigo = "", precio = "", pdesc = "", pagar = "";
@@ -772,9 +757,9 @@ private Map<String,String> buildMemoVars(EmpresaInfo emp, Nota n, java.util.List
     } catch (Exception ignore) {}
 
     v.put("cliente_nombre", cliNombre);
-    v.put("fecha_compra", getFechaVentaEfectiva().format(MX));
-    v.put("fecha_evento", fechaEventoMostrar==null? "" : fechaEventoMostrar.format(MX));
-    v.put("fecha_en_tienda", fechaEntregaMostrar==null? "" : fechaEntregaMostrar.format(MX));
+    v.put("fecha_compra", getFechaVentaEfectiva().format(MX_LARGO));
+    v.put("fecha_evento", fechaEventoMostrar==null? "" : fechaEventoMostrar.format(MX_LARGO));
+    v.put("fecha_en_tienda", fechaEntregaMostrar==null? "" : fechaEntregaMostrar.format(MX_LARGO));
 
     // Artículo principal
     // Artículo principal
@@ -1424,12 +1409,12 @@ private void abrirFormularioCliente() {
     cargarCliente();
 }
 
-    private String fmt(LocalDate d) { return d == null ? "" : d.format(MX); }
+    private String fmt(LocalDate d) { return d == null ? "" : d.format(MX_LARGO); }
     private LocalDate parseFecha(String s){
         if (s==null) return null;
         s = s.trim();
         if (s.isEmpty()) return null;
-        try { return LocalDate.parse(s, MX); }
+        try { return LocalDate.parse(s, MX_LARGO); }
         catch (DateTimeParseException e){ return null; }
     }
     private LocalDate fechaPreferida(){
@@ -1445,7 +1430,7 @@ private void abrirFormularioCliente() {
 }
     private void cambiarFechaVenta() {
     LocalDate actual = getFechaVentaEfectiva();
-    String valorActual = actual.format(MX); // dd-MM-yyyy
+    String valorActual = actual.format(MX_LARGO); // dd-MM-yyyy
 
     String input = JOptionPane.showInputDialog(
             this,
@@ -1458,7 +1443,7 @@ private void abrirFormularioCliente() {
         fechaVentaSeleccionada = null;
     } else {
         try {
-            LocalDate f = LocalDate.parse(input.trim(), MX);
+            LocalDate f = LocalDate.parse(input.trim(), MX_LARGO);
             fechaVentaSeleccionada = f;
         } catch (DateTimeParseException ex) {
             JOptionPane.showMessageDialog(this,
@@ -1470,7 +1455,7 @@ private void abrirFormularioCliente() {
     }
 
     if (lblFechaVenta != null) {
-        lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
+        lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX_LARGO));
     }
 }
 
@@ -2367,7 +2352,7 @@ try {
                         // limpiar observaciones
                                     fechaVentaSeleccionada = null;
 if (lblFechaVenta != null) {
-    lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
+    lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX_LARGO));
 }
 if (btnCambiarFechaVenta != null) {
     btnCambiarFechaVenta.setVisible(false);
@@ -4283,5 +4268,14 @@ private static class DialogBusquedaCliente extends JDialog {
         return seleccionado;
     }
 }
+private static final DecimalFormat MONEY_FMT;
+static {
+    DecimalFormatSymbols s = new DecimalFormatSymbols(Locale.US);
+    s.setGroupingSeparator(',');
+    s.setDecimalSeparator('.');
+    MONEY_FMT = new DecimalFormat("#,##0.00", s);
+}
+private static String fmtMoneda(double v) { synchronized (MONEY_FMT) { return MONEY_FMT.format(v); } }
+private static String fmtMoneda(Double v) { if (v == null) v = 0d; return fmtMoneda(v.doubleValue()); }
 
 }

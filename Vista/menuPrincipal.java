@@ -159,7 +159,6 @@ public class menuPrincipal extends JFrame {
         center.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
         JButton btReportes   = botonGrande("Reportes");
-
         JButton btEmpresa     = botonGrande("Empresa");
         JButton btClientes    = botonGrande("Clientes");
         JButton btInventario  = botonGrande("Inventario");

@@ -8,6 +8,8 @@ import javax.swing.table.DefaultTableModel;
 
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 
 
 import java.awt.BorderLayout;
@@ -142,8 +144,8 @@ public class AbonoPanel extends JPanel {
                     Nota n = (Nota) value;
                     String folio = (n.getFolio() != null && !n.getFolio().isBlank()) ? n.getFolio() : "(sin folio)";
                     setText("Folio " + folio +
-                            "  |  Total: $" + String.format("%.2f", n.getTotal()) +
-                            "  |  Saldo: $" + String.format("%.2f", n.getSaldo()));
+                            "  |  Total: $" + fmtMoneda(n.getTotal()) +
+                            "  |  Saldo: $" + fmtMoneda(n.getSaldo()));
                 } else {
                     setText("— Selecciona folio de crédito —");
                 }
@@ -200,7 +202,7 @@ public class AbonoPanel extends JPanel {
                     JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof Controlador.NotasDVDAO.DVDisponible dv) {
-                    setText("Folio " + dv.folio + " | Disponible: $" + String.format("%.2f", dv.disponible));
+                    setText("Folio " + dv.folio + " | Disponible: $" + fmtMoneda( dv.disponible));
                 } else {
                     setText("--- Pagar con folio de devolución ---");
                 }
@@ -290,7 +292,7 @@ public class AbonoPanel extends JPanel {
     private void actualizarSaldo() {
         Nota sel = (Nota) cbNotas.getSelectedItem();
         if (sel == null) { lblSaldo.setText("Saldo: $0.00"); return; }
-        lblSaldo.setText("Saldo: $" + String.format("%.2f", sel.getSaldo()));
+        lblSaldo.setText("Saldo: $" + fmtMoneda(sel.getSaldo()));
     }
 
 private void guardarAbono() {
@@ -308,14 +310,14 @@ private void guardarAbono() {
     }
     if (abono > saldo + 0.005) {
         JOptionPane.showMessageDialog(this, "El abono no puede ser mayor al saldo (" +
-                String.format("%.2f", saldo) + ").");
+                fmtMoneda(saldo) + ").");
         return;
     }
 
     int r = JOptionPane.showConfirmDialog(this,
-            "¿Registrar ABONO a la nota " + sel.getNumeroNota() + "?\n" +
-                    "Abono: " + String.format("%.2f", abono) + "\nSaldo actual: " +
-                    String.format("%.2f", saldo),
+            "¿Registrar ABONO al folio " + sel.getFolio() + "?\n" +
+                    "Abono: " + fmtMoneda(abono) + "\nSaldo actual: " +
+                    fmtMoneda(saldo),
             "Confirmación", JOptionPane.YES_NO_OPTION);
     if (r != JOptionPane.YES_OPTION) return;
 
@@ -340,7 +342,7 @@ private void guardarAbono() {
         }
         if (montoDV > dvSel.disponible + 0.005) {
             JOptionPane.showMessageDialog(this, "El monto de devolución no puede exceder lo disponible (" +
-                    String.format("%.2f", dvSel.disponible) + ").");
+                    fmtMoneda(dvSel.disponible) + ").");
             return;
         }
         p.setDevolucion(montoDV);
@@ -603,9 +605,9 @@ private Map<String, String> construirVarsDesdeNota(int numeroNota) throws SQLExc
                             double desc = rsDetalle.getDouble("descuento");
                             double pagar = rsDetalle.getDouble("subtotal");
                             
-                            map.put("precio", String.format("%.2f", precio));
+                            map.put("precio", fmtMoneda(precio));
                             map.put("descuento_pct", String.format("%.2f", desc));
-                            map.put("precio_pagar", String.format("%.2f", pagar));
+                            map.put("precio_pagar", fmtMoneda(pagar));
                         }
                     }
                 }
@@ -1388,7 +1390,6 @@ try {
             y += 6; g2.drawLine(x, y, x + w, y); y += 16;
 
             // ===== Totales (zona superior derecha) =====
-
             // yTot = línea base de la sección de totales
             int yTot = y;
 
@@ -1532,7 +1533,10 @@ private int drawIconLine(Graphics2D g2, BufferedImage icon, String text,
     return drawWrapped(g2, text == null ? "" : text.trim(), tx, baseline, maxWidth - (tx - x));
 }
         private String safe(String s){ return (s == null) ? "" : s.trim(); }
-        private String fmt2(Double v){ if (v == null) v = 0d; return String.format("%.2f", v); }
+        private String fmt2(Double v){
+            return fmtMoneda(v);  // usa el helper de la clase
+        }
+
         private String coalesce(String a, String b, String def){
             if (a != null && !a.isBlank()) return a;
             if (b != null && !b.isBlank()) return b;
@@ -1753,5 +1757,14 @@ private static class DialogBusquedaCliente extends JDialog {
         return seleccionado;
     }
 }
+private static final DecimalFormat MONEY_FMT;
+static {
+    DecimalFormatSymbols s = new DecimalFormatSymbols(Locale.US);
+    s.setGroupingSeparator(',');
+    s.setDecimalSeparator('.');
+    MONEY_FMT = new DecimalFormat("#,##0.00", s);
+}
+private static String fmtMoneda(double v) { synchronized (MONEY_FMT) { return MONEY_FMT.format(v); } }
+private static String fmtMoneda(Double v) { if (v == null) v = 0d; return fmtMoneda(v.doubleValue()); }
 
 }
