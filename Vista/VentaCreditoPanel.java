@@ -30,8 +30,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -96,6 +94,28 @@ import Controlador.FacturaDatosDAO;
 
 
 public class VentaCreditoPanel extends JPanel {
+    
+    private static final java.text.DecimalFormat MONEY_FMT;
+static {
+    java.text.DecimalFormatSymbols sym = new java.text.DecimalFormatSymbols(java.util.Locale.US);
+    sym.setDecimalSeparator('.');
+    sym.setGroupingSeparator(',');
+    MONEY_FMT = new java.text.DecimalFormat("#,##0.00", sym);
+    MONEY_FMT.setGroupingUsed(true);
+}
+
+private String fmtMoney(double v) {
+    synchronized (MONEY_FMT) {
+        return MONEY_FMT.format(v);
+    }
+}
+
+private String fmtMoney(Double v) {
+    if (v == null) v = 0d;
+    synchronized (MONEY_FMT) {
+        return MONEY_FMT.format(v);
+    }
+}
 
     private java.util.List<String> obsequiosSel = new java.util.ArrayList<>();
     private JLabel lblObsequios;
@@ -354,7 +374,7 @@ private String fechaLarga(LocalDate fecha) {
     if (!esAdmin) {
         fechaVentaSeleccionada = null;
         if (lblFechaVenta != null) {
-            lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX_LARGO));
+            lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
         }
     }
 });
@@ -419,8 +439,8 @@ model.addTableModelListener(evt -> {
             model.setValueAt(String.format("%.2f", pdesc), row, 8);
             double monto = precio * (pdesc / 100.0);
             double sub   = precio - monto;
-            model.setValueAt(String.format("%.2f", monto), row, 9);
-            model.setValueAt(String.format("%.2f", sub),   row, 10);
+            model.setValueAt(fmtMoney(monto), row, 9);
+            model.setValueAt(fmtMoney(sub),   row, 10);
         } finally {
             updatingTable = false;
         }
@@ -508,7 +528,7 @@ txtMontoDV.getDocument().addDocumentListener((SimpleDocListener) this::validarSu
         btGuardar.addActionListener(_e -> guardarVentaCredito());
         addCell(bottom,d,3,r,btGuardar,1,false);
         r++;
-        lblFechaVenta = new JLabel("Fecha de venta: " + getFechaVentaEfectiva().format(MX_LARGO));
+        lblFechaVenta = new JLabel("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
         btnCambiarFechaVenta = new JButton("Cambiar fecha venta");
         btnCambiarFechaVenta.setVisible(false); // solo se ve con "admin"
         btnCambiarFechaVenta.addActionListener(_e -> cambiarFechaVenta());
@@ -706,12 +726,12 @@ private void abrirFormularioCliente() {
     cargarCliente();
 }
 
-    private String fmt(LocalDate d) { return d == null ? "" : d.format(MX_LARGO); }
+    private String fmt(LocalDate d) { return d == null ? "" : d.format(MX); }
     private LocalDate parseFecha(String s){
         if (s==null) return null;
         s = s.trim();
         if (s.isEmpty()) return null;
-        try { return LocalDate.parse(s, MX_LARGO); }
+        try { return LocalDate.parse(s, MX); }
         catch (DateTimeParseException e){ return null; }
     }
     private LocalDate fechaPreferida(){
@@ -724,7 +744,7 @@ private void abrirFormularioCliente() {
 }
     private void cambiarFechaVenta() {
     LocalDate actual = getFechaVentaEfectiva();
-    String valorActual = actual.format(MX_LARGO); // dd-MM-yyyy
+    String valorActual = actual.format(MX); // dd-MM-yyyy
 
     String input = JOptionPane.showInputDialog(
             this,
@@ -737,7 +757,7 @@ private void abrirFormularioCliente() {
         fechaVentaSeleccionada = null;
     } else {
         try {
-            LocalDate f = LocalDate.parse(input.trim(), MX_LARGO);
+            LocalDate f = LocalDate.parse(input.trim(), MX);
             fechaVentaSeleccionada = f;
         } catch (DateTimeParseException ex) {
             JOptionPane.showMessageDialog(this,
@@ -749,7 +769,7 @@ private void abrirFormularioCliente() {
     }
 
     if (lblFechaVenta != null) {
-        lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX_LARGO));
+        lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
     }
 }
 
@@ -874,10 +894,10 @@ private void cargarAsesores() {
                 n(i.getTalla()),
                 n(i.getColor()),
                 fArt,
-                String.format("%.2f", precio),
+                fmtMoney(precio),
                 String.format("%.2f", pdesc),
-                String.format("%.2f", monto),
-                String.format("%.2f", sub),
+                fmtMoney(monto),
+                fmtMoney(sub),
                 "Quitar"
         });
         recalcularTotales();
@@ -941,10 +961,10 @@ private void cargarAsesores() {
                     tTalla.getText().trim(),
                     tColor.getText().trim(),
                     fArt,
-                    String.format("%.2f", precio),
+                    fmtMoney(precio),
                     String.format("%.2f", desc),
-                    String.format("%.2f", monto),
-                    String.format("%.2f", sub),
+                    fmtMoney(monto),
+                    fmtMoney(sub),
                     "Quitar"
             });
             recalcularTotales();
@@ -1049,10 +1069,10 @@ private void cargarAsesores() {
                 "",                                 // Talla
                 "",                                 // Color
                 fArt,
-                String.format("%.2f", precio),
+                fmtMoney(precio),
                 String.format("%.2f", desc),
-                String.format("%.2f", monto),
-                String.format("%.2f", sub),
+                fmtMoney(monto),
+                fmtMoney(sub),
                 "Quitar"
         });
         recalcularTotales();
@@ -1070,8 +1090,8 @@ private void cargarAsesores() {
         for (int r=0; r<model.getRowCount(); r++){
             tot += parseMoney(model.getValueAt(r,10));
         }
-        txtSubtotal.setText(String.format("%.2f", tot));
-        txtTotal.setText(String.format("%.2f", tot));
+        txtSubtotal.setText(fmtMoney(tot));
+        txtTotal.setText(fmtMoney(tot));
         validarSumaPagos();
     }
 
@@ -1087,8 +1107,8 @@ private void validarSumaPagos() {
 
     // Tooltip con lo pagado y lo que falta
     txtTotal.setToolTipText(
-            String.format("Pagado: %.2f  | Diferencia: %.2f", suma, (total - suma))
-    );
+            "Pagado: " + fmtMoney(suma) +
+            "| Diferencia: " + fmtMoney(total - suma));
 }
 
     /** Solo para impresión: 10 dígitos -> 123-456-7890; si no, lo deja como viene. */
@@ -1153,9 +1173,9 @@ if (montoDV > 0) {
         dvSeleccionada = opt;
         if (montoDV > opt.saldoDisponible + 0.001) {
             JOptionPane.showMessageDialog(this,
-                    "El monto de devolución ($" + String.format("%.2f", montoDV) +
+                    "El monto de devolución ($" + fmtMoney(montoDV) +
                     ") excede el saldo disponible del folio (" +
-                    String.format("%.2f", opt.saldoDisponible) + ").",
+                    fmtMoney(opt.saldoDisponible) + ").",
                     "Error de validación", JOptionPane.ERROR_MESSAGE);
             return;
         }
@@ -1192,7 +1212,7 @@ if (anticipo > total + 0.005) {
     // ================= CONFIRMACIÓN PRINCIPAL =================
     Object[] ops = {"SI","NO"};
     int r = JOptionPane.showOptionDialog(this,
-            "¿Registrar la venta de CRÉDITO?\nAnticipo: " + String.format("%.2f", anticipo) +
+            "¿Registrar la venta de CRÉDITO?\nAnticipo: " + fmtMoney(anticipo) +
                     "\nSaldo quedará pendiente para Abonos.",
             "Confirmación", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
             null, ops, ops[0]);
@@ -1582,7 +1602,7 @@ try {
             // limpiar observaciones
             fechaVentaSeleccionada = null;
 if (lblFechaVenta != null) {
-    lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX_LARGO));
+    lblFechaVenta.setText("Fecha de venta: " + getFechaVentaEfectiva().format(MX));
 }
 if (btnCambiarFechaVenta != null) {
     btnCambiarFechaVenta.setVisible(false);
@@ -1649,13 +1669,21 @@ txtTelefono.requestFocus();
     }
 
     private String n(String s){ return s==null?"":s; }
-    private double parseMoney(Object o){
-        if (o==null) return 0;
-        String s = o.toString().trim();
-        if (s.isEmpty()) return 0;
-        try { return Double.parseDouble(s); } catch(Exception e){ return 0; }
+private double parseMoney(Object o){
+    if (o == null) return 0;
+    String s = o.toString().trim();
+    if (s.isEmpty()) return 0;
+
+    // quitar separadores de miles tipo "26,300.00"
+    s = s.replace(",", "");
+
+    try {
+        return Double.parseDouble(s);
+    } catch (Exception e) {
+        return 0;
     }
-    private Double nullIfZero(double v){ return Math.abs(v) < 0.0001 ? null : v; }
+}
+   private Double nullIfZero(double v){ return Math.abs(v) < 0.0001 ? null : v; }
     private double clamp0a100(double v){ if (v<0) return 0; if (v>100) return 100; return v; }
     private DocumentFilter onlyDecimal(){ return new DialogArticulo.DecimalFilter(12); }
 
@@ -1803,9 +1831,9 @@ private Map<String,String> construirVarsDesdeUI() {
 
     // Cliente
     v.put("cliente_nombre", n(txtNombreCompleto.getText()));
-    v.put("fecha_compra", getFechaVentaEfectiva().format(MX_LARGO));
+    v.put("fecha_compra", getFechaVentaEfectiva().format(MX));
     LocalDate fe = fechaPreferida();
-    v.put("fecha_evento", fe == null ? "" : fe.format(MX_LARGO));
+    v.put("fecha_evento", fe == null ? "" : fe.format(MX));
 
     // Artículo principal del carrito (si hay)
     String modelo = "", marca = "", color = "", talla = "", codigo = "", precio = "", pdesc = "", pagar = "";
@@ -1862,7 +1890,7 @@ private String obtenerCondicionesPredeterminadas() {
 private Map<String, String> construirCtxMemoPreliminar() {
     Map<String, String> vars = new HashMap<>();
     vars.put("cliente_nombre", txtNombreCompleto.getText().trim());
-    vars.put("fecha_compra", getFechaVentaEfectiva().format(MX_LARGO));
+    vars.put("fecha_compra", getFechaVentaEfectiva().format(MX));
     vars.put("fecha_evento", txtFechaEvento.getText().trim());
     vars.put("fecha_en_tienda", txtFechaEntrega.getText().trim());
     vars.put("asesora", cbAsesor.getSelectedItem() != null
@@ -1926,9 +1954,9 @@ private Map<String,String> buildMemoVars(EmpresaInfo emp, Nota n, java.util.List
     } catch (Exception ignore) {}
 
     v.put("cliente_nombre", cliNombre);
-    v.put("fecha_compra", getFechaVentaEfectiva().format(MX_LARGO));
-    v.put("fecha_evento", fechaEventoMostrar==null? "" : fechaEventoMostrar.format(MX_LARGO));
-    v.put("fecha_en_tienda", fechaEntregaMostrar==null? "" : fechaEntregaMostrar.format(MX_LARGO));
+    v.put("fecha_compra", getFechaVentaEfectiva().format(MX));
+    v.put("fecha_evento", fechaEventoMostrar==null? "" : fechaEventoMostrar.format(MX));
+    v.put("fecha_en_tienda", fechaEntregaMostrar==null? "" : fechaEntregaMostrar.format(MX));
 
     // Artículo principal
     // Artículo principal
@@ -1962,9 +1990,9 @@ if (d0 == null && !dets.isEmpty()) {
     v.put("color",   d0==null? "": n(d0.getColor()));
     v.put("talla",   d0==null? "": n(d0.getTalla()));
     v.put("codigo", (d0!=null && d0.getCodigoArticulo()!=null && !d0.getCodigoArticulo().isEmpty()) ? d0.getCodigoArticulo() : "");
-    v.put("precio", String.format("%.2f", d0==null?0d:(d0.getPrecio()==null?0d:d0.getPrecio())));
+    v.put("precio", fmtMoney(d0==null?0d:(d0.getPrecio()==null?0d:d0.getPrecio())));
     v.put("descuento_pct", String.format("%.2f", d0==null?0d:(d0.getDescuento()==null?0d:d0.getDescuento())));
-    v.put("precio_pagar", String.format("%.2f", d0==null?0d:(d0.getSubtotal()==null?0d:d0.getSubtotal())));
+    v.put("precio_pagar", fmtMoney(d0==null?0d:(d0.getSubtotal()==null?0d:d0.getSubtotal())));
 
     // Asesor y empresa
     v.put("asesora", n(asesorNombre));
@@ -2114,7 +2142,7 @@ private static class DVOption {
 
     @Override
     public String toString() {
-        return folio + " - $" + String.format("%.2f", saldoDisponible);
+        return folio + " - $" + (saldoDisponible);
     }
 }
 
@@ -2778,7 +2806,7 @@ if (obsequiosPrint != null && !obsequiosPrint.isEmpty()) {
 }
 
         private String safe(String s){ return (s == null) ? "" : s.trim(); }
-        private String fmt2(Double v){ if (v == null) v = 0d; return String.format("%.2f", v); }
+        private String fmt2(Double v){ if (v == null) v = 0d; return fmtMoney(v); }
         private String coalesce(String a, String b, String def){
             if (a != null && !a.isBlank()) return a;
             if (b != null && !b.isBlank()) return b;
@@ -4031,17 +4059,7 @@ private static class DialogBusquedaCliente extends JDialog {
 
     public ClienteResumen getSeleccionado() {
         return seleccionado;
+        }
     }
-}
-private static final DecimalFormat MONEY_FMT;
-static {
-    DecimalFormatSymbols s = new DecimalFormatSymbols(Locale.US);
-    s.setGroupingSeparator(',');
-    s.setDecimalSeparator('.');
-    MONEY_FMT = new DecimalFormat("#,##0.00", s);
-}
-private static String fmtMoneda(double v) { synchronized (MONEY_FMT) { return MONEY_FMT.format(v); } }
-private static String fmtMoneda(Double v) { if (v == null) v = 0d; return fmtMoneda(v.doubleValue()); }
-
-
+    
 }

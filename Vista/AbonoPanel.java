@@ -75,6 +75,10 @@ import Utilidades.TelefonosUI;
 
 public class AbonoPanel extends JPanel {
 
+    // Resumen de la nota seleccionada
+    private JTable tablaResumen;
+    private DefaultTableModel modeloResumen;
+
     private JTextField txtTelefono, txtNombre;
     private JComboBox<Nota> cbNotas;
     private JLabel lblSaldo;
@@ -152,7 +156,11 @@ public class AbonoPanel extends JPanel {
                 return this;
             }
         });
-        cbNotas.addActionListener(_e -> actualizarSaldo());
+        cbNotas.addActionListener(_e -> {
+        actualizarSaldo();
+        cargarResumenNotaSeleccionada();
+    });
+
         addCell(top,c,0,y,new JLabel("Folios con saldo:"),1,false);
         addCell(top,c,1,y,cbNotas,3,true); 
         y++;
@@ -165,8 +173,26 @@ public class AbonoPanel extends JPanel {
 
         add(top, BorderLayout.NORTH);
 
+        // ====== Panel resumen de nota (artículos)  ======
+        modeloResumen = new DefaultTableModel(
+                new Object[]{"Código", "Artículo", "Color", "Talla", "Subtotal"}, 0
+        ) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        tablaResumen = new JTable(modeloResumen);
+        tablaResumen.setRowHeight(20);
+
+        JScrollPane spResumen = new JScrollPane(tablaResumen);
+        JPanel panelResumen = new JPanel(new BorderLayout());
+        panelResumen.setBorder(BorderFactory.createTitledBorder("Detalle de la nota seleccionada"));
+        panelResumen.add(spResumen, BorderLayout.CENTER);
+
         // ====== Panel pagos
         JPanel pay = new JPanel(new GridBagLayout());
+
         pay.setBorder(BorderFactory.createTitledBorder("Abono (formas de pago)"));
         GridBagConstraints d = new GridBagConstraints();
         d.insets = new Insets(6,6,6,6);
@@ -234,7 +260,13 @@ public class AbonoPanel extends JPanel {
         btAbonar.addActionListener(_e -> guardarAbono());
         addCell(pay,d,3,r,btAbonar,1,false);
 
-        add(pay, BorderLayout.CENTER);
+        JPanel center = new JPanel(new BorderLayout(0, 8));
+        center.setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10));
+        center.add(panelResumen, BorderLayout.CENTER);
+        center.add(pay, BorderLayout.SOUTH);
+
+        add(center, BorderLayout.CENTER);
+
 
         // estado inicial
         limpiar();
@@ -258,6 +290,8 @@ public class AbonoPanel extends JPanel {
             List<Nota> lista = ndao.listarCreditosConSaldo(tel);
 
             cbNotas.removeAllItems();
+            if (modeloResumen != null) modeloResumen.setRowCount(0);
+
             if (lista.isEmpty()) {
                 cbNotas.addItem(null);            // placeholder
                 lblSaldo.setText("Saldo: $0.00");
@@ -265,6 +299,7 @@ public class AbonoPanel extends JPanel {
                 for (Nota n : lista) cbNotas.addItem(n);
                 cbNotas.setSelectedIndex(0);
                 actualizarSaldo();
+                cargarResumenNotaSeleccionada();
             }
             // Cargar devoluciones disponibles (DV)
             try {
@@ -918,7 +953,10 @@ private void imprimirFormatoCondiciones(int numeroNota, String memo, Map<String,
         // Limpiar folios de devolución
         cbDV.removeAllItems();
         txtMontoDV.setEnabled(false);
-        
+        if (modeloResumen != null) {
+        modeloResumen.setRowCount(0);
+    }
+
 
         // Limpiar datos del cliente
         txtTelefono.setText("");
@@ -1766,5 +1804,31 @@ static {
 }
 private static String fmtMoneda(double v) { synchronized (MONEY_FMT) { return MONEY_FMT.format(v); } }
 private static String fmtMoneda(Double v) { if (v == null) v = 0d; return fmtMoneda(v.doubleValue()); }
+private void cargarResumenNotaSeleccionada() {
+    if (modeloResumen == null) return;
+    modeloResumen.setRowCount(0);
+
+    Nota sel = (Nota) cbNotas.getSelectedItem();
+    if (sel == null) return;
+
+    try {
+        NotasDAO ndao = new NotasDAO();
+        java.util.List<NotaDetalle> dets = ndao.listarDetalleDeNota(sel.getNumeroNota());
+
+        for (NotaDetalle d : dets) {
+            modeloResumen.addRow(new Object[]{
+                    d.getCodigoArticulo(),
+                    d.getArticulo(),
+                    d.getColor(),
+                    d.getTalla(),
+                    fmtMoneda(d.getSubtotal() == null ? 0d : d.getSubtotal())
+            });
+        }
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this,
+                "No se pudo cargar el detalle de la nota:\n" + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
 
 }
