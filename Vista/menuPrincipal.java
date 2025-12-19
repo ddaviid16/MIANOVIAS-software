@@ -136,13 +136,7 @@ public class menuPrincipal extends JFrame {
         // Tarjetas destino:
         mainPanel.add(new PagoGastosPanel(),          ReportesPanel.CARD_REP_GASTOS);
         mainPanel.add(new CorteCajaPanel(),           ReportesPanel.CARD_REP_CORTE);
-        ReimprimirNotaPanel reimprimirNotaPanel = new ReimprimirNotaPanel();
-        if (usuarioActual != null) {
-            reimprimirNotaPanel.setCajeraActual(
-                usuarioActual.getNumeroEmpleado(),
-                usuarioActual.getNombreCompleto()
-            );
-        }
+        mainPanel.add(new ReimprimirNotaPanel(),     ReportesPanel.CARD_REP_REIMPR);
         mainPanel.add(new DetalleClienteReportePanel(), ReportesPanel.CARD_REP_DETCLI);
         mainPanel.add(new EntregasVestidosPanel(),    ReportesPanel.CARD_REP_ENTREGAS);
         mainPanel.add(new ArticulosAPedirPanel(),     ReportesPanel.CARD_REP_PEDIR);
