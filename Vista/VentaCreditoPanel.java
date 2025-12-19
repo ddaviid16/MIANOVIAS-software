@@ -203,6 +203,8 @@ private String fechaLarga(LocalDate fecha) {
     int y = 0;
 
     // Teléfonos
+    
+    txtTelefono2 = readOnlyField();
     addCell(top,c,0,y,new JLabel("Teléfono cliente:"),1,false);
     addCell(top,c,1,y,txtTelefono,1,true);
     addCell(top,c,2,y,new JLabel("Teléfono 2:"),1,false);

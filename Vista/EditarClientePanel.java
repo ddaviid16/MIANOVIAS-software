@@ -1,12 +1,14 @@
 package Vista;
 
 import Controlador.clienteDAO;
+import Modelo.ClienteResumen;
 import Modelo.cliente;
 import Utilidades.TelefonosUI;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.table.DefaultTableModel;
 import javax.swing.text.*;
 
 import java.awt.*;
@@ -24,7 +26,7 @@ public class EditarClientePanel extends JPanel {
 
     private JButton btnGuardar;
     private JButton btnCargar;
-
+    private JButton btnBuscarNombre;
     // Campos de texto
     private JTextField txtTel1, txtTel2, txtNombre, txtApPat, txtApMat;
     private JTextField txtBusto, txtCintura, txtCadera, txtEdad;
@@ -73,19 +75,34 @@ public class EditarClientePanel extends JPanel {
 
         int y = 0;
 
-        // ===== Teléfono 1 + Teléfono 2
-        btnCargar = new JButton("Cargar");
-        btnCargar.addActionListener(_e -> cargarCliente());
+// ===== Teléfono 1 + Teléfono 2 =====
+btnCargar = new JButton("Cargar");
+btnCargar.addActionListener(_e -> cargarCliente());
 
-        c.gridx = 0; c.gridy = y; c.gridwidth = 1;
-        p.add(new JLabel("Teléfono 1*:"), c);
+// botón NUEVO: buscar cliente por nombre
+btnBuscarNombre = new JButton("Buscar por nombre…");
+btnBuscarNombre.addActionListener(_e -> buscarClientePorNombre());
+
+c.gridx = 0; c.gridy = y; c.gridwidth = 1;
+p.add(new JLabel("Teléfono 1*:"), c);
+
+        // Teléfono 1
         c.gridx = 1;
         p.add(txtTel1, c);
+
+        // Panel con Cargar + Buscar por nombre (misma fila que el teléfono)
+        JPanel pnlBotonesTel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        pnlBotonesTel.add(btnCargar);
+        pnlBotonesTel.add(btnBuscarNombre);
+
         c.gridx = 2;
-        p.add(new JLabel("Teléfono 2:"), c);
+        p.add(pnlBotonesTel, c);
+
+        // Teléfono 2 a la derecha
         c.gridx = 3;
         p.add(txtTel2, c);
         y++;
+
 
         // Fila separada: Parentesco tel. 2 (lado derecho)  // NUEVO
         c.gridx = 2; c.gridy = y; c.gridwidth = 1;
@@ -159,11 +176,11 @@ public class EditarClientePanel extends JPanel {
         btnGuardar.setEnabled(false);
         JButton btnLimpiar = new JButton("Limpiar");
 
-        actions.add(btnCargar);
         actions.add(btnGuardar);
         actions.add(btnLimpiar);
 
         add(actions, BorderLayout.SOUTH);
+
 
         btnGuardar.addActionListener(_e -> guardarCambios());
         btnLimpiar.addActionListener(_e -> limpiarTodo());
@@ -743,4 +760,175 @@ public class EditarClientePanel extends JPanel {
         @Override default void removeUpdate(DocumentEvent e) { on(); }
         @Override default void changedUpdate(DocumentEvent e) { on(); }
     }
+    // ================== DIÁLOGO DE BÚSQUEDA POR NOMBRE ==================
+private static class DialogBusquedaCliente extends JDialog {
+
+    private final clienteDAO dao;
+    private JTextField txtFiltro;
+    private JTable tabla;
+    private DefaultTableModel modelo;
+    private java.util.List<ClienteResumen> resultados = new java.util.ArrayList<>();
+    private ClienteResumen seleccionado;
+
+    public DialogBusquedaCliente(Window owner, clienteDAO dao) {
+        super(owner, "Buscar cliente por nombre o apellido", ModalityType.APPLICATION_MODAL);
+        this.dao = dao;
+        construirUI();
+    }
+
+    private void construirUI() {
+        JPanel main = new JPanel(new BorderLayout(8, 8));
+        main.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Filtro
+        JPanel pnlFiltro = new JPanel(new BorderLayout(5, 0));
+        pnlFiltro.add(new JLabel("Nombre o apellido:"), BorderLayout.WEST);
+        txtFiltro = new JTextField();
+        pnlFiltro.add(txtFiltro, BorderLayout.CENTER);
+
+        JButton btnBuscar = new JButton("Buscar");
+        pnlFiltro.add(btnBuscar, BorderLayout.EAST);
+
+        main.add(pnlFiltro, BorderLayout.NORTH);
+
+        // Tabla
+        modelo = new DefaultTableModel(
+                new Object[]{
+                        "Nombre completo",
+                        "Teléfono",
+                        "Teléfono 2",
+                        "Evento",
+                        "Prueba 1",
+                        "Prueba 2",
+                        "Entrega"
+                },
+                0
+        ) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
+        tabla = new JTable(modelo);
+        tabla.setRowHeight(22);
+        tabla.setAutoCreateRowSorter(true);
+        main.add(new JScrollPane(tabla), BorderLayout.CENTER);
+
+        // Botones abajo
+        JPanel pnlBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnSeleccionar = new JButton("Seleccionar");
+        JButton btnCerrar = new JButton("Cancelar");
+        pnlBotones.add(btnCerrar);
+        pnlBotones.add(btnSeleccionar);
+
+        main.add(pnlBotones, BorderLayout.SOUTH);
+
+        setContentPane(main);
+        setSize(800, 400);
+        setLocationRelativeTo(getOwner());
+
+        // Eventos
+        btnBuscar.addActionListener(_e -> buscar());
+        btnSeleccionar.addActionListener(_e -> seleccionarActual());
+        btnCerrar.addActionListener(_e -> dispose());
+
+        // Doble clic
+        tabla.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2 && tabla.getSelectedRow() >= 0) {
+                    seleccionarActual();
+                }
+            }
+        });
+
+        // Enter en el campo de filtro = buscar
+        txtFiltro.addActionListener(_e -> buscar());
+    }
+
+    private void buscar() {
+        String filtro = txtFiltro.getText().trim();
+        if (filtro.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Escribe al menos una parte del nombre o apellido.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            resultados = dao.buscarOpcionesPorNombreOApellidos(filtro);
+            modelo.setRowCount(0);
+
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-uuuu");
+
+            for (ClienteResumen cr : resultados) {
+                modelo.addRow(new Object[]{
+                        cr.getNombreCompleto(),
+                        cr.getTelefono1(),
+                        cr.getTelefono2(),
+                        cr.getFechaEvento()  == null ? "" : cr.getFechaEvento().format(fmt),
+                        cr.getFechaPrueba1() == null ? "" : cr.getFechaPrueba1().format(fmt),
+                        cr.getFechaPrueba2() == null ? "" : cr.getFechaPrueba2().format(fmt),
+                        cr.getFechaEntrega() == null ? "" : cr.getFechaEntrega().format(fmt)
+                });
+            }
+
+            if (resultados.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "No se encontraron clientes con ese nombre o apellido.",
+                        "Buscar cliente", JOptionPane.INFORMATION_MESSAGE);
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al buscar clientes: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void seleccionarActual() {
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Selecciona un cliente de la tabla.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int modelRow = tabla.convertRowIndexToModel(row);
+        seleccionado = resultados.get(modelRow);
+        dispose();
+    }
+
+    public ClienteResumen getSeleccionado() {
+        return seleccionado;
+    }
+}
+// ================== BÚSQUEDA POR NOMBRE ==================
+private void buscarClientePorNombre() {
+    Window owner = SwingUtilities.getWindowAncestor(this);
+    DialogBusquedaCliente dlg = new DialogBusquedaCliente(owner, dao);
+    dlg.setLocationRelativeTo(this);
+    dlg.setVisible(true);
+
+    ClienteResumen cr = dlg.getSeleccionado();
+    if (cr == null) {
+        return; // usuario canceló o no seleccionó nada
+    }
+
+    String tel = TelefonosUI.soloDigitos(cr.getTelefono1());
+    if (tel == null || tel.isBlank()) {
+        JOptionPane.showMessageDialog(this,
+                "El cliente seleccionado no tiene Teléfono 1 registrado.",
+                "Aviso", JOptionPane.INFORMATION_MESSAGE);
+        return;
+    }
+
+    // Forzamos recarga aunque sea el mismo que antes
+    lastTelefonoConsultado = null;
+
+    txtTel1.setText(tel);
+    cargarCliente();   // ya tienes toda la lógica de carga aquí
+}
+
 }

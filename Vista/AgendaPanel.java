@@ -1,6 +1,7 @@
 package Vista;
 
 import Controlador.clienteDAO;
+import Modelo.ClienteResumen;
 import Utilidades.SeguridadUI;
 
 import javax.swing.*;
@@ -259,7 +260,6 @@ model.addTableModelListener(e -> {
     }
 
     // ====== Diálogo de Registro de Citas ======
-
 private void abrirDialogoRegistroCitas() {
     int viewRow = tb.getSelectedRow();
     if (viewRow < 0) {
@@ -269,10 +269,8 @@ private void abrirDialogoRegistroCitas() {
         return;
     }
 
-    // === Validar que no sea fecha/hora pasada ===
+    // === Validar fecha / hora como ya lo tenías ===
     LocalDate hoy = LocalDate.now();
-
-    // Cada renglón corresponde 1:1 con la lista slots
     if (viewRow >= 0 && viewRow < slots.size()) {
         Slot slot = slots.get(viewRow);
         LocalTime horaSlot = slot.hora;
@@ -295,15 +293,15 @@ private void abrirDialogoRegistroCitas() {
         }
     }
 
-    // === Diálogo de Registro de Citas con tamaño decente ===
     Window owner = SwingUtilities.getWindowAncestor(this);
     JDialog dlg = new JDialog(owner, "Registro de citas", Dialog.ModalityType.APPLICATION_MODAL);
     dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 
+    // SOLO el panel en el centro
     RegistroCitasPanel panel = new RegistroCitasPanel();
     dlg.getContentPane().add(panel, BorderLayout.CENTER);
 
-    dlg.pack();  // calcula tamaño base
+    dlg.pack();
 
     int minW = 900;
     int minH = 520;
@@ -317,7 +315,7 @@ private void abrirDialogoRegistroCitas() {
 
     dlg.setVisible(true);
 
-    // Al cerrar el diálogo, recargamos la agenda del día
+    // Recargar agenda
     cargarAgenda();
 }
 
@@ -506,4 +504,147 @@ private void imprimir() {
             repaint();
         }
     }
+    // Abre el diálogo de búsqueda por nombre y devuelve el cliente elegido (o null)
+private ClienteResumen seleccionarClientePorNombre(Window owner) {
+    DialogBusquedaCliente dlg = new DialogBusquedaCliente(owner);
+    dlg.setLocationRelativeTo(owner);
+    dlg.setVisible(true);
+    return dlg.getSeleccionado();
+}
+public static class DialogBusquedaCliente extends JDialog {
+
+    private JTextField txtApellido;
+    private JTable tabla;
+    private DefaultTableModel modelo;
+    private java.util.List<ClienteResumen> resultados = new ArrayList<>();
+    private ClienteResumen seleccionado;
+
+    public DialogBusquedaCliente(Window owner) {
+        super(owner, "Buscar cliente por nombre o apellido", ModalityType.APPLICATION_MODAL);
+        construirUI();
+    }
+
+    private void construirUI() {
+        JPanel main = new JPanel(new BorderLayout(8, 8));
+        main.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Filtro
+        JPanel pnlFiltro = new JPanel(new BorderLayout(5, 0));
+        pnlFiltro.add(new JLabel("Nombre o apellido:"), BorderLayout.WEST);
+        txtApellido = new JTextField();
+        pnlFiltro.add(txtApellido, BorderLayout.CENTER);
+
+        JButton btnBuscar = new JButton("Buscar");
+        pnlFiltro.add(btnBuscar, BorderLayout.EAST);
+
+        main.add(pnlFiltro, BorderLayout.NORTH);
+
+        // Tabla
+        modelo = new DefaultTableModel(
+                new Object[]{"Nombre completo", "Teléfono", "Teléfono 2", "Evento", "Prueba 1", "Prueba 2", "Entrega"},
+                0
+        ) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
+        tabla = new JTable(modelo);
+        tabla.setRowHeight(22);
+        tabla.setAutoCreateRowSorter(true);
+
+        main.add(new JScrollPane(tabla), BorderLayout.CENTER);
+
+        // Botones abajo
+        JPanel pnlBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnSeleccionar = new JButton("Seleccionar");
+        JButton btnCerrar = new JButton("Cancelar");
+        pnlBotones.add(btnCerrar);
+        pnlBotones.add(btnSeleccionar);
+
+        main.add(pnlBotones, BorderLayout.SOUTH);
+
+        setContentPane(main);
+        setSize(800, 400);
+        setLocationRelativeTo(getOwner());
+
+        // Eventos
+        btnBuscar.addActionListener(_e -> buscar());
+        btnSeleccionar.addActionListener(_e -> seleccionarActual());
+        btnCerrar.addActionListener(_e -> dispose());
+
+        // Doble clic en la tabla
+        tabla.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && tabla.getSelectedRow() >= 0) {
+                    seleccionarActual();
+                }
+            }
+        });
+
+        // Enter en el campo de apellido = buscar
+        txtApellido.addActionListener(_e -> buscar());
+    }
+
+    private void buscar() {
+        String filtro = txtApellido.getText().trim();
+        if (filtro.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Escribe al menos una parte del nombre o apellido.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            clienteDAO dao = new clienteDAO();
+            resultados = dao.buscarOpcionesPorNombreOApellidos(filtro);  // <-- método que agregamos al DAO
+            modelo.setRowCount(0);
+
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+
+            for (ClienteResumen cr : resultados) {
+                modelo.addRow(new Object[]{
+                        cr.getNombreCompleto(),
+                        cr.getTelefono1(),
+                        cr.getTelefono2(),
+                        cr.getFechaEvento()   == null ? "" : cr.getFechaEvento().format(fmt),
+                        cr.getFechaPrueba1()  == null ? "" : cr.getFechaPrueba1().format(fmt),
+                        cr.getFechaPrueba2()  == null ? "" : cr.getFechaPrueba2().format(fmt),
+                        cr.getFechaEntrega()  == null ? "" : cr.getFechaEntrega().format(fmt)
+                });
+            }
+
+            if (resultados.isEmpty()) {
+                JOptionPane.showMessageDialog(this,
+                        "No se encontraron clientes con ese nombre o apellido.",
+                        "Buscar cliente", JOptionPane.INFORMATION_MESSAGE);
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error al buscar clientes: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void seleccionarActual() {
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Selecciona un cliente de la tabla.",
+                    "Buscar cliente", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int modelRow = tabla.convertRowIndexToModel(row);
+        seleccionado = resultados.get(modelRow);
+        dispose();
+    }
+
+    public ClienteResumen getSeleccionado() {
+        return seleccionado;
+    }
+}
+
 }

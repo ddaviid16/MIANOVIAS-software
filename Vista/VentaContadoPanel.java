@@ -218,7 +218,7 @@ private String fechaLarga(LocalDate fecha) {
 
         // 2) Aplicar formato de teléfono (guiones, filtro, etc.)
         TelefonosUI.instalar(txtTelefono, 10);
-
+        
         // 3) Ya después construyes el panel
         JPanel top = new JPanel(new GridBagLayout());
         top.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
@@ -230,7 +230,6 @@ private String fechaLarga(LocalDate fecha) {
         int y = 0;
 
         // Fila 0: Teléfono1 y Teléfono2
-        // 🚫 YA NO VUELVAS A HACER new JTextField() AQUÍ
         txtTelefono2 = readOnlyField();
         addCell(top,c,0,y,new JLabel("Teléfono cliente:"),1,false);
         addCell(top,c,1,y,txtTelefono,1,true);

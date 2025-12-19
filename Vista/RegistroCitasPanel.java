@@ -61,6 +61,7 @@ public class RegistroCitasPanel extends JPanel {
     private JComboBox<String> cbAsesoraEntrega;
 
     private JButton btnBuscar;
+    private JButton btnBuscarNombre;
     private JButton btnGuardar;
     private JButton btnLimpiar;
 
@@ -84,21 +85,51 @@ public RegistroCitasPanel() {
 
         // ================= Cliente =================
 
-        btnBuscar = new JButton("Buscar");
-        btnBuscar.addActionListener(_e -> buscarCliente());
+// ================= Cliente =================
 
-        txtNombre = new JTextField();
-        txtNombre.setEditable(false);
-        txtNombre.setBackground(UIManager.getColor("TextField.inactiveBackground"));
+btnBuscar = new JButton("Buscar");
+btnBuscar.addActionListener(_e -> buscarCliente());
 
-        txtFechaEvento = new JTextField();
-        txtFechaEvento.setEditable(false);
-        txtFechaEvento.setBackground(UIManager.getColor("TextField.inactiveBackground"));
+// nuevo botón: Buscar cliente por nombre
+btnBuscarNombre = new JButton("Buscar cliente por nombre…");
+btnBuscarNombre.addActionListener(_e -> buscarClientePorNombre());
 
-        addRow(p, c, y++, new JLabel("Teléfono:"), txtTel,
-               new JLabel(""), btnBuscar);
-        addRow(p, c, y++, new JLabel("Nombre cliente:"), txtNombre,
-               new JLabel("Fecha de evento:"), txtFechaEvento);
+txtNombre = new JTextField();
+txtNombre.setEditable(false);
+txtNombre.setBackground(UIManager.getColor("TextField.inactiveBackground"));
+
+txtFechaEvento = new JTextField();
+txtFechaEvento.setEditable(false);
+txtFechaEvento.setBackground(UIManager.getColor("TextField.inactiveBackground"));
+
+/*  Fila 1: Teléfono + botones (Buscar / Buscar por nombre)
+    columnas:
+      0: etiqueta "Teléfono:"
+      1: txtTel
+      2-3: panel con los dos botones                         */
+
+c.gridx = 0; c.gridy = y; c.gridwidth = 1;
+p.add(new JLabel("Teléfono:"), c);
+
+c.gridx = 1;
+p.add(txtTel, c);
+
+// Panel con los dos botones alineados a la izquierda
+JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+panelBotones.add(btnBuscar);
+panelBotones.add(btnBuscarNombre);
+
+c.gridx = 2;
+c.gridwidth = 2;        // ocupa las columnas 2 y 3
+p.add(panelBotones, c);
+c.gridwidth = 1;
+
+y++;
+
+// Fila 2: nombre y fecha de evento, igual que antes
+addRow(p, c, y++, new JLabel("Nombre cliente:"), txtNombre,
+       new JLabel("Fecha de evento:"), txtFechaEvento);
+
 
         // ================= Citas =================
         addSeparator(p, c, y++, "Citas en tienda");
@@ -607,5 +638,39 @@ private void seleccionarEnCombo(JComboBox<String> cb, String valor) {
     }
     cb.setSelectedItem(valor);
 }
-        
+// Dentro de RegistroCitasPanel
+public void setClienteDesdeResumen(ClienteResumen cr) {
+    if (cr == null) return;
+
+    txtNombre.setText(
+            cr.getNombreCompleto() == null ? "" : cr.getNombreCompleto()
+    );
+
+    String tel = TelefonosUI.soloDigitos(cr.getTelefono1());
+    txtTel.setText(tel == null ? "" : tel);
+
+    if (cr.getFechaEvento() != null) {
+        txtFechaEvento.setText(cr.getFechaEvento().format(MX_FECHA));
+    } else {
+        txtFechaEvento.setText("");
+    }
+}
+
+private void buscarClientePorNombre() {
+    // Usa el diálogo que ya definiste en AgendaPanel
+    Window owner = SwingUtilities.getWindowAncestor(this);
+    AgendaPanel.DialogBusquedaCliente dlg =
+            new AgendaPanel.DialogBusquedaCliente(owner);
+    dlg.setLocationRelativeTo(this);
+    dlg.setVisible(true);
+
+    ClienteResumen cr = dlg.getSeleccionado();
+    if (cr != null) {
+        // llenamos teléfono / nombre / fecha evento
+        setClienteDesdeResumen(cr);
+        // y reutilizamos la lógica normal para cargar todas las citas
+        buscarCliente();
+    }
+}
+
 }

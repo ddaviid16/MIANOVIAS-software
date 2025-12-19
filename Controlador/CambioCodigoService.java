@@ -1,7 +1,6 @@
 package Controlador;
 
 import Conexion.Conecta;
-import Modelo.Inventario;
 
 import java.sql.Connection;
 import java.sql.Date;

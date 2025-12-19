@@ -2144,7 +2144,6 @@ private static class HojaDetallePrintable implements Printable {
                     g2.drawString(txt, x, y);
                     break;
                 }
-
                 case SALDOS_RESUMEN: {
                     if (desgloseSaldos != null && !desgloseSaldos.isBlank()) {
                         g2.setFont(fTitulo.deriveFont(9f));

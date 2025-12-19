@@ -39,7 +39,8 @@ public class HojaEntregaPanel extends JPanel {
     // Datos cargados
     private Nota notaActual;
     private Empresa empresaActual;
-
+    // Para evitar que el listener dispare mientras llenamos el combo por código
+    private boolean actualizandoFolios = false;
     // Campos UI
     private final JTextField txtTelefono = new JTextField(12);
     private final JComboBox<String> cbFolios = new JComboBox<>();
@@ -103,6 +104,9 @@ public class HojaEntregaPanel extends JPanel {
         txtTelefono.setColumns(12);
         p.add(txtTelefono);
 
+        // Enter en el teléfono = buscar folios y cargar el primero
+        txtTelefono.addActionListener(_e -> cargarFoliosPorTelefono());
+
         JButton btBuscarNombre = new JButton("Buscar cliente por nombre");
         btBuscarNombre.addActionListener(_e -> seleccionarClientePorApellido());
         p.add(btBuscarNombre);
@@ -115,9 +119,12 @@ public class HojaEntregaPanel extends JPanel {
         cbFolios.setPrototypeDisplayValue("XXXXXXXXXX");
         p.add(cbFolios);
 
-        JButton btCargar = new JButton("CARGAR DATOS");
-        btCargar.addActionListener(_e -> buscarPorFolioSeleccionado());
-        p.add(btCargar);
+        // Cuando el usuario cambia el folio, cargamos los datos automáticamente
+        cbFolios.addActionListener(_e -> {
+            if (actualizandoFolios) return;  // ignorar eventos mientras llenamos el combo
+            buscarPorFolioSeleccionado();
+        });
+
 
         JButton btImprimir = new JButton("Imprimir hoja de entrega");
         btImprimir.addActionListener(_e -> imprimirHoja());
@@ -224,42 +231,50 @@ public class HojaEntregaPanel extends JPanel {
 
     // ================== BÚSQUEDA ==================
 
-    /** Carga en el combo todos los folios liquidados del teléfono indicado. */
-    private void cargarFoliosPorTelefono() {
-        String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
-        if (tel == null || tel.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Capture el teléfono del cliente.",
-                    "Validación", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        tel = tel.trim();
-
-        try {
-            List<Nota> notas = notasDAO.listarNotasLiquidadasPorTelefono(tel);
-            DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
-            for (Nota n : notas) {
-                String folio = n.getFolio();
-                if (folio != null && !folio.isBlank()) {
-                    model.addElement(folio.trim());
-                }
-            }
-            cbFolios.setModel(model);
-
-            if (model.getSize() == 0) {
-                JOptionPane.showMessageDialog(this,
-                        "No se encontraron folios liquidados para ese teléfono.",
-                        "Sin resultados", JOptionPane.INFORMATION_MESSAGE);
-                limpiarCampos();
-            } else {
-                cbFolios.setSelectedIndex(0);
-                buscarPorFolioSeleccionado();   // carga el primero
-            }
-
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error al buscar folios: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
-        }
+private void cargarFoliosPorTelefono() {
+    String tel = Utilidades.TelefonosUI.soloDigitos(txtTelefono.getText());
+    if (tel == null || tel.trim().isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Capture el teléfono del cliente.",
+                "Validación", JOptionPane.WARNING_MESSAGE);
+        return;
     }
+    tel = tel.trim();
+
+    try {
+        List<Nota> notas = notasDAO.listarNotasLiquidadasPorTelefono(tel);
+
+        DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
+        for (Nota n : notas) {
+            String folio = n.getFolio();
+            if (folio != null && !folio.isBlank()) {
+                model.addElement(folio.trim());
+            }
+        }
+
+        actualizandoFolios = true;          // <<< desactivamos el listener mientras llenamos
+        cbFolios.setModel(model);
+
+        if (model.getSize() == 0) {
+            JOptionPane.showMessageDialog(this,
+                    "No se encontraron folios liquidados para ese teléfono.",
+                    "Sin resultados", JOptionPane.INFORMATION_MESSAGE);
+            limpiarCampos();
+        } else {
+            cbFolios.setSelectedIndex(0);   // seleccionamos el primero
+        }
+        actualizandoFolios = false;         // <<< reactivamos
+
+        // si hay al menos un folio, cargamos sus datos
+        if (model.getSize() > 0) {
+            buscarPorFolioSeleccionado();
+        }
+
+    } catch (SQLException ex) {
+        actualizandoFolios = false;
+        JOptionPane.showMessageDialog(this, "Error al buscar folios: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
 
     private void buscarPorFolioSeleccionado() {
         Object sel = cbFolios.getSelectedItem();
