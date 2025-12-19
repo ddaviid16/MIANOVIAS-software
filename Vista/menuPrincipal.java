@@ -267,7 +267,7 @@ public class menuPrincipal extends JFrame {
             System.exit(0);
         }
         Modelo.SesionUsuario.iniciar(usuario);
-        new menuPrincipal(usuario);
+        crearMenuConPantallaCarga(usuario);
     });
 }
 
@@ -362,7 +362,7 @@ public class menuPrincipal extends JFrame {
     }
 
     // ====== Main
-    public static void main(String[] args) {
+public static void main(String[] args) {
     try {
         for (UIManager.LookAndFeelInfo i : UIManager.getInstalledLookAndFeels())
             if ("Nimbus".equals(i.getName())) { UIManager.setLookAndFeel(i.getClassName()); break; }
@@ -375,6 +375,7 @@ public class menuPrincipal extends JFrame {
         // 1) Revisar si hay empleados
         if (!AsesorDAO.hayEmpleadosRegistrados()) {
             // No hay nadie: entrar directo al menú sin login
+            // Aquí NO usamos pantalla de carga, no vale la pena complicarlo.
             menuPrincipal frame = new menuPrincipal(null);
             JOptionPane.showMessageDialog(
                     frame,
@@ -391,7 +392,86 @@ public class menuPrincipal extends JFrame {
             System.exit(0); // canceló
         }
         Modelo.SesionUsuario.iniciar(usuario);
-        new menuPrincipal(usuario);
+
+        // Aquí usamos la pantalla de carga (asíncrona dentro del EDT)
+        crearMenuConPantallaCarga(usuario);
+    });
+}
+// ====== Pantalla de carga ======
+private static JDialog crearDialogoCarga() {
+    JDialog dlg = new JDialog((Frame) null, false); // no modal
+    dlg.setUndecorated(true);                      // sin barra de título
+
+    // Panel raíz
+    JPanel root = new JPanel(new BorderLayout());
+    root.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(180, 130, 170), 2, true),
+            BorderFactory.createEmptyBorder(14, 18, 16, 18)
+    ));
+    root.setBackground(new Color(252, 248, 252)); // casi blanco, tono lila
+    root.setPreferredSize(new Dimension(420, 160)); // tamaño decente
+
+    // Panel de contenido vertical
+    JPanel content = new JPanel();
+    content.setOpaque(false);
+    content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+
+    JLabel lblTitulo = new JLabel("MIANOVIAS", SwingConstants.CENTER);
+    lblTitulo.setAlignmentX(Component.CENTER_ALIGNMENT);
+    lblTitulo.setFont(lblTitulo.getFont().deriveFont(Font.BOLD, 22f));
+    lblTitulo.setForeground(new Color(130, 70, 130));
+
+    JLabel lblSub = new JLabel("Cargando el sistema, por favor espera…", SwingConstants.CENTER);
+    lblSub.setAlignmentX(Component.CENTER_ALIGNMENT);
+    lblSub.setFont(lblSub.getFont().deriveFont(Font.PLAIN, 13f));
+
+    JProgressBar bar = new JProgressBar();
+    bar.setIndeterminate(true);
+    bar.setAlignmentX(Component.CENTER_ALIGNMENT);
+    bar.setPreferredSize(new Dimension(260, 18));
+    bar.setMaximumSize(new Dimension(260, 18));
+
+    JLabel lblHint = new JLabel("Preparando módulos de ventas, clientes e inventario…");
+    lblHint.setAlignmentX(Component.CENTER_ALIGNMENT);
+    lblHint.setFont(lblHint.getFont().deriveFont(Font.ITALIC, 11f));
+    lblHint.setForeground(new Color(120, 120, 120));
+
+    content.add(Box.createVerticalStrut(4));
+    content.add(lblTitulo);
+    content.add(Box.createVerticalStrut(6));
+    content.add(lblSub);
+    content.add(Box.createVerticalStrut(14));
+    content.add(bar);
+    content.add(Box.createVerticalStrut(8));
+    content.add(lblHint);
+
+    root.add(content, BorderLayout.CENTER);
+
+    dlg.setContentPane(root);
+    dlg.pack();
+    dlg.setLocationRelativeTo(null); // centro de la pantalla
+    dlg.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+    dlg.setResizable(false);
+    dlg.setAlwaysOnTop(true);
+
+    return dlg;
+}
+
+
+/**
+ * Muestra la pantalla de carga y, en el siguiente ciclo del EDT,
+ * construye el menú principal y cierra el diálogo.
+ */
+private static void crearMenuConPantallaCarga(final Modelo.Asesor usuario) {
+    // Este método se está llamando desde el EDT en tu main y en cerrarSesion
+    final JDialog dlg = crearDialogoCarga();
+    dlg.setVisible(true);   // se agenda la pintura del diálogo
+
+    // Dejamos que el EDT pinte el diálogo, y en el siguiente "turno"
+    // construimos el menú principal (que sí tarda) y cerramos la pantalla de carga.
+    SwingUtilities.invokeLater(() -> {
+        new menuPrincipal(usuario);  // el constructor YA hace setVisible(true)
+        dlg.dispose();
     });
 }
 
