@@ -68,6 +68,7 @@ import java.util.function.BiConsumer;
 private static final java.util.Locale LOCALE_ES_MX = java.util.Locale.of("es", "MX");
 private static final java.time.format.DateTimeFormatter MX_LARGO =
         java.time.format.DateTimeFormatter.ofPattern("dd-MMMM-yyyy", LOCALE_ES_MX);
+        
 
 private String fechaLarga(java.time.LocalDate f) {
     if (f == null) return "";
@@ -103,15 +104,17 @@ private String fechaLarga(java.time.LocalDate f) {
         private final JButton btBuscar = new JButton("Buscar");
 
         private final JButton btBuscarApellido = new JButton("Buscar por nombre o apellido");
+        private final JTextField txtFolio = new JTextField();
+        private final JButton btBuscarFolio = new JButton("Buscar por Folio");
 
        // Tabla de cabecera (notas)
         private final DefaultTableModel modelNotas = new DefaultTableModel(
-                new String[]{"# Nota", "Tipo", "Folio", "Fecha", "Total", "Saldo", "Folio ref", "Status"}, 0) {
+                new String[]{"# Nota", "Tipo", "Folio", "Fecha", "Total", "Saldo de la nota", "Folio ref", "Status"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
 
             @Override public Class<?> getColumnClass(int c) {
                 return switch (c) {
-                    case 0 -> Integer.class;  // # Nota (oculta, pero existe)
+                    case 0 -> Integer.class; // # Nota
                     case 4, 5 -> Double.class; // Total, Saldo
                     default -> String.class;
                 };
@@ -173,9 +176,25 @@ private String fechaLarga(java.time.LocalDate f) {
             c.gridx = 2;
             filtro.add(btBuscar, c);
 
-            // Botón Buscar por apellido
+            // Botón Buscar por nombre o apellido
             c.gridx = 3;
             filtro.add(btBuscarApellido, c);
+
+            // NUEVO: etiqueta "Buscar por Folio:"
+            c.weightx = 0;
+            c.gridx = 4;
+            filtro.add(new JLabel("Buscar por Folio:"), c);
+
+            // NUEVO: campo de folio
+            c.weightx = 0.6;
+            c.gridx = 5;
+            filtro.add(txtFolio, c);
+
+            // NUEVO: botón "Buscar por Folio"
+            c.weightx = 0;
+            c.gridx = 6;
+            filtro.add(btBuscarFolio, c);
+
 
             add(filtro, BorderLayout.NORTH);
 
@@ -208,6 +227,10 @@ private String fechaLarga(java.time.LocalDate f) {
             btBuscar.addActionListener(_e -> cargarNotas());
             btBuscarApellido.addActionListener(_e -> seleccionarClientePorApellido());
             txtTelefono.addActionListener(_e -> cargarNotas());
+                    // NUEVO: buscar por folio
+            btBuscarFolio.addActionListener(_e -> buscarPorFolio());
+            txtFolio.addActionListener(_e -> buscarPorFolio());
+
 
             tbNotas.getSelectionModel().addListSelectionListener(_e -> {
                 if (!_e.getValueIsAdjusting()) cargarDetalleSeleccionada();
@@ -239,6 +262,102 @@ private String fechaLarga(java.time.LocalDate f) {
                 }
             });
         }
+    /** Busca una nota específica por folio y la muestra en la tabla. */
+    private void buscarPorFolio() {
+        modelNotas.setRowCount(0);
+        modelDet.setRowCount(0);
+
+        String folioBuscar = txtFolio.getText();
+        if (folioBuscar == null || folioBuscar.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Captura un folio para buscar.",
+                    "Atención",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        folioBuscar = folioBuscar.trim();
+
+        final String sql =
+                "SELECT numero_nota, tipo, folio, DATE(fecha_registro) AS fecha, " +
+                "       COALESCE(total,0) AS total, COALESCE(saldo,0) AS saldo, " +
+                "       status, telefono " +
+                "FROM Notas " +
+                "WHERE folio = ?";
+
+        try (Connection cn = Conexion.Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+
+            ps.setString(1, folioBuscar);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean hay = false;
+                while (rs.next()) {
+                    hay = true;
+
+                    int numero      = rs.getInt("numero_nota");
+                    String tipo     = rs.getString("tipo");
+                    String folio    = rs.getString("folio");
+                    java.sql.Date f = rs.getDate("fecha");
+                    String fechaStr = (f == null) ? "" : f.toLocalDate().toString();
+                    Double total    = rs.getDouble("total");
+                    Double saldo    = rs.getDouble("saldo");
+                    String status   = rs.getString("status");
+
+                    // Igual que en cargarNotas(): folio de referencia si es abono
+                    String folioRef = "";
+                    String t = tipoKey(tipo);
+                    boolean esAbono =
+                            t.equals("AB") ||
+                            t.contains("ABONO") ||
+                            t.contains("PAGO PARCIAL");
+
+                    if (esAbono) {
+                        Integer numOrigen = leerNotaOrigenPorAbono(numero);
+                        if (numOrigen != null) {
+                            NotaHead head = leerNotaHead(numOrigen);
+                            if (head != null) {
+                                folioRef = nullToEmpty(head.folio);
+                            }
+                        }
+                    }
+
+                    modelNotas.addRow(new Object[]{
+                            numero,
+                            nullToEmpty(tipo),
+                            nullToEmpty(folio),
+                            fechaStr,
+                            total,
+                            saldo,
+                            folioRef,
+                            nullToEmpty(status)
+                    });
+
+                    // Opcional pero útil: llenar el teléfono del cliente para otras funciones
+                    String telDb = rs.getString("telefono");
+                    String telDig = TelefonosUI.soloDigitos(telDb);
+                    if (telDig != null && !telDig.isEmpty()) {
+                        txtTelefono.setText(telDig);
+                    }
+                }
+
+                if (!hay) {
+                    JOptionPane.showMessageDialog(this,
+                            "No se encontró ninguna nota con el folio indicado.",
+                            "Sin resultados",
+                            JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    ocultarColumnaNumeroNota();   // misma lógica que en cargarNotas()
+                    tbNotas.setRowSelectionInterval(0, 0);
+                }
+            }
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error buscando por folio: " + ex.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
 
 private void cargarNotas() {
     modelNotas.setRowCount(0);
@@ -719,6 +838,13 @@ private void cargarNotas() {
         Double total   = asDouble(modelNotas.getValueAt(modelRow, 4));
         Double saldo   = asDouble(modelNotas.getValueAt(modelRow, 5));
         String tipoCelda = (String) modelNotas.getValueAt(modelRow, 1);
+        // Columna 6 = "Folio ref" (folio de la nota de crédito origen)
+        String folioRef = "";
+        Object frObj = modelNotas.getValueAt(modelRow, 6);
+        if (frObj != null) {
+            folioRef = frObj.toString();
+        }
+
 
         // 1) Inferimos tipo de nota a partir de la columna "Tipo" y total/saldo
         TipoNota tipo = inferirTipoDesdeFila(tipoCelda, total, saldo);
@@ -879,6 +1005,7 @@ private void cargarNotas() {
                         saldoPosterior,
                         saldoAnterior,
                         folio,
+                        folioRef,
                         observacionesOriginal,
                         fechaNota,
                         cajeraCodigo,
@@ -1949,7 +2076,7 @@ private NotaHead leerNotaHead(int numeroNota) {
 
                 // helpers (idénticos a Contado)
                 private String safe(String s){ return (s == null) ? "" : s.trim(); }
-                private String fmt2(Double v){ if (v == null) v = 0d; return String.format("%.2f", v); }
+                private String fmt2(Double v){ return fmtMoneda(v); }
                 private String coalesce(String a, String b, String def){
                     if (a != null && !a.isBlank()) return a;
                     if (b != null && !b.isBlank()) return b;
@@ -2133,7 +2260,7 @@ private NotaHead leerNotaHead(int numeroNota) {
 
                 // ===== helpers =====
                 private String safe(String s){ return (s == null) ? "" : s.trim(); }
-                private String fmt2(Double v){ if (v == null) v = 0d; return String.format("%.2f", v); }
+                private String fmt2(Double v){ return fmtMoneda(v); }
                 private String coalesce(String a, String b, String def){
                     if (a != null && !a.isBlank()) return a;
                     if (b != null && !b.isBlank()) return b;
@@ -2942,7 +3069,7 @@ private NotaHead leerNotaHead(int numeroNota) {
                 double abonoRealizado,                 // suma de pagos capturados
                 double saldoRestante,                  // nuevo saldo después del abono
                 double saldoAnterior,                  // saldo antes del abono
-                String folioTxt, String observacionesTexto, java.time.LocalDate fechaNotaAbono, int cajeraCodigo, String cajeraNombre) {
+                String folioTxt, String folioRefTxt, String observacionesTexto, java.time.LocalDate fechaNotaAbono, int cajeraCodigo, String cajeraNombre) {
 
             // Teléfono crudo de la nota
 final String tel1Raw  = (notaBase.getTelefono() == null) ? "" : notaBase.getTelefono();
@@ -2955,6 +3082,9 @@ final String fechaAbonoStr = fechaLarga(
 );
 
 final double total    = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal();
+
+        // pagos hechos ANTES del abono actual
+        final double pagosPrevios = Math.max(0d, total - saldoAnterior);
 
 
             final double tc = pagos.getTarjetaCredito()   == null ? 0d : pagos.getTarjetaCredito();
@@ -2994,6 +3124,7 @@ final double total    = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal()
 
 
             final String folio = (folioTxt == null || folioTxt.isBlank()) ? "—" : folioTxt;
+            final String folioRef = folioRefTxt;
             final String fCliNombre = cliNombre, fCliTel2 = cliTel2, fCliPrueba1 = cliPrueba1, fCliPrueba2 = cliPrueba2;
             final String fCliFechaEvento = cliFechaEvento;
 
@@ -3139,45 +3270,61 @@ final double total    = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal()
                         y = drawWrapped(g2, "(Detalle no disponible)", xArt, y, colArtW);
                     }
 
-    // === Observaciones (de la venta original) ===
-    if (observacionesTexto != null && !observacionesTexto.isBlank()) {
-        y += 10;
-        g2.setFont(fSection);
-        g2.drawString("Observaciones", x, y);
-        y += 12;
-        g2.setFont(fText);
-        y = drawWrapped(g2, observacionesTexto, x + 4, y, w - 8);
-        y += 10;
-    }
+                    // === Observaciones (de la venta original) ===
+                    if (observacionesTexto != null && !observacionesTexto.isBlank()) {
+                        y += 10;
+                        g2.setFont(fSection);
+                        g2.drawString("Observaciones", x, y);
+                        y += 12;
+                        g2.setFont(fText);
+                        y = drawWrapped(g2, observacionesTexto, x + 4, y, w - 8);
+                        y += 10;
+                    }
 
                     y += 6; g2.drawLine(x, y, x + w, y); y += 16;
 
+                                        // TOTAL de la compra original
                     g2.setFont(fH1);
-                    rightAlign(g2, "TOTAL: $" + fmt2(total), x, w, y);
+                    rightAlign(g2, "TOTAL DE COMPRA: $" + fmt2(total), x, w, y);
                     y += 22;
 
+                    // Abono en letras (igual que en AbonoPanel)
                     g2.setFont(fText);
-                    java.math.BigDecimal bdAbono = java.math.BigDecimal.valueOf(abonoRealizado)
-                    .setScale(2, java.math.RoundingMode.HALF_UP);
-            String abonoLetra = numeroALetras(bdAbono.doubleValue());
-            // Convierte el abono a letras
+                    java.math.BigDecimal bdAbono = java.math.BigDecimal
+                            .valueOf(abonoRealizado)
+                            .setScale(2, java.math.RoundingMode.HALF_UP);
+                    String abonoLetra = numeroALetras(bdAbono.doubleValue());
                     int anchoLetras = w - 230;
-                    
                     int yInicioTotales = y - 24; // solo hubo una línea (TOTAL)
-                    drawWrapped(g2, "Abono en letra: " + abonoLetra, x, yInicioTotales, anchoLetras);  // Imprime el abono en letras
+                    drawWrapped(g2, "Abono en letra: " + abonoLetra, x, yInicioTotales, anchoLetras);
                     y += 22;
 
-                    // Saldo anterior (antes del abono actual)
-                    rightAlign(g2, "Saldo anterior: $" + fmt2(saldoAnterior), x, w, y);
-                    y += 14;
-
+                    // === Bloque de totales de la nota (igual que AbonoPanel original) ===
                     g2.setFont(fText);
-                    rightAlign(g2, "Abono: $" + fmt2(abonoRealizado), x, w, y);
+
+                    // "Pagos efectuados a la nota {folio}: $XXX.XX"
+                    String etiquetaPagos = "Pagos efectuados a la nota";
+                    if (!"—".equals(folioRef)) {
+                        etiquetaPagos += " " + folioRef;
+                    }
+                    etiquetaPagos += ": $" + fmt2(pagosPrevios);
+                    rightAlign(g2, etiquetaPagos, x, w, y);
                     y += 14;
 
+                    // Saldo previo al abono actual
+                    rightAlign(g2, "Saldo por pagar: $" + fmt2(saldoAnterior), x, w, y);
+                    y += 14;
+
+                    // Monto del abono de esta nota
+                    rightAlign(g2, "Su abono: $" + fmt2(abonoRealizado), x, w, y);
+                    y += 14;
+
+                    // Nuevo saldo después del abono
                     g2.setFont(fH1);
-                    rightAlign(g2, "SALDO RESTANTE: $" + fmt2(saldoRestante), x, w, y);
+                    rightAlign(g2, "NUEVO SALDO RESTANTE: $" + fmt2(saldoRestante), x, w, y);
                     y += 22;
+
+
 
                     if (Math.abs(saldoRestante) < 0.005) {
                         g2.setFont(fH1);
@@ -3200,31 +3347,31 @@ final double total    = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal()
                     yPRight = drawWrapped(g2, "T. Débito: $"    + fmt2(td), x + leftW2 + gapCols2, yPRight, rightW2);
                     yPRight = drawWrapped(g2, "Transferencia: $" + fmt2(tr), x + leftW2 + gapCols2, yPRight + 2, rightW2);
                     yPRight = drawWrapped(g2, "Efectivo: $"     + fmt2(ef), x + leftW2 + gapCols2, yPRight + 2, rightW2);
-    y = Math.max(yPLeft, yPRight) + 10;
+                    y = Math.max(yPLeft, yPRight) + 10;
 
-    // Línea de cajera
-    g2.setFont(fText);
-    boolean tieneCodigo = cajeraCodigo > 0;
-    boolean tieneNombre = (cajeraNombre != null && !cajeraNombre.isBlank());
+                    // Línea de cajera
+                    g2.setFont(fText);
+                    boolean tieneCodigo = cajeraCodigo > 0;
+                    boolean tieneNombre = (cajeraNombre != null && !cajeraNombre.isBlank());
 
-    String cajeraLine = "Cajera: ";
-    if (tieneCodigo) {
-        cajeraLine += cajeraCodigo;
-    }
-    if (tieneNombre) {
-        if (tieneCodigo) {
-            cajeraLine += " - " + cajeraNombre;
-        } else {
-            cajeraLine += cajeraNombre;
-        }
-    }
-    g2.drawString(cajeraLine, x, y);
+                    String cajeraLine = "Cajera: ";
+                    if (tieneCodigo) {
+                        cajeraLine += cajeraCodigo;
+                    }
+                    if (tieneNombre) {
+                        if (tieneCodigo) {
+                            cajeraLine += " - " + cajeraNombre;
+                        } else {
+                            cajeraLine += cajeraNombre;
+                        }
+                    }
+                    g2.drawString(cajeraLine, x, y);
 
                     return PAGE_EXISTS;
                 }
 
                 private String safe(String s){ return (s == null) ? "" : s.trim(); }
-                private String fmt2(Double v){ if (v == null) v = 0d; return String.format("%.2f", v); }
+                private String fmt2(Double v){ return fmtMoneda(v);}
                 private String coalesce(String a, String b, String def){
                     if (a != null && !a.isBlank()) return a;
                     if (b != null && !b.isBlank()) return b;
@@ -3428,6 +3575,7 @@ final double total    = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal()
                                 : java.time.LocalDate.now().format(MX);
 
         final double total    = (n.getTotal() == null) ? 0d : n.getTotal();
+
         final String folio    = (folioTxt == null || folioTxt.isBlank()) ? "—" : folioTxt;
 
         // Cliente (nombre/tel2 y pruebas si existen)
@@ -3652,7 +3800,7 @@ final double total    = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal()
 
             // ===== Helpers locales =====
             private String safe(String s){ return (s == null) ? "" : s.trim(); }
-            private String fmt2(Double v){ if (v == null) v = 0d; return String.format("%.2f", v); }
+            private String fmt2(Double v){ return fmtMoneda(v);}
             private String coalesce(String a, String b, String def){
                 if (a != null && !a.isBlank()) return a;
                 if (b != null && !b.isBlank()) return b;

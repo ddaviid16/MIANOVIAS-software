@@ -1198,7 +1198,7 @@ private Printable construirPrintableAbono(
     final double total      = (notaBase.getTotal() == null) ? 0d : notaBase.getTotal();
     // Total de la compra y saldo actual del crédito (después del abono)
     final double totalCompraCredito   = total;
-    final double saldoPorPagarActual  = saldoRestante;
+    final double saldoPorPagarActual  = saldoAnterior;
 
     // Pagos efectuados a la nota de crédito: total - saldo actual
     final double pagosEfectuados = totalCompraCredito - saldoPorPagarActual;
