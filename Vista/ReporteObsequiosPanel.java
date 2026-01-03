@@ -159,47 +159,71 @@ private void cargarVentas() {
     }
 
     // Exportar CSV
+// Exportar CSV
 private void exportarCSV() {
     try {
         JFileChooser fc = new JFileChooser();
         fc.setDialogTitle("Guardar reporte de obsequios");
 
-        // Establecer el nombre predeterminado del archivo con la extensión .csv
         String defaultFileName = "reporte_obsequios_" + LocalDate.now().toString() + ".csv";
         fc.setSelectedFile(new java.io.File(defaultFileName));
 
         int res = fc.showSaveDialog(this);
         if (res != JFileChooser.APPROVE_OPTION) return;
 
-        // Obtener la ruta seleccionada y asegurarse de que tenga la extensión .csv
         java.io.File file = fc.getSelectedFile();
         String filePath = file.getAbsolutePath();
         if (!filePath.endsWith(".csv")) {
-            filePath += ".csv"; // Agregar .csv si no lo tiene
+            filePath += ".csv";
         }
 
         FileWriter out = new FileWriter(filePath);
-        out.write("Fecha,Folio,Telefono,Obsequio1_cod,Obsequio1,Obsequio2_cod,Obsequio2,Obsequio3_cod,Obsequio3,Obsequio4_cod,Obsequio4,Obsequio5_cod,Obsequio5\n");
 
-        // Recorrer ventas y sacar obsequios de cada nota
+        // NUEVO ENCABEZADO con los campos adicionales
+        out.write(
+            "Fecha,Folio,Telefono," +
+            "Cliente,Modelo,Talla,Color,PrecioFinalVestido,FechaEvento,Asesora," +
+            "Obsequio1_cod,Obsequio1,Obsequio2_cod,Obsequio2," +
+            "Obsequio3_cod,Obsequio3,Obsequio4_cod,Obsequio4," +
+            "Obsequio5_cod,Obsequio5\n"
+        );
+
         ReporteObsequiosDAO dao = new ReporteObsequiosDAO();
+
         for (int i = 0; i < modelVentas.getRowCount(); i++) {
             int nota = (int) modelVentas.getValueAt(i, 0);
             String folio = String.valueOf(modelVentas.getValueAt(i, 1));
-            String tel = String.valueOf(modelVentas.getValueAt(i, 2));
+            String tel   = String.valueOf(modelVentas.getValueAt(i, 2));
             String fecha = String.valueOf(modelVentas.getValueAt(i, 3));
 
-            // Obtener los códigos y descripciones de los obsequios
+            // Info extra de la venta (cliente, vestido, evento, asesora)
+            VentaInfo info = obtenerInfoVenta(nota);
+
+            // Obsequios existentes
             List<String> obs = obtenerObsequiosPlano(dao, nota);
+            while (obs.size() < 10) obs.add("");
 
-            // Asegurarse de que la lista tenga 10 elementos, si faltan se agrega un string vacío
-            while (obs.size() < 10) obs.add(""); // Si faltan columnas, se agregan vacíos
+            // Saneamos nulls a cadena vacía
+            String cliente      = info == null || info.cliente == null      ? "" : info.cliente;
+            String modelo       = info == null || info.modelo == null       ? "" : info.modelo;
+            String talla        = info == null || info.talla == null        ? "" : info.talla;
+            String color        = info == null || info.color == null        ? "" : info.color;
+            String precioFinal  = info == null || info.precioFinal == null  ? "" : info.precioFinal;
+            String fechaEvento  = info == null || info.fechaEvento == null  ? "" : info.fechaEvento;
+            String asesora      = info == null || info.asesora == null      ? "" : info.asesora;
 
-            // Escribir la línea con los datos de la venta y obsequios
-            out.write(String.join(",", fecha, folio, tel,
-                    obs.get(0), obs.get(1), obs.get(2), obs.get(3), obs.get(4),
-                    obs.get(5), obs.get(6), obs.get(7), obs.get(8), obs.get(9)) + "\n");
+            out.write(String.join(",",
+                    fecha, folio, tel,
+                    cliente, modelo, talla, color, precioFinal, fechaEvento, asesora,
+                    obs.get(0), obs.get(1),
+                    obs.get(2), obs.get(3),
+                    obs.get(4), obs.get(5),
+                    obs.get(6), obs.get(7),
+                    obs.get(8), obs.get(9)
+            ));
+            out.write("\n");
         }
+
         out.close();
         JOptionPane.showMessageDialog(this, "Archivo exportado correctamente.");
     } catch (Exception e) {
@@ -209,6 +233,74 @@ private void exportarCSV() {
 }
 
 
+private VentaInfo obtenerInfoVenta(int numeroNota) throws SQLException {
+    VentaInfo info = new VentaInfo();
+
+    try (Connection cn = Conecta.getConnection()) {
+
+        // 1) CABECERA: cliente, fecha_evento, asesora
+        String sqlCab =
+            "SELECT " +
+            "  CONCAT(COALESCE(c.nombre,''),' ',COALESCE(c.apellido_paterno,''),' ',COALESCE(c.apellido_materno,'')) AS nombre_cliente, " +
+            "  c.fecha_evento, " +
+            "  a.nombre_completo AS nombre_asesora " +
+            "FROM Notas n " +
+            "LEFT JOIN Clientes c ON c.telefono1 = n.telefono " +
+            "LEFT JOIN Asesor a ON a.numero_empleado = n.asesor " +
+            "WHERE n.numero_nota = ?";
+
+        try (PreparedStatement ps = cn.prepareStatement(sqlCab)) {
+            ps.setInt(1, numeroNota);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    info.cliente = rs.getString("nombre_cliente");
+                    java.sql.Date fe = rs.getDate("fecha_evento");
+                    info.fechaEvento = (fe == null) ? "" : fe.toLocalDate().toString();
+                    info.asesora = rs.getString("nombre_asesora");
+                }
+            }
+        }
+
+        // 2) VESTIDO: modelo, talla, color, precio final (precio con descuento)
+        String sqlDet =
+            "SELECT modelo, talla, color, precio, descuento " +
+            "FROM Nota_Detalle " +
+            "WHERE numero_nota = ? " +
+            "ORDER BY precio DESC " +  // asumimos que el vestido principal es el más caro
+            "LIMIT 1";
+
+        try (PreparedStatement ps = cn.prepareStatement(sqlDet)) {
+            ps.setInt(1, numeroNota);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    info.modelo = rs.getString("modelo");
+                    info.talla  = rs.getString("talla");
+                    info.color  = rs.getString("color");
+
+                    Double precio = null;
+                    Double desc   = null;
+
+                    double p = rs.getDouble("precio");
+                    if (!rs.wasNull()) precio = p;
+
+                    double d = rs.getDouble("descuento");
+                    if (!rs.wasNull()) desc = d;
+
+                    if (precio != null) {
+                        double pct = (desc == null ? 0.0 : desc);
+                        double finalVal = precio * (1.0 - pct / 100.0);
+                        info.precioFinal = String.format(java.util.Locale.US, "%.2f", finalVal);
+                    } else {
+                        info.precioFinal = "";
+                    }
+                }
+            }
+        }
+    }
+
+    // Si algo no se encontró, quedan null -> lo saneamos al escribir
+    return info;
+}
 
 // Método para obtener los obsequios de la base de datos (código y descripción)
 private List<String> obtenerObsequiosPlano(ReporteObsequiosDAO dao, int nota) throws SQLException {
@@ -230,7 +322,16 @@ private List<String> obtenerObsequiosPlano(ReporteObsequiosDAO dao, int nota) th
     }
     return obs;
 }
-    //Necesito que este popup sea funcional para esta clase.
+private static class VentaInfo {
+    String cliente;      // nombre + apellidos
+    String modelo;
+    String talla;
+    String color;
+    String precioFinal;  // ya formateado con 2 decimales
+    String fechaEvento;  // yyyy-MM-dd
+    String asesora;      // nombre completo asesora
+}
+
         // ======= Popup de selección de MES =======
     static class MonthPopup extends JPopupMenu {
         private int year;

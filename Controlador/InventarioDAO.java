@@ -37,7 +37,7 @@ private static final String SELECT_SEARCH =
     "       remision, factura, " +
     "       status " +
     "FROM Inventarios " +
-    "WHERE codigo_articulo LIKE ? OR articulo LIKE ? OR talla LIKE ? OR color LIKE ? " +
+    "WHERE codigo_articulo LIKE ? OR articulo LIKE ? OR talla LIKE ? OR color LIKE ? OR modelo LIKE ?" +
     "ORDER BY fecha_registro DESC, codigo_articulo DESC";
 
 private static final String SELECT_BY_ID =
@@ -89,6 +89,7 @@ private static final String SELECT_BY_ID =
             ps.setString(2, like); // articulo
             ps.setString(3, like); // talla
             ps.setString(4, like); // color
+            ps.setString(5, like); // modelo
         }
         try (ResultSet rs = ps.executeQuery()) {
             List<Inventario> lista = new ArrayList<>();
@@ -145,7 +146,7 @@ private static final String SELECT_BY_ID =
             "FROM Inventarios " +
             "WHERE status='A' AND COALESCE(existencia,0) > 0 AND (" +
             "      articulo LIKE ? OR marca LIKE ? OR modelo LIKE ? OR " +
-            "      talla LIKE ? OR color LIKE ? OR CAST(codigo_articulo AS CHAR) LIKE ?" +
+            "      talla LIKE ? OR color LIKE ? OR CAST(codigo_articulo AS CHAR) LIKE ? OR modelo LIKE ?" +
             ") ORDER BY articulo ASC, codigo_articulo DESC LIMIT 200";
 
         try (java.sql.Connection cn = Conecta.getConnection();

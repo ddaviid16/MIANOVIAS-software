@@ -38,7 +38,7 @@ public class InventarioPanel extends JPanel {
         txtBuscar = new JTextField(30);
         JButton btnBuscar = new JButton("Buscar");
         JButton btnActualizar = new JButton("Actualizar");
-        rightPanel.add(new JLabel("Buscar (código / artículo / talla / color):"));
+        rightPanel.add(new JLabel("Buscar (código / artículo / modelo / talla / color):"));
         rightPanel.add(txtBuscar);
         rightPanel.add(btnBuscar);
         rightPanel.add(btnActualizar);
@@ -230,7 +230,7 @@ public class InventarioPanel extends JPanel {
         try {
             List<Inventario> lista = new InventarioDAO().listar(null); // Obtener la lista de inventarios
 
-            ExportadorCSV.guardarListaCSV(lista, "inventario_articulos", "codigoArticulo", "articulo", "marca", "modelo", "talla", "color", "precio", "descuento", "existencia");
+            ExportadorCSV.guardarListaCSV(lista, "inventario_articulos", "codigoArticulo", "articulo","descripcion1", "descripcion2", "marca", "modelo", "talla", "color", "nombreNovia", "costoIva", "precio", "descuento", "existencia","inventarioConteo", "fechaRegistro", "remision", "factura", "fechaPago","status");
 
             JOptionPane.showMessageDialog(this, "Archivo exportado exitosamente.", "Exportación exitosa", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {

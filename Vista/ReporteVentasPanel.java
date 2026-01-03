@@ -1,5 +1,8 @@
 package Vista;
 
+import Controlador.InventarioDAO;
+import Modelo.Inventario;
+
 import Conexion.Conecta;
 import Controlador.AsesorDAO;
 import Controlador.ExportadorCSV;
@@ -68,6 +71,12 @@ public class ReporteVentasPanel extends JPanel {
     // --- Filtro por artículo ---
     private final JTextField tfArtIni = new JTextField(8);
     private final JTextField tfArtFin = new JTextField(8);
+
+    // Sub-modo del filtro por artículo: por código o por tipo
+    private final JRadioButton rbArtPorCodigo = new JRadioButton("Por código", true);
+    private final JRadioButton rbArtPorTipo   = new JRadioButton("Por tipo");
+    private final JComboBox<String> cbTipoArticulo = new JComboBox<>();
+
 
     // --- Filtro por vendedor (asesor) ---
     private final JComboBox<AsesorItem> cbVendIni = new JComboBox<>();
@@ -159,7 +168,7 @@ static class CsvRow {
     public String folio;
     public String cliente;
     public String asesor;
-    public String fecha;
+    public String fecha; //fecha de la nota
     public String tipo;
     public String status;
     public Double total;
@@ -171,6 +180,10 @@ static class CsvRow {
     public String modelo;
     public String talla;
     public String color;
+    
+    public String fechaRegistroArticulo; // fecha_registro de Inventarios
+    public Double costoArticulo;         // costoIva de Inventarios
+
     public Double precio;
     public Double descuento;
     public Double subtotal;
@@ -187,6 +200,8 @@ static class CsvRow {
         // Cargar combos
         cargarAsesores();
         cargarClientes();
+
+        cargarTiposArticulo();
 
         // Listeners
         btCargar.addActionListener(e -> cargar());
@@ -258,12 +273,22 @@ fechaFin.set(LocalDate.now());
         // --- Línea 2: panel de filtros específicos (CardLayout) ---
         panelFiltrosEspecificos.setBorder(BorderFactory.createEmptyBorder(0, 4, 4, 4));
 
-        // Card de artículos
+                // Card de artículos
         JPanel cardArt = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
+
+        // Rango por código
         cardArt.add(new JLabel("Artículo de:"));
         cardArt.add(tfArtIni);
         cardArt.add(new JLabel("a"));
         cardArt.add(tfArtFin);
+
+        // Separador visual
+        cardArt.add(Box.createHorizontalStrut(20));
+
+        // Búsqueda por tipo de artículo
+        cardArt.add(new JLabel("O  Buscar por tipo de artículo:"));
+        cardArt.add(cbTipoArticulo);
+
 
         // Card de vendedores
         JPanel cardVend = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
@@ -350,6 +375,44 @@ private void cargar() {
 }
 
 private void cargarPorArticulo(LocalDate ini, LocalDate finExcl) throws Exception {
+    String sIni  = tfArtIni.getText().trim();
+    String sFin  = tfArtFin.getText().trim();
+    String tipo  = (String) cbTipoArticulo.getSelectedItem();
+    tipo = (tipo == null) ? "" : tipo.trim();
+
+    boolean tieneRango = !sIni.isEmpty() && !sFin.isEmpty();
+    boolean tieneTipo  = !tipo.isEmpty();
+
+    // Si marca ambas cosas, le regañamos
+    if (tieneRango && tieneTipo) {
+        JOptionPane.showMessageDialog(this,
+                "Capturaste un rango de artículos Y también un tipo.\n" +
+                "Usa solo una opción: rango de código O tipo de artículo.",
+                "Aviso", JOptionPane.WARNING_MESSAGE);
+        return;
+    }
+
+    // Solo rango de código
+    if (tieneRango) {
+        cargarPorRangoCodigoArticulo(ini, finExcl);
+        return;
+    }
+
+    // Solo tipo
+    if (tieneTipo) {
+        cargarPorTipoArticulo(ini, finExcl);
+        return;
+    }
+
+    // Nada
+    JOptionPane.showMessageDialog(this,
+            "Debes capturar un rango de códigos de artículo\n" +
+            "O seleccionar un tipo de artículo.",
+            "Aviso", JOptionPane.WARNING_MESSAGE);
+}
+
+
+private void cargarPorRangoCodigoArticulo(LocalDate ini, LocalDate finExcl) throws Exception {
     String sIni = tfArtIni.getText().trim();
     String sFin = tfArtFin.getText().trim();
 
@@ -361,12 +424,8 @@ private void cargarPorArticulo(LocalDate ini, LocalDate finExcl) throws Exceptio
     }
 
     // Trabajar como cadenas (porque en BD es VARCHAR)
-    String artIni = sIni;
-    String artFin = sFin;
-
-    // Normalizas si quieres (opcional, si tus códigos son mayúsculas)
-    artIni = artIni.toUpperCase();
-    artFin = artFin.toUpperCase();
+    String artIni = sIni.toUpperCase();
+    String artFin = sFin.toUpperCase();
 
     // Asegurar que artIni <= artFin lexicográficamente
     if (artIni.compareTo(artFin) > 0) {
@@ -394,6 +453,42 @@ private void cargarPorArticulo(LocalDate ini, LocalDate finExcl) throws Exceptio
         ps.setDate(2, Date.valueOf(finExcl));
         ps.setString(3, artIni);
         ps.setString(4, artFin);
+
+        try (ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                agregarFilaNota(rs);
+            }
+        }
+    }
+}
+
+private void cargarPorTipoArticulo(LocalDate ini, LocalDate finExcl) throws Exception {
+    String tipo = (String) cbTipoArticulo.getSelectedItem();
+    if (tipo == null || tipo.trim().isEmpty()) {
+        JOptionPane.showMessageDialog(this,
+                "Debes seleccionar un tipo de artículo.",
+                "Aviso", JOptionPane.WARNING_MESSAGE);
+        return;
+    }
+
+    String sql =
+        "SELECT DISTINCT n.numero_nota, n.asesor, n.tipo, n.folio, n.fecha_registro, " +
+        "       n.total, n.saldo, n.status, " +
+        "       CONCAT(COALESCE(c.nombre,''),' ',COALESCE(c.apellido_paterno,''),' ',COALESCE(c.apellido_materno,'')) AS nombre_cliente " +
+        "FROM Notas n " +
+        "JOIN Nota_Detalle d ON d.numero_nota = n.numero_nota " +
+        "LEFT JOIN Clientes c ON c.telefono1 = n.telefono " +
+        "WHERE n.status='A' AND n.tipo IN ('CN','CR') " +
+        "  AND n.fecha_registro >= ? AND n.fecha_registro < ? " +
+        "  AND d.articulo = ? " +
+        "ORDER BY n.fecha_registro, n.numero_nota";
+
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setDate(1, Date.valueOf(ini));
+        ps.setDate(2, Date.valueOf(finExcl));
+        ps.setString(3, tipo);
 
         try (ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
@@ -582,6 +677,9 @@ private void exportarCSV() {
     try {
         List<CsvRow> rows = new ArrayList<>();
         NotasDAO notasDAO = new NotasDAO();
+        InventarioDAO invDAO = new InventarioDAO();
+        Map<String, Inventario> cacheInv = new HashMap<>();
+
 
         // Recorremos TODAS las notas que aparecen en la tabla filtrada
         for (int vr = 0; vr < tbNotas.getRowCount(); vr++) {
@@ -611,7 +709,7 @@ private void exportarCSV() {
                 r.asesor = asesor;
                 r.folio      = folio;
                 r.cliente    = cliente;
-                r.fecha      = fecha;
+                r.fecha      = fecha; //fecha de la nota
                 r.tipo       = tipo;
                 r.status     = status;
                 r.total      = total;
@@ -637,6 +735,27 @@ private void exportarCSV() {
                     r.modelo     = d.getModelo();
                     r.talla      = d.getTalla();
                     r.color      = d.getColor();
+                    // === NUEVO: buscar información en Inventarios ===
+                    Inventario inv = null;
+                    if (r.codigo != null && !r.codigo.isBlank()) {
+                        inv = cacheInv.get(r.codigo);
+                        if (inv == null) {
+                            try {
+                                inv = invDAO.buscarPorCodigo(r.codigo);
+                            } catch (Exception exInv) {
+                                inv = null; // si truena, lo dejamos null y seguimos
+                            }
+                            cacheInv.put(r.codigo, inv);
+                        }
+                    }
+
+                    if (inv != null) {
+                        if (inv.getFechaRegistro() != null) {
+                            // usamos el mismo DF = yyyy-MM-dd que ya tienes en la clase
+                            r.fechaRegistroArticulo = inv.getFechaRegistro().format(DF);
+                        }
+                        r.costoArticulo = inv.getCostoIva();
+                    }
                     r.precio     = d.getPrecio();
                     r.descuento  = d.getDescuento();
                     r.subtotal   = d.getSubtotal();
@@ -663,14 +782,12 @@ if (ini == null || fin == null) {
 
 String fname = "ReporteVentas_" + ini.format(DF) + "_a_" + fin.format(DF);
 
-
-        // IMPORTANTE: aquí ya NO aparece "numeroNota"
         ExportadorCSV.guardarListaCSV(
         rows, fname,
         "asesor", "folio", "cliente", "fecha", "tipo", "status", "total", "saldo",
-        "codigo", "articulo", "marca", "modelo", "talla", "color",
+        "codigo", "articulo", "marca", "modelo", "talla", "color", "fechaRegistroArticulo", "costoArticulo",
         "precio", "descuento", "subtotal"
-);
+        );
 
 
         JOptionPane.showMessageDialog(this, "CSV generado correctamente.");
@@ -711,6 +828,32 @@ private void cargarAsesores() {
                 "Error", JOptionPane.ERROR_MESSAGE);
     }
 }
+private void cargarTiposArticulo() {
+    cbTipoArticulo.removeAllItems();
+    cbTipoArticulo.addItem(""); // opción vacía
+
+    String sql = "SELECT DISTINCT articulo FROM Nota_Detalle ORDER BY articulo";
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql);
+         ResultSet rs = ps.executeQuery()) {
+
+        while (rs.next()) {
+            String art = ns(rs.getString(1));
+            if (!art.isEmpty()) {
+                cbTipoArticulo.addItem(art);
+            }
+        }
+
+        if (cbTipoArticulo.getItemCount() > 1) {
+            cbTipoArticulo.setSelectedIndex(1);
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this,
+                "Error cargando tipos de artículo: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
+
 
     private void cargarClientes() {
         cbCliIni.removeAllItems();
