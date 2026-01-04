@@ -123,6 +123,7 @@ public class menuPrincipal extends JFrame {
         mainPanel.add(new HojaEntregaPanel(),         "Hoja de entrega");
         mainPanel.add(new AgregarObsequiosNotaPanel(), "Agregar obsequios a nota");
         mainPanel.add(new CambioCodigoArticuloPanel(), "Cambio de código de artículo");
+        mainPanel.add(new FacturarPorFolioPanel(),  "Agregar datos de factura");
 
         // Submenú Empresa (mismo patrón que Operaciones)
         mainPanel.add(new EmpresaSubmenuPanel(card -> showCard(card, tituloDe(card))), CARD_EMPRESA);
@@ -342,6 +343,7 @@ public class menuPrincipal extends JFrame {
             case "Hoja de entrega":
             case "Agregar obsequios a nota":
             case "Cambio de código de artículo":
+            case "Agregar datos de factura":
             
                 return card;
         }

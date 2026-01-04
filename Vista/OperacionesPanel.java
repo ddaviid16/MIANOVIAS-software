@@ -34,6 +34,7 @@ public class OperacionesPanel extends JPanel {
         JButton btHojaEntrega = botonGrande("Hoja de entrega");
         JButton btAgregarObsequios = botonGrande("Agregar obsequios a nota");
         JButton btCambioCodigoArticulo = botonGrande("Cambio de código de artículo");
+        JButton btAgregarFactura = botonGrande("Agregar datos de factura");
 
         // Navegación (cambia por tus constantes si son distintas)
         btContado.addActionListener(_e    -> navigate.accept(CARD_VENTA_CONTADO));
@@ -45,6 +46,7 @@ public class OperacionesPanel extends JPanel {
         btHojaEntrega.addActionListener(_e-> navigate.accept(CARD_HOJA_ENTREGA));
         btAgregarObsequios.addActionListener(_e -> navigate.accept(CARD_AGREGAR_OBSEQUIOS));
         btCambioCodigoArticulo.addActionListener(_e -> navigate.accept(CARD_CAMBIO_CODIGO_ART));
+        btAgregarFactura.addActionListener(_e -> navigate.accept("Agregar datos de factura"));
         
 
         center.add(btContado);
@@ -56,6 +58,7 @@ public class OperacionesPanel extends JPanel {
         center.add(btHojaEntrega);
         center.add(btAgregarObsequios);
         center.add(btCambioCodigoArticulo);
+        center.add(btAgregarFactura);
 
         add(center, BorderLayout.CENTER);
     }

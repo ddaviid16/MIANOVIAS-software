@@ -1,9 +1,10 @@
 package Vista;
 
 import javax.swing.*;
+
+import Utilidades.CatalogoCFDI;
+
 import java.awt.*;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.regex.Pattern;
 
 public class DlgFactura extends JDialog {
@@ -18,9 +19,10 @@ public class DlgFactura extends JDialog {
 
     private final JTextField txtRFC     = new JTextField();
     private final JComboBox<String> cbTipo = new JComboBox<>(new String[]{"FISICA","MORAL"});
-    private final JTextField txtRegimen = new JTextField(4);
-    private final JComboBox<String> cbUso = new JComboBox<>();
+    private final JComboBox<Utilidades.CatalogoCFDI.Regimen> cbRegimen = new JComboBox<>();
+    private final JComboBox<Utilidades.CatalogoCFDI.UsoCfdi> cbUso = new JComboBox<>();
     private final JTextField txtCorreo  = new JTextField();
+
 
     private CapturaFactura result;
 
@@ -37,7 +39,7 @@ public class DlgFactura extends JDialog {
         int y=0;
         add(formRow(form, c, 0, y++, new JLabel("Tipo de persona:"), cbTipo));
         add(formRow(form, c, 0, y++, new JLabel("RFC:"), txtRFC));
-        add(formRow(form, c, 0, y++, new JLabel("Régimen fiscal:"), txtRegimen));
+        add(formRow(form, c, 0, y++, new JLabel("Régimen fiscal:"), cbRegimen));
         add(formRow(form, c, 0, y++, new JLabel("Uso de CFDI:"), cbUso));
         add(formRow(form, c, 0, y++, new JLabel("Correo receptor:"), txtCorreo));
 
@@ -50,13 +52,13 @@ public class DlgFactura extends JDialog {
         add(south, BorderLayout.SOUTH);
 
         // catálogo mínimo por ahora (puedes reemplazarlo por tu catálogo oficial)
-        cargarUsosPorRegimen();
+        inicializarCatalogos();
 
         // precarga opcional
         if (precargada != null) {
             cbTipo.setSelectedItem(precargada.tipoPersona==null? "FISICA":precargada.tipoPersona);
             txtRFC.setText(precargada.rfc==null? "" : precargada.rfc);
-            txtRegimen.setText(precargada.regimen==null? "" : precargada.regimen);
+            cbRegimen.setSelectedItem(precargada.regimen==null? null : new Utilidades.CatalogoCFDI.Regimen(precargada.regimen, "", ""));
             txtCorreo.setText(precargada.correo==null? "" : precargada.correo);
             if (precargada.usoCfdi != null) cbUso.setSelectedItem(precargada.usoCfdi);
         }
@@ -72,18 +74,23 @@ public class DlgFactura extends JDialog {
     private void onAceptar() {
         String tipo = String.valueOf(cbTipo.getSelectedItem());
         String rfc  = txtRFC.getText().trim().toUpperCase();
-        String reg  = txtRegimen.getText().trim().toUpperCase();
-        String uso  = (String) cbUso.getSelectedItem();
+
+        CatalogoCFDI.Regimen regItem = (CatalogoCFDI.Regimen) cbRegimen.getSelectedItem();
+        CatalogoCFDI.UsoCfdi usoItem = (CatalogoCFDI.UsoCfdi) cbUso.getSelectedItem();
+
+        String reg = (regItem == null ? "" : regItem.clave);
+        String uso = (usoItem == null ? "" : usoItem.clave);
+
         String mail = txtCorreo.getText().trim();
 
-        // Validación RFC (básica)
+        // Validación RFC (igual que antes)
         Pattern RFC_FIS = Pattern.compile("^[A-ZÑ&]{4}\\d{6}[A-Z0-9]{3}$");
         Pattern RFC_MOR = Pattern.compile("^[A-ZÑ&]{3}\\d{6}[A-Z0-9]{3}$");
         boolean ok = ("FISICA".equals(tipo) ? RFC_FIS.matcher(rfc).matches()
-                                             : RFC_MOR.matcher(rfc).matches());
+                                            : RFC_MOR.matcher(rfc).matches());
         if (!ok) { JOptionPane.showMessageDialog(this, "RFC inválido para el tipo seleccionado."); return; }
         if (reg.isEmpty()) { JOptionPane.showMessageDialog(this, "Captura el régimen fiscal."); return; }
-        if (uso==null || uso.isBlank()) { JOptionPane.showMessageDialog(this, "Selecciona el uso de CFDI."); return; }
+        if (uso == null || uso.isBlank()) { JOptionPane.showMessageDialog(this, "Selecciona el uso de CFDI."); return; }
         if (!mail.isBlank() && !mail.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
             JOptionPane.showMessageDialog(this, "Correo inválido."); return;
         }
@@ -91,8 +98,8 @@ public class DlgFactura extends JDialog {
         result = new CapturaFactura();
         result.tipoPersona = tipo;
         result.rfc = rfc;
-        result.regimen = reg;
-        result.usoCfdi = uso;
+        result.regimen = reg;     // solo la CLAVE (4 chars)
+        result.usoCfdi = uso;     // solo la CLAVE (3 chars)
         result.correo = mail;
         dispose();
     }
@@ -113,14 +120,64 @@ public class DlgFactura extends JDialog {
         return p;
     }
 
-    private void cargarUsosPorRegimen() {
-        // Ejemplo simple: puedes mapear por régimen; por ahora dejamos un set general práctico
-        Map<String,String> usos = new LinkedHashMap<>();
-        usos.put("G01","Adquisición de mercancías");
-        usos.put("G03","Gastos en general");
-        usos.put("I01","Construcciones");
-        usos.put("P01","Por definir"); // quítalo si en tu PAC ya no aplica
-        cbUso.removeAllItems();
-        usos.keySet().forEach(cbUso::addItem);
+// === Carga de catálogos y filtros ===
+
+private void inicializarCatalogos() {
+    // Cuando cambie FISICA/MORAL, recargamos regímenes
+    cbTipo.addActionListener(_e -> recargarRegimenesSegunTipoPersona());
+    // Cuando cambie el régimen, recargamos usos compatibles
+    cbRegimen.addActionListener(_e -> recargarUsosSegunRegimen());
+    // Primera carga
+    recargarRegimenesSegunTipoPersona();
+}
+
+private void recargarRegimenesSegunTipoPersona() {
+    String tipo = String.valueOf(cbTipo.getSelectedItem()); // "FISICA" / "MORAL"
+    String persona = "PF";
+    if ("MORAL".equals(tipo)) persona = "PM";
+
+    cbRegimen.removeAllItems();
+    for (CatalogoCFDI.Regimen r : CatalogoCFDI.listarRegimenesPorPersona(persona)) {
+        cbRegimen.addItem(r);
     }
+    if (cbRegimen.getItemCount() > 0) {
+        cbRegimen.setSelectedIndex(0);
+    }
+    recargarUsosSegunRegimen();
+}
+
+private void recargarUsosSegunRegimen() {
+    cbUso.removeAllItems();
+    CatalogoCFDI.Regimen r = (CatalogoCFDI.Regimen) cbRegimen.getSelectedItem();
+    if (r == null) return;
+
+    for (CatalogoCFDI.UsoCfdi u : CatalogoCFDI.listarUsosParaRegimen(r.clave)) {
+        cbUso.addItem(u);
+    }
+}
+
+// Para precargar valores desde BD
+private void seleccionarRegimenPorClave(String clave) {
+    if (clave == null) return;
+    for (int i = 0; i < cbRegimen.getItemCount(); i++) {
+        CatalogoCFDI.Regimen r = cbRegimen.getItemAt(i);
+        if (r.clave.equalsIgnoreCase(clave)) {
+            cbRegimen.setSelectedIndex(i);
+            recargarUsosSegunRegimen();
+            return;
+        }
+    }
+}
+
+private void seleccionarUsoPorClave(String clave) {
+    if (clave == null) return;
+    for (int i = 0; i < cbUso.getItemCount(); i++) {
+        CatalogoCFDI.UsoCfdi u = cbUso.getItemAt(i);
+        if (u.clave.equalsIgnoreCase(clave)) {
+            cbUso.setSelectedIndex(i);
+            return;
+        }
+    }
+}
+
 }

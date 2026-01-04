@@ -7,10 +7,6 @@ import java.awt.Component;
 import java.awt.Dialog;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-
-
 import java.awt.Frame;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -19,6 +15,8 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.awt.print.PageFormat;
 import java.awt.print.Printable;
@@ -37,11 +35,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-
-import Controlador.ManufacturasDAO;
-import Modelo.Manufactura;
-
 
 import javax.imageio.ImageIO;
 import javax.swing.AbstractAction;
@@ -72,11 +67,12 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumnModel;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.DocumentFilter;
-import java.util.Locale;
 
 import Controlador.AsesorDAO;
 import Controlador.EmpresaDAO;
+import Controlador.FacturaDatosDAO;
 import Controlador.InventarioDAO;
+import Controlador.ManufacturasDAO;
 import Controlador.NotasDAO;
 import Controlador.NotasMemoDAO;
 import Controlador.ObsequiosDAO;
@@ -86,11 +82,12 @@ import Controlador.clienteDAO;
 import Modelo.ClienteResumen;
 import Modelo.Empresa;
 import Modelo.Inventario;
+import Modelo.Manufactura;
 import Modelo.Nota;
 import Modelo.NotaDetalle;
 import Modelo.PagoFormas;
+import Utilidades.CatalogoCFDI;
 import Utilidades.TelefonosUI;
-import Controlador.FacturaDatosDAO;
 
 
 public class VentaCreditoPanel extends JPanel {
@@ -784,7 +781,7 @@ private void abrirFormularioCliente() {
         return t;
     }
 
-    private void addCell(JPanel p, GridBagConstraints c, int x, int y, JComponent comp, int span, boolean growX){
+    private static void addCell(JPanel p, GridBagConstraints c, int x, int y, JComponent comp, int span, boolean growX){
         c.gridx=x; c.gridy=y; c.gridwidth=span; c.weightx = growX?1:0; p.add(comp,c); c.gridwidth=1;
     }
 
@@ -1747,7 +1744,7 @@ private double parseMoney(Object o){
 
     private static String limpiarPrefijoPedido(String s) {
         if (s == null) return "";
-        return s.replaceFirst("^\\s*PEDIDO\\s*[–-]\\s*", "").trim();
+        return s.replaceFirst("^\s*PEDIDO\s*[–-]\s*", "").trim();
     }
     private void guardarPedidosDeCarrito(int numeroNota, LocalDate fechaEventoParaDetalle) {
         try {
@@ -2291,7 +2288,7 @@ private Printable construirPrintableCondiciones(
         // Cuerpo del texto (respetando saltos de línea del formato)
         g2.setFont(fText);
         int lineHeight = g2.getFontMetrics().getHeight();
-        for (String linea : texto.split("\\R")) {
+        for (String linea : texto.split("\r")) {
             String ln = (linea == null) ? "" : linea;
             if (ln.isEmpty()) {
                 y += lineHeight;
@@ -2799,8 +2796,8 @@ if (obsequiosPrint != null && !obsequiosPrint.isEmpty()) {
 
     String texto = sb.toString().trim();
     // Ajuste "uno" → "un" antes de "mil"/"millón"/"millones"/"pesos"
-    texto = texto.replaceAll("\\buno(?=\\s+(mil|millón|millones|pesos)\\b)", "un");
-    texto = texto.replaceAll("\\bveintiuno(?=\\s+(mil|millón|millones|pesos)\\b)", "veintiún");
+    texto = texto.replaceAll("\buno(?=\s+(mil|millón|millones|pesos)\b)", "un");
+    texto = texto.replaceAll("\bveintiuno(?=\s+(mil|millón|millones|pesos)\b)", "veintiún");
 
     return texto + " pesos " + String.format("%02d", centavos) + "/100 M.N.";
 }
@@ -2852,7 +2849,7 @@ if (obsequiosPrint != null && !obsequiosPrint.isEmpty()) {
             text = text.trim();
             if (text.isEmpty()) return y;
             java.awt.FontMetrics fm = g2.getFontMetrics();
-            String[] words = text.split("\\s+");
+            String[] words = text.split("\s+");
             StringBuilder line = new StringBuilder();
             for (String w : words){
                 String tryLine = (line.length()==0 ? w : line + " " + w);
@@ -2960,12 +2957,14 @@ private void abrirDialogoFactura() {
     actualizarFacturaBadge();
 }
 // ================== DLG FACTURA (captura básica previa al timbrado) ==================
+// ================== DLG FACTURA (captura básica previa al timbrado) ==================
 static class DlgFactura extends JDialog {
+
     static class CapturaFactura {
         String persona;  // "PF" o "PM"
         String rfc;
-        String regimen;  // 3-4 chars
-        String usoCfdi;  // G03, CP01, S01, ...
+        String regimen;  // clave: 601, 605, ...
+        String usoCfdi;  // clave: G03, CP01, ...
         String correo;   // opcional
     }
 
@@ -2974,16 +2973,14 @@ static class DlgFactura extends JDialog {
 
     private CapturaFactura result;
 
-    private final JComboBox<String> cbPersona = new JComboBox<>(new String[]{"PF (Persona física)","PM (Persona moral)"});
-    private final JTextField tfRFC = new JTextField();
-    private final JComboBox<String> cbRegimen = new JComboBox<>(new String[]{
-            "", "601","603","605","606","607","608","609","610","611","612","614","616","620","621","622","623","624","625","626"
-    });
-    private final JComboBox<String> cbUso = new JComboBox<>(new String[]{
-            "", "G01","G02","G03","I01","I02","I03","I04","I05","I06","I07","D01","D02","D03","CP01","CN01","S01"
-    });
-    private final JTextField tfRegimenLibre = new JTextField(); // permite editar manual
-    private final JTextField tfUsoLibre = new JTextField();
+    private final JComboBox<String> cbPersona =
+            new JComboBox<>(new String[]{"PF (Persona física)", "PM (Persona moral)"});
+    private final JTextField tfRFC    = new JTextField();
+
+    // Ahora usamos los tipos del catálogo
+    private final JComboBox<CatalogoCFDI.Regimen> cbRegimen = new JComboBox<>();
+    private final JComboBox<CatalogoCFDI.UsoCfdi> cbUso     = new JComboBox<>();
+
     private final JTextField tfCorreo = new JTextField();
 
     DlgFactura(Frame owner, CapturaFactura init) {
@@ -2994,113 +2991,193 @@ static class DlgFactura extends JDialog {
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(6,6,6,6);
         c.fill = GridBagConstraints.HORIZONTAL;
-        c.weightx = 1; int y=0;
+        c.weightx = 1;
+        int y = 0;
 
-        addCell(p,c,0,y,new JLabel("Persona:"),1,false); addCell(p,c,1,y,cbPersona,1,true); y++;
-        addCell(p,c,0,y,new JLabel("RFC:"),1,false);     addCell(p,c,1,y,tfRFC,1,true);     y++;
+        addCell(p,c,0,y,new JLabel("Persona:"),1,false);
+        addCell(p,c,1,y,cbPersona,1,true);
+        y++;
+
+        addCell(p,c,0,y,new JLabel("RFC:"),1,false);
+        addCell(p,c,1,y,tfRFC,1,true);
+        y++;
 
         addCell(p,c,0,y,new JLabel("Régimen fiscal:"),1,false);
-        JPanel pr = new JPanel(new BorderLayout(6,0));
-        pr.add(cbRegimen, BorderLayout.WEST);
-        pr.add(tfRegimenLibre, BorderLayout.CENTER);
-        addCell(p,c,1,y,pr,1,true); y++;
+        addCell(p,c,1,y,cbRegimen,1,true);
+        y++;
 
         addCell(p,c,0,y,new JLabel("Uso del CFDI:"),1,false);
-        JPanel pu = new JPanel(new BorderLayout(6,0));
-        pu.add(cbUso, BorderLayout.WEST);
-        pu.add(tfUsoLibre, BorderLayout.CENTER);
-        addCell(p,c,1,y,pu,1,true); y++;
+        addCell(p,c,1,y,cbUso,1,true);
+        y++;
 
-        addCell(p,c,0,y,new JLabel("Correo:"),1,false); addCell(p,c,1,y,tfCorreo,1,true); y++;
+        addCell(p,c,0,y,new JLabel("Correo:"),1,false);
+        addCell(p,c,1,y,tfCorreo,1,true);
+        y++;
 
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton btGuardar = new JButton("Guardar");
         JButton btLimpiar = new JButton("Quitar captura");
         JButton btCancelar= new JButton("Cancelar");
-        south.add(btLimpiar); south.add(btCancelar); south.add(btGuardar);
+        south.add(btLimpiar);
+        south.add(btCancelar);
+        south.add(btGuardar);
 
         getContentPane().add(p, BorderLayout.CENTER);
         getContentPane().add(south, BorderLayout.SOUTH);
 
-        // Sincroniza combos con campos libres
-        cbRegimen.addActionListener(_e -> {
-            String v = (String) cbRegimen.getSelectedItem();
-            tfRegimenLibre.setText(v == null ? "" : v);
-        });
-        cbUso.addActionListener(_e -> {
-            String v = (String) cbUso.getSelectedItem();
-            tfUsoLibre.setText(v == null ? "" : v);
-        });
+        // Inicializar catálogos (regímenes y usos compatibles)
+        inicializarCatalogos();
 
-        // Cargar inicial
+        // Cargar valores iniciales (por ejemplo, si ya hay datos guardados)
         if (init != null) {
             cbPersona.setSelectedIndex("PM".equalsIgnoreCase(init.persona) ? 1 : 0);
+            recargarRegimenesSegunPersona(); // para que el combo tenga los regímenes correctos
+
             tfRFC.setText(init.rfc == null ? "" : init.rfc);
-            tfRegimenLibre.setText(init.regimen == null ? "" : init.regimen);
-            tfUsoLibre.setText(init.usoCfdi == null ? "" : init.usoCfdi);
             tfCorreo.setText(init.correo == null ? "" : init.correo);
+
+            if (init.regimen != null) {
+                seleccionarRegimenPorClave(init.regimen);
+            }
+            if (init.usoCfdi != null) {
+                seleccionarUsoPorClave(init.usoCfdi);
+            }
         }
 
-        btGuardar.addActionListener(_e -> {
-            String persona = (cbPersona.getSelectedIndex()==1) ? "PM" : "PF";
-            String rfc = tfRFC.getText().trim().toUpperCase();
-            String regimen = tfRegimenLibre.getText().trim().toUpperCase();
-            String uso = tfUsoLibre.getText().trim().toUpperCase();
-            String correo = tfCorreo.getText().trim();
-
-            // Validaciones mínimas
-            if (persona.equals("PF") && rfc.length()!=13) {
-                JOptionPane.showMessageDialog(this,"El RFC de persona física debe tener 13 caracteres.");
-                return;
-            }
-            if (persona.equals("PM") && rfc.length()!=12) {
-                JOptionPane.showMessageDialog(this,"El RFC de persona moral debe tener 12 caracteres.");
-                return;
-            }
-            if (regimen.length() < 3 || regimen.length() > 4) {
-                JOptionPane.showMessageDialog(this,"Régimen debe ser de 3–4 caracteres (ej. 601).");
-                return;
-            }
-            if (uso.length() < 3 || uso.length() > 4) {
-                JOptionPane.showMessageDialog(this,"Uso de CFDI debe ser de 3–4 caracteres (ej. G03, CP01).");
-                return;
-            }
-            if (!correo.isBlank() && !correo.contains("@")) {
-                JOptionPane.showMessageDialog(this,"Correo inválido.");
-                return;
-            }
-
-            CapturaFactura cf = new CapturaFactura();
-            cf.persona = persona;
-            cf.rfc = rfc;
-            cf.regimen = regimen;
-            cf.usoCfdi = uso;
-            cf.correo = correo.isBlank()? null : correo;
-            result = cf;
-            dispose();
-        });
-
+        btGuardar.addActionListener(_e -> onGuardar());
         btLimpiar.addActionListener(_e -> {
             limpiado = true;
             result = null;
             dispose();
         });
-
         btCancelar.addActionListener(_e -> {
-            result = null; dispose();
+            result = null;
+            dispose();
         });
 
         setSize(520, 300);
         setLocationRelativeTo(owner);
     }
 
-    DlgFactura.CapturaFactura showDialog() { setVisible(true); return result; }
+    DlgFactura.CapturaFactura showDialog() {
+        setVisible(true);
+        return result;
+    }
 
-    // pequeño helper local para grid
-    private static void addCell(JPanel p, GridBagConstraints c, int x, int y, JComponent comp, int span, boolean growX){
-        c.gridx=x; c.gridy=y; c.gridwidth=span; c.weightx = growX?1:0; p.add(comp,c); c.gridwidth=1;
+    // ================= LÓGICA DE CATÁLOGOS =================
+
+    private void inicializarCatalogos() {
+        // Cuando cambie PF / PM, recargamos regímenes
+        cbPersona.addActionListener(_e -> recargarRegimenesSegunPersona());
+        // Cuando cambie régimen, recargamos usos compatibles
+        cbRegimen.addActionListener(_e -> recargarUsosSegunRegimen());
+
+        // Primera carga
+        recargarRegimenesSegunPersona();
+    }
+
+    private void recargarRegimenesSegunPersona() {
+        String persona = (cbPersona.getSelectedIndex() == 1) ? "PM" : "PF";
+
+        cbRegimen.removeAllItems();
+        for (CatalogoCFDI.Regimen r : CatalogoCFDI.listarRegimenesPorPersona(persona)) {
+            cbRegimen.addItem(r);  // toString del Regimen ya muestra "601 - texto..."
+        }
+
+        if (cbRegimen.getItemCount() > 0) {
+            cbRegimen.setSelectedIndex(0);
+        }
+        recargarUsosSegunRegimen();
+    }
+
+    private void recargarUsosSegunRegimen() {
+        cbUso.removeAllItems();
+        CatalogoCFDI.Regimen r = (CatalogoCFDI.Regimen) cbRegimen.getSelectedItem();
+        if (r == null) return;
+
+        for (CatalogoCFDI.UsoCfdi u : CatalogoCFDI.listarUsosParaRegimen(r.clave)) {
+            cbUso.addItem(u);  // toString muestra "G03 - Gastos en general"
+        }
+    }
+
+    private void seleccionarRegimenPorClave(String clave) {
+        if (clave == null) return;
+        for (int i = 0; i < cbRegimen.getItemCount(); i++) {
+            CatalogoCFDI.Regimen r = cbRegimen.getItemAt(i);
+            if (r != null && r.clave.equalsIgnoreCase(clave)) {
+                cbRegimen.setSelectedIndex(i);
+                recargarUsosSegunRegimen();
+                break;
+            }
+        }
+    }
+
+    private void seleccionarUsoPorClave(String clave) {
+        if (clave == null) return;
+        for (int i = 0; i < cbUso.getItemCount(); i++) {
+            CatalogoCFDI.UsoCfdi u = cbUso.getItemAt(i);
+            if (u != null && u.clave.equalsIgnoreCase(clave)) {
+                cbUso.setSelectedIndex(i);
+                break;
+            }
+        }
+    }
+
+    // ================= GUARDAR / VALIDAR =================
+
+    private void onGuardar() {
+        String persona = (cbPersona.getSelectedIndex()==1) ? "PM" : "PF";
+        String rfc = tfRFC.getText().trim().toUpperCase();
+
+        CatalogoCFDI.Regimen regItem = (CatalogoCFDI.Regimen) cbRegimen.getSelectedItem();
+        CatalogoCFDI.UsoCfdi usoItem = (CatalogoCFDI.UsoCfdi) cbUso.getSelectedItem();
+
+        String regimen = (regItem == null ? "" : regItem.clave);
+        String uso     = (usoItem == null ? "" : usoItem.clave);
+        String correo  = tfCorreo.getText().trim();
+
+        // Validaciones
+        if (rfc.isEmpty()) {
+            JOptionPane.showMessageDialog(this,"El RFC es obligatorio.");
+            return;
+        }
+        if (persona.equals("PF") && rfc.length()!=13) {
+            JOptionPane.showMessageDialog(this,"El RFC de persona física debe tener 13 caracteres.");
+            return;
+        }
+        if (persona.equals("PM") && rfc.length()!=12) {
+            JOptionPane.showMessageDialog(this,"El RFC de persona moral debe tener 12 caracteres.");
+            return;
+        }
+        if (regimen.isEmpty()) {
+            JOptionPane.showMessageDialog(this,"Selecciona un régimen fiscal.");
+            return;
+        }
+        if (uso.isEmpty()) {
+            JOptionPane.showMessageDialog(this,"Selecciona el uso de CFDI.");
+            return;
+        }
+        if (!correo.isBlank()) {
+            JOptionPane.showMessageDialog(this,"Ingresa el correo electrónico.");
+            return;   
+        }
+        if(!correo.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            JOptionPane.showMessageDialog(this,"Correo inválido.");
+            return;
+        }
+
+        CapturaFactura cf = new CapturaFactura();
+        cf.persona = persona;
+        cf.rfc     = rfc;
+        cf.regimen = regimen;      // solo CLAVE (ej. "601")
+        cf.usoCfdi = uso;          // solo CLAVE (ej. "G03")
+        cf.correo  = correo.isBlank()? null : correo;
+
+        result = cf;
+        dispose();
     }
 }
+
 @Override
 public void setVisible(boolean aFlag) {
     super.setVisible(aFlag);

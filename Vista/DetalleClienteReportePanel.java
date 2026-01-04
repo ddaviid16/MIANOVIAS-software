@@ -2,6 +2,7 @@ package Vista;
 
 import Controlador.NotasDAO;
 import Controlador.clienteDAO;
+import Utilidades.CatalogoCFDI;
 import Utilidades.TelefonosUI;
 import Controlador.FormasPagoDAO;
 import Controlador.ExportadorCSV;
@@ -2274,9 +2275,18 @@ private void cargarFacturaTab(int numeroNota) {
                              fd.persona);
 
             addKV(modelFactura, "Persona", personaFmt);
-            addKV(modelFactura, "RFC", n(fd.rfc));
-            addKV(modelFactura, "Régimen fiscal", n(fd.regimen));
-            addKV(modelFactura, "Uso del CFDI", n(fd.usoCfdi));
+            addKV(modelFactura, "RFC", n(fd.rfc));// usar catálogo para mostrar DESCRIPCIÓN completa
+            String regClave = n(fd.regimen);
+            String usoClave = n(fd.usoCfdi);
+
+            CatalogoCFDI.Regimen reg = CatalogoCFDI.buscarRegimenPorClave(regClave);
+            CatalogoCFDI.UsoCfdi uso = CatalogoCFDI.buscarUsoPorClave(usoClave);
+
+            String regFmt = (reg == null ? regClave : reg.toString());
+            String usoFmt = (uso == null ? usoClave : uso.toString());
+
+            addKV(modelFactura, "Régimen fiscal", regFmt);
+            addKV(modelFactura, "Uso del CFDI", usoFmt);
             addKV(modelFactura, "Correo", n(fd.correo));
 
             if (fd.createdAt != null) addKV(modelFactura, "Capturado", fd.createdAt.toString());
