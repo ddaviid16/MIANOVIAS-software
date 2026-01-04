@@ -152,7 +152,7 @@ private static final String SELECT_BY_ID =
         try (java.sql.Connection cn = Conecta.getConnection();
              java.sql.PreparedStatement ps = cn.prepareStatement(sql)) {
 
-            for (int i = 1; i <= 6; i++) ps.setString(i, like);
+            for (int i = 1; i <= 7; i++) ps.setString(i, like);
 
             try (java.sql.ResultSet rs = ps.executeQuery()) {
                 java.util.List<Modelo.Inventario> out = new java.util.ArrayList<>();
