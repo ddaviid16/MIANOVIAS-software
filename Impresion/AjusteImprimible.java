@@ -1,12 +1,14 @@
 package Impresion;
 
 import java.awt.*;
-import java.awt.BasicStroke;
 import java.awt.print.PageFormat;
 import java.awt.print.Printable;
 import java.awt.print.PrinterException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+
 
 public class AjusteImprimible implements Printable {
 
@@ -23,6 +25,8 @@ public class AjusteImprimible implements Printable {
         public LocalDate fechaAjuste1;
         public LocalDate fechaAjuste2;
         public LocalDate fechaEntrega;
+        public String otrasEspecificaciones = "";
+
     }
 
     private final Datos d;
@@ -126,13 +130,22 @@ public class AjusteImprimible implements Printable {
         drawCheckbox(g2, cx,           cy, "AMBAS");          cx += mm(32);
         drawCheckbox(g2, cx,           cy, "SIN CRINOLINA");
 
-        // ===== Otras especificaciones (sin línea bajo el texto)
+        // ===== Otras especificaciones (imprimir texto + líneas)
         y += mm(8);
+        g2.setFont(fLbl);
         String lblOtras = "OTRAS ESPECIFICACIONES ESPECIALES:";
         g2.drawString(lblOtras, i(X), i(y));
         y += mm(3);
+
+        // Medimos con fLbl porque así se dibuja el label
         double startOtras = X + g2.getFontMetrics().stringWidth(lblOtras) + mm(5);
-        y = drawEmptyLinesFrom(g2, startOtras, y, X+CW, mm(6.0), 4);
+
+        // Texto que llega desde el panel (obsequios + observaciones)
+        String otras = nz(d.otrasEspecificaciones).replaceAll("\\s+", " ").trim();
+
+        // 1ra línea empieza después del label; líneas 2..4 desde el margen X (se ve más pro)
+        y = drawOtrasEspecificaciones(g2, otras, X, startOtras, y, X + CW, mm(6.0), 4);
+
 
         // ===== Medidas + confirmación
         y += mm(6);
@@ -294,4 +307,109 @@ public class AjusteImprimible implements Printable {
 
         return new double[]{c1, c2, c3};
     }
+    private double drawOtrasEspecificaciones(Graphics2D g2, String text,
+                                        double xLeft, double xStartFirst,
+                                        double y, double xEnd,
+                                        double sep, int maxLines) {
+
+    // Primero: preparar líneas envueltas (wrap)
+    g2.setFont(fCampo);
+    FontMetrics fm = g2.getFontMetrics();
+
+    int w1 = i(xEnd - xStartFirst); // ancho disponible en línea 1 (después del label)
+    int wN = i(xEnd - xLeft);       // ancho disponible en líneas 2..N (desde margen)
+    List<String> lines = wrapTextVariable(text, fm, w1, wN, maxLines);
+
+    // Dibujar líneas + texto (texto un poquito arriba para que no lo tache la raya)
+    double underlineOffset = mm(2.0);
+    double lift = mm(0.8);
+
+    for (int k = 0; k < maxLines; k++) {
+        double xStart = (k == 0) ? xStartFirst : xLeft;
+
+        double underlineY = y + underlineOffset;
+        g2.drawLine(i(xStart), i(underlineY), i(xEnd), i(underlineY));
+
+        if (k < lines.size()) {
+            String s = lines.get(k);
+            if (s != null && !s.isBlank()) {
+                g2.setFont(fCampo);
+                g2.drawString(s, i(xStart), i(underlineY - lift));
+            }
+        }
+
+        y += sep;
+    }
+    return y;
+}
+
+private List<String> wrapTextVariable(String text, FontMetrics fm, int widthFirst, int widthNext, int maxLines) {
+    List<String> out = new ArrayList<>();
+    if (text == null) return out;
+
+    String t = text.trim();
+    if (t.isEmpty()) return out;
+
+    String[] words = t.split("\\s+");
+    StringBuilder line = new StringBuilder();
+
+    int iWord = 0;
+    for (int lineIdx = 0; lineIdx < maxLines && iWord < words.length; lineIdx++) {
+        int maxW = (lineIdx == 0) ? widthFirst : widthNext;
+
+        line.setLength(0);
+        while (iWord < words.length) {
+            String w = words[iWord];
+            String cand = line.length() == 0 ? w : line + " " + w;
+
+            if (fm.stringWidth(cand) <= maxW) {
+                line.setLength(0);
+                line.append(cand);
+                iWord++;
+            } else {
+                break;
+            }
+        }
+
+        // Si no cupo ni una palabra (palabra larguísima), truncamos esa palabra
+        if (line.length() == 0 && iWord < words.length) {
+            String trunc = truncateToWidth(words[iWord], fm, maxW);
+            out.add(trunc);
+            iWord++;
+        } else {
+            out.add(line.toString());
+        }
+    }
+
+    // Si sobró texto, pon "…" al final de la última línea
+    if (iWord < words.length && !out.isEmpty()) {
+        int last = out.size() - 1;
+        String s = out.get(last);
+        String withEllipsis = addEllipsisToFit(s, fm, (last == 0) ? widthFirst : widthNext);
+        out.set(last, withEllipsis);
+    }
+
+    return out;
+}
+
+private String truncateToWidth(String s, FontMetrics fm, int maxW) {
+    if (s == null) return "";
+    if (fm.stringWidth(s) <= maxW) return s;
+
+    String ell = "…";
+    int n = s.length();
+    while (n > 0 && fm.stringWidth(s.substring(0, n) + ell) > maxW) n--;
+    return (n <= 0) ? ell : s.substring(0, n) + ell;
+}
+
+private String addEllipsisToFit(String s, FontMetrics fm, int maxW) {
+    if (s == null) return "";
+    String ell = "…";
+    if (fm.stringWidth(s + ell) <= maxW) return s + ell;
+
+    int n = s.length();
+    while (n > 0 && fm.stringWidth(s.substring(0, n) + ell) > maxW) n--;
+    return (n <= 0) ? ell : s.substring(0, n) + ell;
+}
+
 }

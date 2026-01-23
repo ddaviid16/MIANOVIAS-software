@@ -20,22 +20,29 @@ public class EditarHojaAjusteDialog extends JDialog {
     private final JTextField txtAjuste1 = new JTextField();
     private final JTextField txtAjuste2 = new JTextField();
     private final JTextField txtEntrega = new JTextField();
+    private final JTextArea txtOtras = new JTextArea(4, 40);
+
 
     private static final DateTimeFormatter MX = DateTimeFormatter.ofPattern("dd-MM-uuuu");
 
     public EditarHojaAjusteDialog(Window owner, String titulo){
-        super(owner, titulo, ModalityType.APPLICATION_MODAL);
-        setSize(720, 360);
-        setLocationRelativeTo(owner);
-        setLayout(new BorderLayout(10,10));
-        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+            super(owner, titulo, ModalityType.APPLICATION_MODAL);
 
-        JPanel form = new JPanel(new GridBagLayout());
-        GridBagConstraints c = new GridBagConstraints();
-        c.insets = new Insets(6,6,6,6);
-        c.fill = GridBagConstraints.HORIZONTAL;
-        c.weightx = 1;
-        int y=0;
+            setLayout(new BorderLayout(10,10));
+            setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+            setResizable(true);
+
+            // Tamaño más cómodo
+            setMinimumSize(new Dimension(900, 450));
+            setSize(900, 450);
+            setLocationRelativeTo(owner);
+
+            JPanel form = new JPanel(new GridBagLayout());
+            GridBagConstraints c = new GridBagConstraints();
+            c.insets = new Insets(6,6,6,6);
+            c.fill = GridBagConstraints.HORIZONTAL;
+            c.weightx = 1;
+            int y=0;
 
         addCell(form,c,0,y,new JLabel("Nombre de la novia:"),1,false);
         addCell(form,c,1,y,txtNombre,3,true); y++;
@@ -57,14 +64,41 @@ public class EditarHojaAjusteDialog extends JDialog {
 
         addCell(form,c,0,y,new JLabel("Fecha entrega (dd-MM-aaaa):"),1,false);
         addCell(form,c,1,y,txtEntrega,1,true); y++;
+    txtOtras.setLineWrap(true);
+    txtOtras.setWrapStyleWord(true);
+    txtOtras.setRows(6);       // más alto por default
+    txtOtras.setColumns(60);   // más ancho por default
 
-        add(form, BorderLayout.CENTER);
+    JLabel lblOtras = new JLabel("Otras especificaciones especiales:");
+    JScrollPane spOtras = new JScrollPane(txtOtras);
+    spOtras.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+    spOtras.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+    // Quita esto: spOtras.setPreferredSize(new Dimension(10, 80));
 
-        JButton btImprimir = new JButton("Previsualizar / Imprimir");
-        btImprimir.addActionListener(_e -> imprimir());
-        JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        south.add(btImprimir);
-        add(south, BorderLayout.SOUTH);
+    // >>> ESTA FILA ES LA CLAVE: fill BOTH + weighty 1
+    c.gridx = 0; c.gridy = y; c.gridwidth = 1;
+    c.weightx = 0; c.weighty = 0;
+    c.fill = GridBagConstraints.HORIZONTAL;
+    form.add(lblOtras, c);
+
+    c.gridx = 1; c.gridy = y; c.gridwidth = 3;
+    c.weightx = 1; c.weighty = 1;              // <-- para que tenga altura
+    c.fill = GridBagConstraints.BOTH;          // <-- para que crezca
+    form.add(spOtras, c);
+
+    // reset para filas siguientes
+    c.gridwidth = 1;
+    c.weighty = 0;
+    c.fill = GridBagConstraints.HORIZONTAL;
+    y++;
+
+    add(form, BorderLayout.CENTER);
+
+    JButton btImprimir = new JButton("Previsualizar / Imprimir");
+    btImprimir.addActionListener(_e -> imprimir());
+    JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+    south.add(btImprimir);
+    add(south, BorderLayout.SOUTH);
     }
 
     /** Prefill desde la venta/cliente. */
@@ -80,6 +114,9 @@ public class EditarHojaAjusteDialog extends JDialog {
         txtAjuste2.setText(fAjuste2==null? "" : fAjuste2.format(MX));
         txtEntrega.setText(fEntrega==null? "" : fEntrega.format(MX));
     }
+    public void setOtrasEspecificaciones(String texto) {
+        txtOtras.setText(nz(texto));
+    }
 
     private void imprimir() {
         AjusteImprimible.Datos d = new AjusteImprimible.Datos();
@@ -87,6 +124,8 @@ public class EditarHojaAjusteDialog extends JDialog {
         d.modeloVestido = txtModelo.getText().trim();
         d.talla         = txtTalla.getText().trim();
         d.color         = txtColor.getText().trim();
+        d.otrasEspecificaciones = txtOtras.getText().trim();
+
 
         String sEv = txtEvento.getText().trim();
         String sA1 = txtAjuste1.getText().trim();

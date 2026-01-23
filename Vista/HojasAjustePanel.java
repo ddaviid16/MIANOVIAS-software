@@ -84,6 +84,9 @@ public class HojasAjustePanel extends JPanel {
     private LocalDate sugAjuste1  = null; // fecha_prueba1
     private LocalDate sugAjuste2  = null; // fecha_prueba2
     private LocalDate sugEntrega  = null;
+    private int notaSeleccionada = -1;
+    private String otrasEspecificaciones = "";
+
 
     public HojasAjustePanel(){
         setLayout(new BorderLayout(10,10));
@@ -239,6 +242,8 @@ for (Row r : rows) {
         if (row < 0) return;
 
         int numero = Integer.parseInt(String.valueOf(modelNotas.getValueAt(row,0)));
+        notaSeleccionada = numero;
+        otrasEspecificaciones = construirTextoOtrasEspecificaciones(numero);
 
         // Cargar cliente (para mostrar su nombre en el campo y tener sugerencias)
         String tel = leerTelefonoDeNota(numero);
@@ -333,6 +338,7 @@ for (Row r : rows) {
                 sugAjuste2,
                 fEnt
         );
+        ed.setOtrasEspecificaciones(otrasEspecificaciones);
         ed.setVisible(true);
     }
 
@@ -484,4 +490,93 @@ for (Row r : rows) {
             repaint();
         }
     }
+    private String leerObservacionesDeNota(int numeroNota) {
+    try (Connection cn = Conexion.Conecta.getConnection()) {
+
+        String obs = null;
+
+        // 1) Tabla nueva
+        final String sql1 = "SELECT observaciones FROM notas_observaciones WHERE numero_nota = ?";
+        try (PreparedStatement ps = cn.prepareStatement(sql1)) {
+            ps.setInt(1, numeroNota);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) obs = rs.getString(1);
+            }
+        }
+
+        // 2) Fallback a Notas.observaciones
+        if (obs == null || obs.trim().isEmpty()) {
+            final String sql2 = "SELECT observaciones FROM Notas WHERE numero_nota = ?";
+            try (PreparedStatement ps = cn.prepareStatement(sql2)) {
+                ps.setInt(1, numeroNota);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) obs = rs.getString(1);
+                }
+            }
+        }
+
+        if (obs == null) return "";
+        return obs.replaceAll("\\s+", " ").trim();
+
+    } catch (Exception e) {
+        return "";
+    }
+}
+
+private String resumenObsequiosDeNota(int numeroNota) {
+    final String sql =
+            "SELECT obsequio1, obsequio1_cod, " +
+            "       obsequio2, obsequio2_cod, " +
+            "       obsequio3, obsequio3_cod, " +
+            "       obsequio4, obsequio4_cod, " +
+            "       obsequio5, obsequio5_cod " +
+            "FROM obsequios WHERE numero_nota = ?";
+
+    List<String> parts = new ArrayList<>();
+
+    try (Connection cn = Conexion.Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setInt(1, numeroNota);
+
+        try (ResultSet rs = ps.executeQuery()) {
+            if (!rs.next()) return "";
+
+            addObsequio(parts, rs.getString("obsequio1_cod"), rs.getString("obsequio1"));
+            addObsequio(parts, rs.getString("obsequio2_cod"), rs.getString("obsequio2"));
+            addObsequio(parts, rs.getString("obsequio3_cod"), rs.getString("obsequio3"));
+            addObsequio(parts, rs.getString("obsequio4_cod"), rs.getString("obsequio4"));
+            addObsequio(parts, rs.getString("obsequio5_cod"), rs.getString("obsequio5"));
+        }
+
+    } catch (Exception e) {
+        return "";
+    }
+
+    return String.join("  |  ", parts).trim();
+}
+
+private void addObsequio(List<String> out, String cod, String desc) {
+    String c = safe(cod);
+    String d = safe(desc);
+    if (c.isEmpty() && d.isEmpty()) return;
+
+    if (!c.isEmpty() && !d.isEmpty()) out.add(c + " - " + d);
+    else if (!d.isEmpty()) out.add(d);
+    else out.add(c);
+}
+
+private String construirTextoOtrasEspecificaciones(int numeroNota) {
+    String ob = resumenObsequiosDeNota(numeroNota);
+    String obs = leerObservacionesDeNota(numeroNota);
+
+    StringBuilder sb = new StringBuilder();
+    if (!ob.isBlank()) sb.append("Obsequios: ").append(ob);
+    if (!obs.isBlank()) {
+        if (sb.length() > 0) sb.append("  |  ");
+        sb.append("Observaciones: ").append(obs);
+    }
+    return sb.toString().trim();
+}
+
 }

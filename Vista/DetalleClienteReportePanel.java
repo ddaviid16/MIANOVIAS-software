@@ -1141,23 +1141,42 @@ private List<PagoLinea> construirPagos(NotasDAO ndao, List<NotasDAO.NotaResumen>
 
         // Movimientos cancelados: fuera de la impresión
         if ("C".equals(status)) continue;
+if ("CR".equals(tipo)) {
+    // Pago inicial REAL: lo que se capturó en formas de pago del CR (no total - saldo actual)
+    double pagoInicial = 0.0;
 
-        if ("CR".equals(tipo)) {
-            // Pago inicial: total - saldo
-            double total = z(r.total);
-            double saldo = z(r.saldo);
-            double enganche = total - saldo;
-            if (enganche > 0.005) {
-                PagoLinea p = new PagoLinea();
-                p.numeroNota = r.numero;
-                p.folio      = folioDeNota(r);
-                p.fecha      = r.fecha;
-                p.concepto   = "Pago inicial de la nota";
-                p.importe    = enganche;
-                p.saldo      = saldo;
-                p.esDevolucion = false;
-                out.add(p);
-            }
+    try {
+        FormasPagoDAO fdao = new FormasPagoDAO();
+        FormasPagoDAO.FormasPagoRow fp = fdao.obtenerPorNota(r.numero);
+        if (fp != null) {
+            // Sumar sólo métodos "de pago" (excluir devoluciones)
+            pagoInicial =
+                    z(fp.efectivo) +
+                    z(fp.tarjetaCredito) +
+                    z(fp.tarjetaDebito) +
+                    z(fp.americanExpress) +
+                    z(fp.transferencia) +
+                    z(fp.deposito);
+        }
+    } catch (Exception ignore) {
+        // si falla, no inventamos pago inicial
+        pagoInicial = 0.0;
+    }
+
+    // Si el anticipo fue 0, NO imprimimos "Pago inicial de la nota"
+    if (pagoInicial > 0.005) {
+        PagoLinea p = new PagoLinea();
+        p.numeroNota = r.numero;
+        p.folio      = folioDeNota(r);
+        p.fecha      = r.fecha;
+        p.concepto   = "Pago inicial de la nota";
+        p.importe    = pagoInicial;
+        p.saldo      = null;        // no se imprime de todos modos; evitamos datos engañosos
+        p.esDevolucion = false;
+        out.add(p);
+    }
+
+
         } else if ("AB".equals(tipo)) {
             PagoLinea p = new PagoLinea();
             p.numeroNota = r.numero;
