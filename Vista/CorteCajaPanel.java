@@ -711,7 +711,6 @@ static class DayPopup extends JPopupMenu {
     }
 }
 private void imprimir() {
-    // Toma el contenido scrollable (grid + tabla detalle + botones)
     if (scrollPrincipal == null) {
         JOptionPane.showMessageDialog(this,
                 "No hay contenido para imprimir.",
@@ -719,52 +718,80 @@ private void imprimir() {
         return;
     }
 
-    // Componente raíz dentro del scroll
     Component comp = scrollPrincipal.getViewport().getView();
 
     PrinterJob job = PrinterJob.getPrinterJob();
     job.setJobName("Corte de caja " + selectedDate);
+
+    // >>> Forzar horizontal
+    PageFormat pf = job.defaultPage();
+    pf.setOrientation(PageFormat.LANDSCAPE);
 
     job.setPrintable(new Printable() {
         @Override
         public int print(Graphics graphics, PageFormat pageFormat, int pageIndex)
                 throws PrinterException {
 
-            if (pageIndex > 0) {
-                return NO_SUCH_PAGE;
-            }
-
             Graphics2D g2 = (Graphics2D) graphics;
-            // Margen de impresión
-            g2.translate(pageFormat.getImageableX(), pageFormat.getImageableY());
 
-            // Tamaño del contenido vs área imprimible
+            // Mejor calidad de texto
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // Área imprimible
+            double ix = pageFormat.getImageableX();
+            double iy = pageFormat.getImageableY();
             double pw = pageFormat.getImageableWidth();
             double ph = pageFormat.getImageableHeight();
-            double cw = comp.getWidth();
-            double ch = comp.getHeight();
 
-            if (cw <= 0 || ch <= 0) {
-                return NO_SUCH_PAGE;
+            // Asegurar tamaño del componente (por si algo da 0)
+            Dimension pref = comp.getPreferredSize();
+            int cwInt = Math.max(comp.getWidth(), pref.width);
+            int chInt = Math.max(comp.getHeight(), pref.height);
+            if (cwInt <= 0 || chInt <= 0) return NO_SUCH_PAGE;
+
+            // Si el componente no está con tamaño asignado, se lo damos
+            if (comp.getWidth() <= 0 || comp.getHeight() <= 0) {
+                comp.setSize(cwInt, chInt);
+                comp.doLayout();
             }
 
-            double scaleX = pw / cw;
-            double scaleY = ph / ch;
-            double scale = Math.min(scaleX, scaleY);
+            double cw = cwInt;
+            double ch = chInt;
 
-            // Solo reducir, no hacer más grande
-            if (scale > 1.0) scale = 1.0;
+            // >>> Fit-to-width (clave para que NO se reduzca por la altura)
+            double scale = pw / cw;
 
+            // Permitir agrandar un poco si cabe, pero sin exagerar
+            double maxScale = 1.15;  // 1.10–1.20 es razonable
+            if (scale > maxScale) scale = maxScale;
+
+            // Altura visible por página en coords del componente
+            double pageHeight = ph / scale;
+
+            int totalPages = (int) Math.ceil(ch / pageHeight);
+            if (pageIndex >= totalPages) return NO_SUCH_PAGE;
+
+            // Margen imprimible
+            g2.translate(ix, iy);
+
+            // Escala
             g2.scale(scale, scale);
 
-            // Imprimir todo el contenido tal cual se ve
+            // Clip de la “rebanada” de esta página (antes de mover)
+            int clipY = (int) Math.floor(pageIndex * pageHeight);
+            int clipH = (int) Math.ceil(pageHeight);
+            g2.setClip(0, clipY, (int) Math.ceil(cw), clipH);
+
+            // Mover el contenido hacia arriba para imprimir la sección de esta página
+            g2.translate(0, -pageIndex * pageHeight);
+
             comp.printAll(g2);
 
             return PAGE_EXISTS;
         }
-    });
+    }, pf);
 
-    // Diálogo estándar de impresión
     if (job.printDialog()) {
         try {
             job.print();

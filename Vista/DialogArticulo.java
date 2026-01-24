@@ -21,6 +21,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
+import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.AbstractDocument;
@@ -42,6 +43,12 @@ public class DialogArticulo extends JDialog {
     private JTextField txtRemision, txtFactura, txtFechaPago;
     private JTextField txtNombreNovia;   // ← NUEVO
     private JComboBox<String> cbStatus;
+
+    // --- EXISTENCIA protegida ---
+    private boolean existenciaDesbloqueada = false;
+    private Integer existenciaOriginal = null;
+    private Color bgExistenciaNormal;
+
 
     private boolean guardado = false;
     private final InventarioDAO dao = new InventarioDAO();
@@ -98,10 +105,19 @@ public class DialogArticulo extends JDialog {
         txtPrecioFinal.setForeground(new Color(0, 102, 0));
 
         txtExistencia = new JTextField();
+        bgExistenciaNormal = txtExistencia.getBackground();
+
         applyDigitsOnly(txtExistencia, 10);
         if (!edicion) {
             txtExistencia.setText("1");
         }
+        // Existencia: en ALTA editable, en EDICIÓN bloqueada hasta clave
+        if (edicion) {
+            setExistenciaEditable(false);
+        } else {
+            setExistenciaEditable(true);
+        }
+
         txtConteo = new JTextField();
         applyDigitsOnly(txtConteo, 10);
 
@@ -142,6 +158,28 @@ public class DialogArticulo extends JDialog {
                 new JLabel("Existencia:"), txtExistencia,
                 new JLabel("Conteo:"), txtConteo,
                 new JLabel("Status:"), cbStatus);
+                if (edicion) {
+    JButton btnExistencia = new JButton("Desbloquear existencia");
+    c.gridx = 0;
+    c.gridy = y++;
+    c.gridwidth = 4;
+    p.add(btnExistencia, c);
+    c.gridwidth = 1;
+
+    btnExistencia.addActionListener(_e -> {
+        if (existenciaDesbloqueada) {
+            JOptionPane.showMessageDialog(this,
+                    "La existencia ya está desbloqueada.",
+                    "Información",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (SeguridadUI.pedirYValidarClave(this)) {
+            existenciaDesbloqueada = true;
+            setExistenciaEditable(true);
+        }
+    });
+}
 
         // Fecha registro / Costo IVA / Fecha pago
         y = addRowTriple(p, c, y,
@@ -269,6 +307,10 @@ public class DialogArticulo extends JDialog {
         // al abrir, siempre bloqueados de nuevo
         habilitarCamposAdmin(false);
         camposAdminDesbloqueados = false;
+        existenciaOriginal = inv.getExistencia();
+        setExistenciaEditable(false);
+        existenciaDesbloqueada = false;
+
     }
 
     private void guardar() {
@@ -486,6 +528,14 @@ static class DateFieldFilter extends DocumentFilter {
         return digits.substring(0,2) + "-" +
                digits.substring(2,4) + "-" +
                digits.substring(4);
+    }
+}
+private void setExistenciaEditable(boolean editable) {
+    txtExistencia.setEditable(editable);
+    if (editable) {
+        txtExistencia.setBackground(bgExistenciaNormal);
+    } else {
+        txtExistencia.setBackground(UIManager.getColor("TextField.inactiveBackground"));
     }
 }
 

@@ -227,6 +227,9 @@ public class InventarioPanel extends JPanel {
     }
     // Método para exportar a CSV
     private void exportarCSV() {
+            if (!Utilidades.SeguridadUI.pedirYValidarClave(this)) {
+        return;
+    }
         try {
             List<Inventario> lista = new InventarioDAO().listar(null); // Obtener la lista de inventarios
 
