@@ -141,6 +141,7 @@ public class FacturarPorFolioPanel extends JPanel {
                 addKV("RFC", "");
                 addKV("Régimen fiscal", "");
                 addKV("Uso del CFDI", "");
+                addKV("Código postal", "");
                 addKV("Correo", "");
                 return;
             }
@@ -164,6 +165,7 @@ public class FacturarPorFolioPanel extends JPanel {
 
             addKV("Régimen fiscal", regFmt);
             addKV("Uso del CFDI", usoFmt);
+            addKV("Código postal", safe(fd.codigoPostal));
             addKV("Correo", safe(fd.correo));
 
             if (fd.createdAt != null) addKV("Capturado", fd.createdAt.toString());
@@ -209,6 +211,7 @@ public class FacturarPorFolioPanel extends JPanel {
             init.rfc     = fdActual.rfc;
             init.regimen = fdActual.regimen;
             init.usoCfdi = fdActual.usoCfdi;
+            init.codigoPostal = fdActual.codigoPostal;
             init.correo  = fdActual.correo;
         }
 
@@ -238,6 +241,7 @@ public class FacturarPorFolioPanel extends JPanel {
                     res.rfc,
                     res.regimen,
                     res.usoCfdi,
+                    res.codigoPostal,
                     res.correo
             );
 

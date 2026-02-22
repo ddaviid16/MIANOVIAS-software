@@ -39,11 +39,14 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import java.util.Locale;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * Panel "Reporte de ventas".
  *
  * Filtros:
+ *  0) De fecha a fecha
  *  1) De fecha a fecha, de artículo a artículo
  *  2) De fecha a fecha, de vendedor a vendedor
  *  3) De fecha a fecha, de cliente a cliente
@@ -60,7 +63,8 @@ public class ReporteVentasPanel extends JPanel {
 
 
     // ======== Tipo de filtro ========
-    private final JRadioButton rbArticulo = new JRadioButton("Por artículo", true);
+    private final JRadioButton rbFecha = new JRadioButton("Por fecha", true);
+    private final JRadioButton rbArticulo = new JRadioButton("Por artículo");
     private final JRadioButton rbVendedor = new JRadioButton("Por vendedor");
     private final JRadioButton rbCliente = new JRadioButton("Por cliente");
 
@@ -183,6 +187,8 @@ static class CsvRow {
     
     public String fechaRegistroArticulo; // fecha_registro de Inventarios
     public Double costoArticulo;         // costoIva de Inventarios
+    public Double utilidadBrutaPct;
+    public Double utilidadNetaPct;
 
     public Double precio;
     public Double descuento;
@@ -217,6 +223,7 @@ fechaFin.set(LocalDate.now());
 
 
         // Cambio de tarjeta de filtros
+        rbFecha.addActionListener(e -> cardsFiltros.show(panelFiltrosEspecificos, "FECHA"));
         rbArticulo.addActionListener(e -> cardsFiltros.show(panelFiltrosEspecificos, "ARTICULO"));
         rbVendedor.addActionListener(e -> cardsFiltros.show(panelFiltrosEspecificos, "VENDEDOR"));
         rbCliente.addActionListener(e -> cardsFiltros.show(panelFiltrosEspecificos, "CLIENTE"));
@@ -252,12 +259,14 @@ fechaFin.set(LocalDate.now());
 
 
         ButtonGroup grupo = new ButtonGroup();
+        grupo.add(rbFecha);
         grupo.add(rbArticulo);
         grupo.add(rbVendedor);
         grupo.add(rbCliente);
 
         linea1.add(Box.createHorizontalStrut(16));
         linea1.add(new JLabel("Filtro:"));
+        linea1.add(rbFecha);
         linea1.add(rbArticulo);
         linea1.add(rbVendedor);
         linea1.add(rbCliente);
@@ -272,6 +281,9 @@ fechaFin.set(LocalDate.now());
 
         // --- Línea 2: panel de filtros específicos (CardLayout) ---
         panelFiltrosEspecificos.setBorder(BorderFactory.createEmptyBorder(0, 4, 4, 4));
+
+        JPanel cardFecha = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
+        cardFecha.add(new JLabel("Se usarán las fechas indicadas arriba (Del/Al)."));
 
                 // Card de artículos
         JPanel cardArt = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
@@ -304,10 +316,11 @@ fechaFin.set(LocalDate.now());
         cardCli.add(new JLabel("a"));
         cardCli.add(cbCliFin);
 
+        panelFiltrosEspecificos.add(cardFecha, "FECHA");
         panelFiltrosEspecificos.add(cardArt, "ARTICULO");
         panelFiltrosEspecificos.add(cardVend, "VENDEDOR");
         panelFiltrosEspecificos.add(cardCli, "CLIENTE");
-        cardsFiltros.show(panelFiltrosEspecificos, "ARTICULO");
+        cardsFiltros.show(panelFiltrosEspecificos, "FECHA");
 
         north.add(header, BorderLayout.NORTH);
         north.add(panelFiltrosEspecificos, BorderLayout.CENTER);
@@ -354,7 +367,9 @@ private void cargar() {
     LocalDate finExcl = fin.plusDays(1); // [ini, fin)
 
     try {
-        if (rbArticulo.isSelected()) {
+        if (rbFecha.isSelected()) {
+            cargarPorFecha(ini, finExcl);
+        } else if (rbArticulo.isSelected()) {
             cargarPorArticulo(ini, finExcl);
         } else if (rbVendedor.isSelected()) {
             cargarPorVendedor(ini, finExcl);
@@ -371,6 +386,31 @@ private void cargar() {
         JOptionPane.showMessageDialog(this,
                 "Error al cargar reporte: " + ex.getMessage(),
                 "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
+
+private void cargarPorFecha(LocalDate ini, LocalDate finExcl) throws Exception {
+    String sql =
+    "SELECT n.numero_nota, n.asesor, n.tipo, n.folio, n.fecha_registro, " +
+    "       n.total, n.saldo, n.status, " +
+    "       CONCAT(COALESCE(c.nombre,''),' ',COALESCE(c.apellido_paterno,''),' ',COALESCE(c.apellido_materno,'')) AS nombre_cliente " +
+    "FROM Notas n " +
+    "LEFT JOIN Clientes c ON c.telefono1 = n.telefono " +
+    "WHERE n.status='A' AND n.tipo IN ('CN','CR') " +
+    "  AND n.fecha_registro >= ? AND n.fecha_registro < ? " +
+    "ORDER BY n.fecha_registro, n.numero_nota";
+
+    try (Connection cn = Conecta.getConnection();
+         PreparedStatement ps = cn.prepareStatement(sql)) {
+
+        ps.setDate(1, Date.valueOf(ini));
+        ps.setDate(2, Date.valueOf(finExcl));
+
+        try (ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                agregarFilaNota(rs);
+            }
+        }
     }
 }
 
@@ -679,6 +719,9 @@ private void exportarCSV() {
         NotasDAO notasDAO = new NotasDAO();
         InventarioDAO invDAO = new InventarioDAO();
         Map<String, Inventario> cacheInv = new HashMap<>();
+        double totalCosto = 0.0;
+        double totalPrecio = 0.0;
+        double totalSubtotal = 0.0;
 
 
         // Recorremos TODAS las notas que aparecen en la tabla filtrada
@@ -760,6 +803,21 @@ private void exportarCSV() {
                     r.descuento  = d.getDescuento();
                     r.subtotal   = d.getSubtotal();
 
+                    double costo = n(r.costoArticulo);
+                    double precio = n(r.precio);
+                    double subtotal = n(r.subtotal);
+
+                    r.utilidadBrutaPct = (precio <= 0.005)
+                            ? 0.0
+                            : round2(((precio - costo) / precio) * 100.0);
+                    r.utilidadNetaPct = (subtotal <= 0.005)
+                            ? 0.0
+                            : round2(((subtotal - costo) / subtotal) * 100.0);
+
+                    totalCosto += costo;
+                    totalPrecio += precio;
+                    totalSubtotal += subtotal;
+
                     rows.add(r);
                 }
             }
@@ -770,6 +828,13 @@ private void exportarCSV() {
                     "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+
+        CsvRow tot = new CsvRow();
+        tot.articulo = "Totales:";
+        tot.costoArticulo = totalCosto;
+        tot.precio = totalPrecio;
+        tot.subtotal = totalSubtotal;
+        rows.add(tot);
 
         LocalDate ini = fechaIni.get();
 LocalDate fin = fechaFin.get();
@@ -786,6 +851,7 @@ String fname = "ReporteVentas_" + ini.format(DF) + "_a_" + fin.format(DF);
         rows, fname,
         "asesor", "folio", "cliente", "fecha", "tipo", "status", "total", "saldo",
         "codigo", "articulo", "marca", "modelo", "talla", "color", "fechaRegistroArticulo", "costoArticulo",
+        "utilidadBrutaPct", "utilidadNetaPct",
         "precio", "descuento", "subtotal"
         );
 
@@ -908,6 +974,10 @@ private void cargarTiposArticulo() {
 
     private static Double n(Double d) {
         return d == null ? 0.0 : d;
+    }
+
+    private static Double round2(double d) {
+        return BigDecimal.valueOf(d).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
 
     private static String ns(String s) {
