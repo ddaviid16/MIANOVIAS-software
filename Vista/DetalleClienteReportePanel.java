@@ -1141,61 +1141,69 @@ private List<PagoLinea> construirPagos(NotasDAO ndao, List<NotasDAO.NotaResumen>
 
         // Movimientos cancelados: fuera de la impresión
         if ("C".equals(status)) continue;
-if ("CR".equals(tipo)) {
-    // Pago inicial REAL: lo que se capturó en formas de pago del CR (no total - saldo actual)
-    double pagoInicial = 0.0;
 
-    try {
-        FormasPagoDAO fdao = new FormasPagoDAO();
-        FormasPagoDAO.FormasPagoRow fp = fdao.obtenerPorNota(r.numero);
-        if (fp != null) {
-            // Sumar sólo métodos "de pago" (excluir devoluciones)
-            pagoInicial =
-                    z(fp.efectivo) +
-                    z(fp.tarjetaCredito) +
-                    z(fp.tarjetaDebito) +
-                    z(fp.americanExpress) +
-                    z(fp.transferencia) +
-                    z(fp.deposito);
+        FormasPagoDAO.FormasPagoRow fp = null;
+        try {
+            fp = new FormasPagoDAO().obtenerPorNota(r.numero);
+        } catch (Exception ignore) {
+            fp = null;
         }
-    } catch (Exception ignore) {
-        // si falla, no inventamos pago inicial
-        pagoInicial = 0.0;
-    }
 
-    // Si el anticipo fue 0, NO imprimimos "Pago inicial de la nota"
-    if (pagoInicial > 0.005) {
-        PagoLinea p = new PagoLinea();
-        p.numeroNota = r.numero;
-        p.folio      = folioDeNota(r);
-        p.fecha      = r.fecha;
-        p.concepto   = "Pago inicial de la nota";
-        p.importe    = pagoInicial;
-        p.saldo      = null;        // no se imprime de todos modos; evitamos datos engañosos
-        p.esDevolucion = false;
-        out.add(p);
-    }
+        if ("CR".equals(tipo) || "AB".equals(tipo)) {
+            double pagoSinDV = 0.0;
+            double montoDVAplicada = 0.0;
+            String referenciaDV = "";
 
-
-        } else if ("AB".equals(tipo)) {
-            PagoLinea p = new PagoLinea();
-            p.numeroNota = r.numero;
-            p.folio      = folioDeNota(r);
-            p.fecha      = r.fecha;
-
-            String folioCR = obtenerFolioCreditoAbonado(r.numero);
-            if (folioCR == null || folioCR.isBlank()) {
-                p.concepto = "Abono a crédito";
+            if (fp != null) {
+                pagoSinDV =
+                        z(fp.efectivo) +
+                        z(fp.tarjetaCredito) +
+                        z(fp.tarjetaDebito) +
+                        z(fp.americanExpress) +
+                        z(fp.transferencia) +
+                        z(fp.deposito);
+                montoDVAplicada = z(fp.devolucion);
+                referenciaDV = safe(fp.referenciaDV);
             } else {
-                p.concepto = "Abono a " + folioCR;
+                // Fallback cuando no hay formas de pago guardadas para no perder el movimiento.
+                pagoSinDV = z(r.total);
             }
 
-            p.importe      = z(r.total);
-            p.saldo        = z(r.saldo);
-            p.esDevolucion = false;
-            out.add(p);
+            if (pagoSinDV > 0.005) {
+                PagoLinea p = new PagoLinea();
+                p.numeroNota = r.numero;
+                p.folio      = folioDeNota(r);
+                p.fecha      = r.fecha;
+                if ("CR".equals(tipo)) {
+                    p.concepto = "Pago inicial de la nota";
+                    p.saldo    = null;
+                } else {
+                    String folioCR = obtenerFolioCreditoAbonado(r.numero);
+                    p.concepto = (folioCR == null || folioCR.isBlank())
+                            ? "Abono a crédito"
+                            : "Abono a " + folioCR;
+                    p.saldo = z(r.saldo);
+                }
+                p.importe = pagoSinDV;
+                p.esDevolucion = false;
+                out.add(p);
+            }
 
-                } else if ("DV".equals(tipo)) {
+            if (montoDVAplicada > 0.005) {
+                PagoLinea p = new PagoLinea();
+                p.numeroNota = r.numero;
+                p.folio      = folioDeNota(r);
+                p.fecha      = r.fecha;
+                p.concepto   = referenciaDV.isBlank()
+                        ? "Devolución aplicada como pago"
+                        : "Devolución aplicada como pago (" + referenciaDV + ")";
+                p.importe      = -Math.abs(montoDVAplicada);
+                p.saldo        = null;
+                p.esDevolucion = true;
+                out.add(p);
+            }
+
+        } else if ("DV".equals(tipo)) {
             // Devoluciones en negativo
             PagoLinea p = new PagoLinea();
             p.numeroNota = r.numero;
