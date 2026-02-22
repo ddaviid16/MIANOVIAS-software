@@ -317,6 +317,7 @@ private final JTable tbFactura = new JTable(modelFactura);
 
             addKV(modelFactura, "Régimen fiscal", regFmt);
             addKV(modelFactura, "Uso del CFDI", usoFmt);
+            addKV(modelFactura, "Código postal", n(fd.codigoPostal));
             addKV(modelFactura, "Correo", n(fd.correo));
 
             // (Opcional) Timestamps si quieres verlos:
@@ -328,6 +329,7 @@ private final JTable tbFactura = new JTable(modelFactura);
             addKV(modelFactura, "RFC", "");
             addKV(modelFactura, "Régimen fiscal", "");
             addKV(modelFactura, "Uso del CFDI", "");
+            addKV(modelFactura, "Código postal", "");
             addKV(modelFactura, "Correo", "");
         }
     } catch (Exception e) {
@@ -372,13 +374,14 @@ private static String n(String s) { return (s == null) ? "" : s; }
                     if (cr != null && cr.getNombreCompleto()!=null) nombre = cr.getNombreCompleto();
                 } catch (Exception ignore) {}
 
-                 String rfc = "", regimen = "", usoCFDI = "", correo = "";
+                 String rfc = "", regimen = "", usoCFDI = "", codigoPostal = "", correo = "";
             try {
                 FacturaDatosDAO.Row fd = fddao.obtenerPorNota(numero);
                 if (fd != null) {
                     rfc     = safe(fd.rfc);
                     regimen = safe(fd.regimen);
                     usoCFDI = safe(fd.usoCfdi);
+                    codigoPostal = safe(fd.codigoPostal);
                     correo  = safe(fd.correo);
                 }
             } catch (Exception ignore) {}
@@ -426,7 +429,7 @@ private static String n(String s) { return (s == null) ? "" : s; }
                         r.p_transfer=ptr; r.p_deposito=pdep; r.p_devolucion=pdv; r.p_ref_dv=refDV;
                         r.saldo=saldo; r.folioCreditoAbonado = folioCreditoAbonado; 
                         // NUEVO: facturación
-                        r.rfc = rfc; r.regimenFiscal = regimen; r.usoCFDI = usoCFDI; r.correo = correo;
+                        r.rfc = rfc; r.regimenFiscal = regimen; r.usoCFDI = usoCFDI; r.codigoPostal = codigoPostal; r.correo = correo;
 
                         rows.add(r);
                     }
@@ -440,7 +443,7 @@ private static String n(String s) { return (s == null) ? "" : s; }
                     "telefono","nombre","codigo","articulo","marca","modelo","talla","color",
                     "precio","descuento","subtotal",
                     "p_efectivo","p_tcredito","p_tdebito","p_amex","p_transfer","p_deposito","p_devolucion","p_ref_dv",
-                    "saldo", "folioCreditoAbonado", "rfc","regimenFiscal","usoCFDI","correo"
+                    "saldo", "folioCreditoAbonado", "rfc","regimenFiscal","usoCFDI","codigoPostal","correo"
             );
 
             JOptionPane.showMessageDialog(this, "CSV generado correctamente.");
@@ -556,6 +559,7 @@ private static String n(String s) { return (s == null) ? "" : s; }
         public String rfc;
         public String regimenFiscal;
         public String usoCFDI;
+        public String codigoPostal;
         public String correo;
     }
 
