@@ -2306,6 +2306,7 @@ private void cargarFacturaTab(int numeroNota) {
 
             addKV(modelFactura, "Régimen fiscal", regFmt);
             addKV(modelFactura, "Uso del CFDI", usoFmt);
+            addKV(modelFactura, "Código postal", n(fd.codigoPostal));
             addKV(modelFactura, "Correo", n(fd.correo));
 
             if (fd.createdAt != null) addKV(modelFactura, "Capturado", fd.createdAt.toString());
@@ -2316,6 +2317,7 @@ private void cargarFacturaTab(int numeroNota) {
             addKV(modelFactura, "RFC", "");
             addKV(modelFactura, "Régimen fiscal", "");
             addKV(modelFactura, "Uso del CFDI", "");
+            addKV(modelFactura, "Código postal", "");
             addKV(modelFactura, "Correo", "");
         }
     } catch (Exception ex) {
