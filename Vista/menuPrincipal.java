@@ -6,6 +6,11 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Supplier;
 
 import Controlador.AsesorDAO;
 
@@ -30,6 +35,8 @@ public class menuPrincipal extends JFrame {
     private final Deque<String> history = new ArrayDeque<>();
     private String current = CARD_HOME;
     private final Modelo.Asesor usuarioActual;
+    private final Map<String, Supplier<JComponent>> lazyFactories = new HashMap<>();
+    private final Set<String> loadedCards = new HashSet<>();
 
     public menuPrincipal(Modelo.Asesor usuarioActual) {
         setTitle("MIANOVIAS");
@@ -79,74 +86,74 @@ public class menuPrincipal extends JFrame {
         add(mainPanel, BorderLayout.CENTER);
 
         // ====== Tarjetas
-        mainPanel.add(buildHomeCard(), CARD_HOME);           // Menú principal
+        addEagerCard(CARD_HOME, buildHomeCard());           // Menú principal
 
         // Submenú Inventario + destinos reales
-        mainPanel.add(buildInventarioMenu(), CARD_INV_MENU);
-        mainPanel.add(new InventarioPanel(),   CARD_INV_ART); // "inventario_articulos"
-        mainPanel.add(new ObsequiosInvPanel(), CARD_INV_OBS); // "inventario_obsequios"
+        addEagerCard(CARD_INV_MENU, buildInventarioMenu());
+        registerLazyCard(CARD_INV_ART, InventarioPanel::new);   // "inventario_articulos"
+        registerLazyCard(CARD_INV_OBS, ObsequiosInvPanel::new); // "inventario_obsequios"
 
         // Submenú de clientes
-        mainPanel.add(new ClientesSubmenuPanel(card -> showCard(card, tituloDe(card))), CARD_CLIENTES);
-        mainPanel.add(new ClientesPanel(), ClientesSubmenuPanel.CARD_CLIENTES_REGISTRO);
-        
-        mainPanel.add(new EditarClientePanel(),   ClientesSubmenuPanel.CARD_CLIENTES_EDITAR);
-        mainPanel.add(new AgendaPanel(),   ClientesSubmenuPanel.CARD_CLIENTES_CITAS);
-        mainPanel.add(new HistorialClientePanel(),ClientesSubmenuPanel.CARD_CLIENTES_HIST);
+        addEagerCard(CARD_CLIENTES, new ClientesSubmenuPanel(card -> showCard(card, tituloDe(card))));
+        registerLazyCard(ClientesSubmenuPanel.CARD_CLIENTES_REGISTRO, ClientesPanel::new);
+        registerLazyCard(ClientesSubmenuPanel.CARD_CLIENTES_EDITAR, EditarClientePanel::new);
+        registerLazyCard(ClientesSubmenuPanel.CARD_CLIENTES_CITAS, AgendaPanel::new);
+        registerLazyCard(ClientesSubmenuPanel.CARD_CLIENTES_HIST, HistorialClientePanel::new);
 
 
         // Submenú Operaciones (usa IDs de texto EXACTOS que emite OperacionesPanel)
-        mainPanel.add(new OperacionesPanel(card -> showCard(card, tituloDe(card))), CARD_OPER);
-        VentaContadoPanel ventaContado = new VentaContadoPanel();
-        VentaCreditoPanel ventaCredito = new VentaCreditoPanel();
-        AbonoPanel abonoPanel = new AbonoPanel();
-        if (usuarioActual != null) {
-            ventaContado.setCajeraActual(
-                usuarioActual.getNumeroEmpleado(),
-                usuarioActual.getNombreCompleto()
-            );
-            ventaCredito.setCajeraActual(
-                usuarioActual.getNumeroEmpleado(),
-                usuarioActual.getNombreCompleto()
-            );
-            abonoPanel.setCajeraActual(
-                usuarioActual.getNumeroEmpleado(),
-                usuarioActual.getNombreCompleto()
-            );
-        }
-        mainPanel.add(ventaContado,        "Venta de contado");
-        mainPanel.add(ventaCredito,        "Venta de crédito");
-        mainPanel.add(abonoPanel,               "Abono");
-        mainPanel.add(new DevolucionPanel(),          "Devoluciones");
-        mainPanel.add(new CancelarNotaPanel(),        "Cancelación de notas");
-        mainPanel.add(new CambioFechaEventoPanel(),   "Cambio de fecha de evento");
-        mainPanel.add(new HojaEntregaPanel(),         "Hoja de entrega");
-        mainPanel.add(new AgregarObsequiosNotaPanel(), "Agregar obsequios a nota");
-        mainPanel.add(new CambioCodigoArticuloPanel(), "Cambio de código de artículo");
-        mainPanel.add(new FacturarPorFolioPanel(),  "Agregar datos de factura");
+        addEagerCard(CARD_OPER, new OperacionesPanel(card -> showCard(card, tituloDe(card))));
+        registerLazyCard("Venta de contado", () -> {
+            VentaContadoPanel p = new VentaContadoPanel();
+            if (usuarioActual != null) {
+                p.setCajeraActual(usuarioActual.getNumeroEmpleado(), usuarioActual.getNombreCompleto());
+            }
+            return p;
+        });
+        registerLazyCard("Venta de crédito", () -> {
+            VentaCreditoPanel p = new VentaCreditoPanel();
+            if (usuarioActual != null) {
+                p.setCajeraActual(usuarioActual.getNumeroEmpleado(), usuarioActual.getNombreCompleto());
+            }
+            return p;
+        });
+        registerLazyCard("Abono", () -> {
+            AbonoPanel p = new AbonoPanel();
+            if (usuarioActual != null) {
+                p.setCajeraActual(usuarioActual.getNumeroEmpleado(), usuarioActual.getNombreCompleto());
+            }
+            return p;
+        });
+        registerLazyCard("Devoluciones", DevolucionPanel::new);
+        registerLazyCard("Cancelación de notas", CancelarNotaPanel::new);
+        registerLazyCard("Cambio de fecha de evento", CambioFechaEventoPanel::new);
+        registerLazyCard("Hoja de entrega", HojaEntregaPanel::new);
+        registerLazyCard("Agregar obsequios a nota", AgregarObsequiosNotaPanel::new);
+        registerLazyCard("Cambio de código de artículo", CambioCodigoArticuloPanel::new);
+        registerLazyCard("Agregar datos de factura", FacturarPorFolioPanel::new);
 
         // Submenú Empresa (mismo patrón que Operaciones)
-        mainPanel.add(new EmpresaSubmenuPanel(card -> showCard(card, tituloDe(card))), CARD_EMPRESA);
-        mainPanel.add(new EmpresaPanel(),        "Información de la empresa");
-        mainPanel.add(new PanelFoliosIniciales(),"Asignación de Folios");
-        mainPanel.add(new AsesoresPanel(),       "Empleados");
-        mainPanel.add(new CondicionesEmpresaPanel(), "Condiciones de venta");
+        addEagerCard(CARD_EMPRESA, new EmpresaSubmenuPanel(card -> showCard(card, tituloDe(card))));
+        registerLazyCard("Información de la empresa", EmpresaPanel::new);
+        registerLazyCard("Asignación de Folios", PanelFoliosIniciales::new);
+        registerLazyCard("Empleados", AsesoresPanel::new);
+        registerLazyCard("Condiciones de venta", CondicionesEmpresaPanel::new);
 
         // Submenú Reportes (mismo patrón que Operaciones)
-        mainPanel.add(new ReportesPanel(card -> showCard(card, tituloDe(card))), CARD_REPORTES);
+        addEagerCard(CARD_REPORTES, new ReportesPanel(card -> showCard(card, tituloDe(card))));
         // Tarjetas destino:
-        mainPanel.add(new PagoGastosPanel(),          ReportesPanel.CARD_REP_GASTOS);
-        mainPanel.add(new CorteCajaPanel(),           ReportesPanel.CARD_REP_CORTE);
-        mainPanel.add(new ReimprimirNotaPanel(),     ReportesPanel.CARD_REP_REIMPR);
-        mainPanel.add(new DetalleClienteReportePanel(), ReportesPanel.CARD_REP_DETCLI);
-        mainPanel.add(new EntregasVestidosPanel(),    ReportesPanel.CARD_REP_ENTREGAS);
-        mainPanel.add(new ArticulosAPedirPanel(),     ReportesPanel.CARD_REP_PEDIR);
-        mainPanel.add(new HojasAjustePanel(),        ReportesPanel.CARD_REP_AJUSTES);
-        mainPanel.add(new ReporteObsequiosPanel(),    ReportesPanel.CARD_REP_OBSEQ);
-        mainPanel.add(new VentasPorVendedorPanel(),   ReportesPanel.CARD_REP_VENTVEND);
-        mainPanel.add(new NotasPorMesPanel(), ReportesPanel.CARD_REP_NOTAS_MES);
-        mainPanel.add(new ReporteVentasPanel(),       ReportesPanel.CARD_REP_VENTAS);
-        mainPanel.add(new ReporteModistasPanel(),     ReportesPanel.CARD_REP_MODISTAS);
+        registerLazyCard(ReportesPanel.CARD_REP_GASTOS, PagoGastosPanel::new);
+        registerLazyCard(ReportesPanel.CARD_REP_CORTE, CorteCajaPanel::new);
+        registerLazyCard(ReportesPanel.CARD_REP_REIMPR, ReimprimirNotaPanel::new);
+        registerLazyCard(ReportesPanel.CARD_REP_DETCLI, DetalleClienteReportePanel::new);
+        registerLazyCard(ReportesPanel.CARD_REP_ENTREGAS, EntregasVestidosPanel::new);
+        registerLazyCard(ReportesPanel.CARD_REP_PEDIR, ArticulosAPedirPanel::new);
+        registerLazyCard(ReportesPanel.CARD_REP_AJUSTES, HojasAjustePanel::new);
+        registerLazyCard(ReportesPanel.CARD_REP_OBSEQ, ReporteObsequiosPanel::new);
+        registerLazyCard(ReportesPanel.CARD_REP_VENTVEND, VentasPorVendedorPanel::new);
+        registerLazyCard(ReportesPanel.CARD_REP_NOTAS_MES, NotasPorMesPanel::new);
+        registerLazyCard(ReportesPanel.CARD_REP_VENTAS, ReporteVentasPanel::new);
+        registerLazyCard(ReportesPanel.CARD_REP_MODISTAS, ReporteModistasPanel::new);
 
 
         // Mostrar
@@ -280,8 +287,30 @@ public class menuPrincipal extends JFrame {
         return b;
     }
 
+    private void addEagerCard(String id, JComponent comp) {
+        mainPanel.add(comp, id);
+        loadedCards.add(id);
+    }
+
+    private void registerLazyCard(String id, Supplier<JComponent> factory) {
+        lazyFactories.put(id, factory);
+    }
+
+    private void ensureCardLoaded(String card) {
+        if (loadedCards.contains(card)) return;
+        Supplier<JComponent> factory = lazyFactories.get(card);
+        if (factory == null) return;
+
+        JComponent comp = factory.get();
+        if (comp != null) {
+            mainPanel.add(comp, card);
+            loadedCards.add(card);
+        }
+    }
+
     // ====== Navegación
     private void showCard(String card, String titulo) {
+        ensureCardLoaded(card);
         if (!CARD_HOME.equals(current)) history.push(current);
         current = card;
         title.setText(titulo);
@@ -298,6 +327,7 @@ public class menuPrincipal extends JFrame {
             return;
         }
         String prev = history.pop();
+        ensureCardLoaded(prev);
         current = prev;
         btBack.setVisible(!CARD_HOME.equals(prev));
         title.setText(tituloDe(prev));
@@ -467,8 +497,20 @@ private static void crearMenuConPantallaCarga(final Modelo.Asesor usuario) {
     // Dejamos que el EDT pinte el diálogo, y en el siguiente "turno"
     // construimos el menú principal (que sí tarda) y cerramos la pantalla de carga.
     SwingUtilities.invokeLater(() -> {
-        new menuPrincipal(usuario);  // el constructor YA hace setVisible(true)
-        dlg.dispose();
+        try {
+            new menuPrincipal(usuario);  // el constructor YA hace setVisible(true)
+        } catch (Throwable ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Ocurrió un error al abrir el sistema:\n" + ex.getMessage(),
+                    "Error de inicio",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            System.exit(1);
+        } finally {
+            dlg.dispose();
+        }
     });
 }
 
