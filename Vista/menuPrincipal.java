@@ -467,8 +467,20 @@ private static void crearMenuConPantallaCarga(final Modelo.Asesor usuario) {
     // Dejamos que el EDT pinte el diálogo, y en el siguiente "turno"
     // construimos el menú principal (que sí tarda) y cerramos la pantalla de carga.
     SwingUtilities.invokeLater(() -> {
-        new menuPrincipal(usuario);  // el constructor YA hace setVisible(true)
-        dlg.dispose();
+        try {
+            new menuPrincipal(usuario);  // el constructor YA hace setVisible(true)
+        } catch (Throwable ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Ocurrió un error al abrir el sistema:\n" + ex.getMessage(),
+                    "Error de inicio",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            System.exit(1);
+        } finally {
+            dlg.dispose();
+        }
     });
 }
 
