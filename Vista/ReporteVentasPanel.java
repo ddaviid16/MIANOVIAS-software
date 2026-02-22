@@ -39,6 +39,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import java.util.Locale;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * Panel "Reporte de ventas".
@@ -807,10 +809,10 @@ private void exportarCSV() {
 
                     r.utilidadBrutaPct = (precio <= 0.005)
                             ? 0.0
-                            : ((precio - costo) / precio) * 100.0;
+                            : round2(((precio - costo) / precio) * 100.0);
                     r.utilidadNetaPct = (subtotal <= 0.005)
                             ? 0.0
-                            : ((subtotal - costo) / subtotal) * 100.0;
+                            : round2(((subtotal - costo) / subtotal) * 100.0);
 
                     totalCosto += costo;
                     totalPrecio += precio;
@@ -972,6 +974,10 @@ private void cargarTiposArticulo() {
 
     private static Double n(Double d) {
         return d == null ? 0.0 : d;
+    }
+
+    private static Double round2(double d) {
+        return BigDecimal.valueOf(d).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
 
     private static String ns(String s) {
