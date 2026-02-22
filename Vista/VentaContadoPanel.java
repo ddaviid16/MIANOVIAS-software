@@ -2158,6 +2158,7 @@ try {
             facturaDraft.rfc.trim().toUpperCase(),
             facturaDraft.regimen.trim().toUpperCase(),  // tú lo manejas como 4 chars
             facturaDraft.usoCfdi.trim().toUpperCase(),  // G03, CP01, S01, ...
+            facturaDraft.codigoPostal == null ? null : facturaDraft.codigoPostal.trim(),
             facturaDraft.correo == null ? null : facturaDraft.correo.trim()
         );
     }
@@ -3335,6 +3336,7 @@ static class DlgFactura extends JDialog {
         String rfc;
         String regimen;
         String usoCfdi;
+        String codigoPostal;
         String correo;
     }
 
@@ -3352,6 +3354,7 @@ static class DlgFactura extends JDialog {
     private final JComboBox<CatalogoCFDI.UsoCfdi> cbUso     = new JComboBox<>();
 
     private final JTextField tfCorreo = new JTextField();
+    private final JTextField tfCodigoPostal = new JTextField();
 
     DlgFactura(Frame owner, CapturaFactura init) {
         super(owner, "Datos para facturar", true);
@@ -3384,6 +3387,10 @@ static class DlgFactura extends JDialog {
         addCell(p,c,1,y,tfCorreo,1,true);
         y++;
 
+        addCell(p,c,0,y,new JLabel("Código postal:"),1,false);
+        addCell(p,c,1,y,tfCodigoPostal,1,true);
+        y++;
+
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton btGuardar = new JButton("Guardar");
         JButton btLimpiar = new JButton("Quitar captura");
@@ -3405,6 +3412,7 @@ static class DlgFactura extends JDialog {
 
             tfRFC.setText(init.rfc == null ? "" : init.rfc);
             tfCorreo.setText(init.correo == null ? "" : init.correo);
+            tfCodigoPostal.setText(init.codigoPostal == null ? "" : init.codigoPostal);
 
             if (init.regimen != null) {
                 seleccionarRegimenPorClave(init.regimen);
@@ -3425,7 +3433,7 @@ static class DlgFactura extends JDialog {
             dispose();
         });
 
-        setSize(520, 300);
+        setSize(520, 340);
         setLocationRelativeTo(owner);
     }
 
@@ -3505,6 +3513,7 @@ static class DlgFactura extends JDialog {
         String regimen = (regItem == null ? "" : regItem.clave);
         String uso     = (usoItem == null ? "" : usoItem.clave);
         String correo  = tfCorreo.getText().trim();
+        String codigoPostal = tfCodigoPostal.getText().trim();
 
         // Validaciones
         if (rfc.isEmpty()) {
@@ -3535,12 +3544,17 @@ static class DlgFactura extends JDialog {
             JOptionPane.showMessageDialog(this,"Correo inválido.");
             return;
         }
+        if(!codigoPostal.matches("^\\d{5}$")) {
+            JOptionPane.showMessageDialog(this,"El código postal debe tener 5 dígitos.");
+            return;
+        }
 
         CapturaFactura cf = new CapturaFactura();
         cf.persona = persona;
         cf.rfc     = rfc;
         cf.regimen = regimen;      // solo CLAVE (ej. "601")
         cf.usoCfdi = uso;          // solo CLAVE (ej. "G03")
+        cf.codigoPostal = codigoPostal;
         cf.correo  = correo.isBlank()? null : correo;
 
         result = cf;

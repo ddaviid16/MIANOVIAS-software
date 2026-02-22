@@ -14,6 +14,7 @@ public class DlgFactura extends JDialog {
         public String tipoPersona; // FISICA|MORAL
         public String regimen;     // p.ej. 601, 605, ...
         public String usoCfdi;     // p.ej. G01, G03, P01 (según catálogo vigente)
+        public String codigoPostal;
         public String correo;
     }
 
@@ -22,6 +23,7 @@ public class DlgFactura extends JDialog {
     private final JComboBox<Utilidades.CatalogoCFDI.Regimen> cbRegimen = new JComboBox<>();
     private final JComboBox<Utilidades.CatalogoCFDI.UsoCfdi> cbUso = new JComboBox<>();
     private final JTextField txtCorreo  = new JTextField();
+    private final JTextField txtCodigoPostal = new JTextField();
 
 
     private CapturaFactura result;
@@ -41,6 +43,7 @@ public class DlgFactura extends JDialog {
         add(formRow(form, c, 0, y++, new JLabel("RFC:"), txtRFC));
         add(formRow(form, c, 0, y++, new JLabel("Régimen fiscal:"), cbRegimen));
         add(formRow(form, c, 0, y++, new JLabel("Uso de CFDI:"), cbUso));
+        add(formRow(form, c, 0, y++, new JLabel("Código postal:"), txtCodigoPostal));
         add(formRow(form, c, 0, y++, new JLabel("Correo receptor:"), txtCorreo));
 
         add(form, BorderLayout.CENTER);
@@ -59,6 +62,7 @@ public class DlgFactura extends JDialog {
             cbTipo.setSelectedItem(precargada.tipoPersona==null? "FISICA":precargada.tipoPersona);
             txtRFC.setText(precargada.rfc==null? "" : precargada.rfc);
             cbRegimen.setSelectedItem(precargada.regimen==null? null : new Utilidades.CatalogoCFDI.Regimen(precargada.regimen, "", ""));
+            txtCodigoPostal.setText(precargada.codigoPostal==null? "" : precargada.codigoPostal);
             txtCorreo.setText(precargada.correo==null? "" : precargada.correo);
             if (precargada.usoCfdi != null) cbUso.setSelectedItem(precargada.usoCfdi);
         }
@@ -81,6 +85,7 @@ public class DlgFactura extends JDialog {
         String reg = (regItem == null ? "" : regItem.clave);
         String uso = (usoItem == null ? "" : usoItem.clave);
 
+        String cp = txtCodigoPostal.getText().trim();
         String mail = txtCorreo.getText().trim();
 
         // Validación RFC (igual que antes)
@@ -91,6 +96,7 @@ public class DlgFactura extends JDialog {
         if (!ok) { JOptionPane.showMessageDialog(this, "RFC inválido para el tipo seleccionado."); return; }
         if (reg.isEmpty()) { JOptionPane.showMessageDialog(this, "Captura el régimen fiscal."); return; }
         if (uso == null || uso.isBlank()) { JOptionPane.showMessageDialog(this, "Selecciona el uso de CFDI."); return; }
+        if (!cp.matches("^\\d{5}$")) { JOptionPane.showMessageDialog(this, "El código postal debe tener 5 dígitos."); return; }
         if (!mail.isBlank() && !mail.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
             JOptionPane.showMessageDialog(this, "Correo inválido."); return;
         }
@@ -100,6 +106,7 @@ public class DlgFactura extends JDialog {
         result.rfc = rfc;
         result.regimen = reg;     // solo la CLAVE (4 chars)
         result.usoCfdi = uso;     // solo la CLAVE (3 chars)
+        result.codigoPostal = cp;
         result.correo = mail;
         dispose();
     }
