@@ -17,15 +17,17 @@ public class EmpresaSubmenuPanel extends JPanel {
     public EmpresaSubmenuPanel(Consumer<String> navigate) {
         this.navigate = navigate;
         setLayout(new BorderLayout());
+        MenuTheme.styleAppBackground(this);
 
         // Cuadrícula limpia: 2 filas × 2 columnas
         JPanel center = new JPanel(new GridLayout(2, 2, 18, 18));
         center.setBorder(BorderFactory.createEmptyBorder(20, 60, 20, 60));
+        MenuTheme.styleMenuPanel(center);
 
-        JButton btInfo   = botonGrande("Información de la empresa");
-        JButton btFolios = botonGrande("Asignación de Folios");
-        JButton btAses   = botonGrande("Empleados");
-        JButton btCond   = botonGrande("Condiciones de venta");
+        JButton btInfo   = botonGrande("Información de la empresa", MenuTheme.textIcon("ⓘ"));
+        JButton btFolios = botonGrande("Asignación de Folios", MenuTheme.textIcon("⌗"));
+        JButton btAses   = botonGrande("Empleados", MenuTheme.textIcon("☷"));
+        JButton btCond   = botonGrande("Condiciones de venta", MenuTheme.textIcon("✓"));
 
         btInfo.addActionListener(_e   -> navigate.accept(CARD_EMPRESA_INFO));
         btFolios.addActionListener(_e -> navigate.accept(CARD_EMPRESA_FOLIOS));
@@ -41,11 +43,12 @@ public class EmpresaSubmenuPanel extends JPanel {
     }
 
     /** Botón “grande” consistente con Operaciones. */
-    private JButton botonGrande(String texto) {
+    private JButton botonGrande(String texto, Icon icon) {
         JButton b = new JButton(texto);
         b.setFont(b.getFont().deriveFont(Font.BOLD, 16f));
         b.setFocusPainted(false);
         b.setPreferredSize(new Dimension(220, 100));
+        MenuTheme.styleButton(b, icon);
         return b;
     }
 }
