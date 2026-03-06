@@ -21,20 +21,22 @@ public class OperacionesPanel extends JPanel {
     public OperacionesPanel(Consumer<String> navigate) {
         this.navigate = navigate;
         setLayout(new BorderLayout());
+        MenuTheme.styleAppBackground(this);
 
         JPanel center = new JPanel(new GridLayout(2, 4, 18, 18));
         center.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        MenuTheme.styleMenuPanel(center);
 
-        JButton btContado     = botonGrande("Venta de Contado");
-        JButton btCredito     = botonGrande("Venta de Crédito");
-        JButton btAbono       = botonGrande("Abono");
-        JButton btDevolucion  = botonGrande("Devoluciones");
-        JButton btCancelacion = botonGrande("Cancelación de Notas");
-        JButton btCambioFecha = botonGrande("Cambio de Fecha de Evento");
-        JButton btHojaEntrega = botonGrande("Hoja de entrega");
-        JButton btAgregarObsequios = botonGrande("Agregar obsequios a nota");
-        JButton btCambioCodigoArticulo = botonGrande("Cambio de código de artículo");
-        JButton btAgregarFactura = botonGrande("Agregar datos de factura");
+        JButton btContado     = botonGrande("Venta de Contado", MenuTheme.textIcon("$"));
+        JButton btCredito     = botonGrande("Venta de Crédito", MenuTheme.textIcon("¢"));
+        JButton btAbono       = botonGrande("Abono", MenuTheme.textIcon("↘"));
+        JButton btDevolucion  = botonGrande("Devoluciones", MenuTheme.textIcon("↺"));
+        JButton btCancelacion = botonGrande("Cancelación de Notas", MenuTheme.textIcon("✕"));
+        JButton btCambioFecha = botonGrande("Cambio de Fecha de Evento", MenuTheme.textIcon("◴"));
+        JButton btHojaEntrega = botonGrande("Hoja de entrega", MenuTheme.textIcon("☑"));
+        JButton btAgregarObsequios = botonGrande("Agregar obsequios a nota", MenuTheme.textIcon("✦"));
+        JButton btCambioCodigoArticulo = botonGrande("Cambio de código de artículo", MenuTheme.textIcon("⟲"));
+        JButton btAgregarFactura = botonGrande("Agregar datos de factura", MenuTheme.textIcon("⌘"));
 
         // Navegación (cambia por tus constantes si son distintas)
         btContado.addActionListener(_e    -> navigate.accept(CARD_VENTA_CONTADO));
@@ -64,11 +66,12 @@ public class OperacionesPanel extends JPanel {
     }
 
     /** Helper local para crear botones “grandes” con estilo consistente. */
-    private JButton botonGrande(String texto) {
+    private JButton botonGrande(String texto, Icon icon) {
         JButton b = new JButton(texto);
         b.setFont(b.getFont().deriveFont(Font.BOLD, 16f));
         b.setFocusPainted(false);
         b.setPreferredSize(new Dimension(220, 100)); // ajusta tamaño a gusto
+        MenuTheme.styleButton(b, icon);
         return b;
     }
 }
