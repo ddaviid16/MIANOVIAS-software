@@ -27,16 +27,16 @@ public class OperacionesPanel extends JPanel {
         center.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         MenuTheme.styleMenuPanel(center);
 
-        JButton btContado     = botonGrande("Venta de Contado", MenuTheme.textIcon("cash"));
-        JButton btCredito     = botonGrande("Venta de Crédito", MenuTheme.textIcon("credit"));
-        JButton btAbono       = botonGrande("Abono", MenuTheme.textIcon("cash"));
-        JButton btDevolucion  = botonGrande("Devoluciones", MenuTheme.textIcon("refund"));
-        JButton btCancelacion = botonGrande("Cancelación de Notas", MenuTheme.textIcon("cancel"));
-        JButton btCambioFecha = botonGrande("Cambio de Fecha de Evento", MenuTheme.textIcon("calendar"));
-        JButton btHojaEntrega = botonGrande("Hoja de entrega", MenuTheme.textIcon("delivery"));
-        JButton btAgregarObsequios = botonGrande("Agregar obsequios a nota", MenuTheme.textIcon("gift"));
-        JButton btCambioCodigoArticulo = botonGrande("Cambio de código de artículo", MenuTheme.textIcon("code"));
-        JButton btAgregarFactura = botonGrande("Agregar datos de factura", MenuTheme.textIcon("invoice"));
+        JButton btContado     = botonGrande("Venta de Contado", MenuTheme.textIcon("$"));
+        JButton btCredito     = botonGrande("Venta de Crédito", MenuTheme.textIcon("¢"));
+        JButton btAbono       = botonGrande("Abono", MenuTheme.textIcon("↘"));
+        JButton btDevolucion  = botonGrande("Devoluciones", MenuTheme.textIcon("↺"));
+        JButton btCancelacion = botonGrande("Cancelación de Notas", MenuTheme.textIcon("✕"));
+        JButton btCambioFecha = botonGrande("Cambio de Fecha de Evento", MenuTheme.textIcon("◴"));
+        JButton btHojaEntrega = botonGrande("Hoja de entrega", MenuTheme.textIcon("☑"));
+        JButton btAgregarObsequios = botonGrande("Agregar obsequios a nota", MenuTheme.textIcon("✦"));
+        JButton btCambioCodigoArticulo = botonGrande("Cambio de código de artículo", MenuTheme.textIcon("⟲"));
+        JButton btAgregarFactura = botonGrande("Agregar datos de factura", MenuTheme.textIcon("⌘"));
 
         // Navegación (cambia por tus constantes si son distintas)
         btContado.addActionListener(_e    -> navigate.accept(CARD_VENTA_CONTADO));
