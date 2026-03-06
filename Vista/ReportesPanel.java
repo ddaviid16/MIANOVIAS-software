@@ -32,18 +32,18 @@ public class ReportesPanel extends JPanel {
         center.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         MenuTheme.styleMenuPanel(center);
 
-        center.add(tile("Pago de Gastos",       CARD_REP_GASTOS, MenuTheme.textIcon("₳")));
-        center.add(tile("Corte de Caja",        CARD_REP_CORTE, MenuTheme.textIcon("☷")));
-        center.add(tile("Re-Imprimir Nota",     CARD_REP_REIMPR, MenuTheme.textIcon("⎙")));
-        center.add(tile("Detalle de Cliente",   CARD_REP_DETCLI, MenuTheme.textIcon("☵")));
-        center.add(tile("Entregas de vestidos", CARD_REP_ENTREGAS, MenuTheme.textIcon("▤")));
-        center.add(tile("Artículos a pedir",    CARD_REP_PEDIR, MenuTheme.textIcon("☑")));
-        center.add(tile("Hojas de ajustes",     CARD_REP_AJUSTES, MenuTheme.textIcon("✎")));
-        center.add(tile("Reporte de obsequios", CARD_REP_OBSEQ, MenuTheme.textIcon("✧")));
-        center.add(tile("Ventas por vendedor",  CARD_REP_VENTVEND, MenuTheme.textIcon("▥")));
-        center.add(tile("Notas por mes",       CARD_REP_NOTAS_MES, MenuTheme.textIcon("◫")));
-        center.add(tile("Reporte de ventas", CARD_REP_VENTAS, MenuTheme.textIcon("⬈")));
-        center.add(tile("Reporte de artículos modistas", CARD_REP_MODISTAS, MenuTheme.textIcon("✂")));
+        center.add(tile("Pago de Gastos",       CARD_REP_GASTOS, MenuTheme.textIcon("cash")));
+        center.add(tile("Corte de Caja",        CARD_REP_CORTE, MenuTheme.textIcon("reports")));
+        center.add(tile("Re-Imprimir Nota",     CARD_REP_REIMPR, MenuTheme.textIcon("print")));
+        center.add(tile("Detalle de Cliente",   CARD_REP_DETCLI, MenuTheme.textIcon("detail")));
+        center.add(tile("Entregas de vestidos", CARD_REP_ENTREGAS, MenuTheme.textIcon("delivery")));
+        center.add(tile("Artículos a pedir",    CARD_REP_PEDIR, MenuTheme.textIcon("request")));
+        center.add(tile("Hojas de ajustes",     CARD_REP_AJUSTES, MenuTheme.textIcon("adjust")));
+        center.add(tile("Reporte de obsequios", CARD_REP_OBSEQ, MenuTheme.textIcon("gift")));
+        center.add(tile("Ventas por vendedor",  CARD_REP_VENTVEND, MenuTheme.textIcon("sales")));
+        center.add(tile("Notas por mes",       CARD_REP_NOTAS_MES, MenuTheme.textIcon("month")));
+        center.add(tile("Reporte de ventas", CARD_REP_VENTAS, MenuTheme.textIcon("sales")));
+        center.add(tile("Reporte de artículos modistas", CARD_REP_MODISTAS, MenuTheme.textIcon("modista")));
         add(center, BorderLayout.CENTER);
     }
 

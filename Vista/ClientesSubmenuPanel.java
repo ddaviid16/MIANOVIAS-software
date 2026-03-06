@@ -23,10 +23,10 @@ public class ClientesSubmenuPanel extends JPanel {
         center.setBorder(BorderFactory.createEmptyBorder(20, 60, 20, 60));
         MenuTheme.styleMenuPanel(center);
 
-        JButton btRegistro  = botonGrande("Registro de clientes", MenuTheme.textIcon("✎"));
-        JButton btEditar    = botonGrande("Editar información de Cliente", MenuTheme.textIcon("✐"));
-        JButton btCitas     = botonGrande("Agenda y Registro de Citas", MenuTheme.textIcon("◷"));
-        JButton btHistorial = botonGrande("Registrar historial de cliente", MenuTheme.textIcon("☰"));
+        JButton btRegistro  = botonGrande("Registro de clientes", MenuTheme.textIcon("register"));
+        JButton btEditar    = botonGrande("Editar información de Cliente", MenuTheme.textIcon("edit"));
+        JButton btCitas     = botonGrande("Agenda y Registro de Citas", MenuTheme.textIcon("agenda"));
+        JButton btHistorial = botonGrande("Registrar historial de cliente", MenuTheme.textIcon("history"));
 
         btRegistro.addActionListener(_e  -> navigate.accept(CARD_CLIENTES_REGISTRO));
         btEditar.addActionListener(_e    -> navigate.accept(CARD_CLIENTES_EDITAR));

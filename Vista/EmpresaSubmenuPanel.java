@@ -24,10 +24,10 @@ public class EmpresaSubmenuPanel extends JPanel {
         center.setBorder(BorderFactory.createEmptyBorder(20, 60, 20, 60));
         MenuTheme.styleMenuPanel(center);
 
-        JButton btInfo   = botonGrande("Información de la empresa", MenuTheme.textIcon("ⓘ"));
-        JButton btFolios = botonGrande("Asignación de Folios", MenuTheme.textIcon("⌗"));
-        JButton btAses   = botonGrande("Empleados", MenuTheme.textIcon("☷"));
-        JButton btCond   = botonGrande("Condiciones de venta", MenuTheme.textIcon("✓"));
+        JButton btInfo   = botonGrande("Información de la empresa", MenuTheme.textIcon("info"));
+        JButton btFolios = botonGrande("Asignación de Folios", MenuTheme.textIcon("folios"));
+        JButton btAses   = botonGrande("Empleados", MenuTheme.textIcon("employees"));
+        JButton btCond   = botonGrande("Condiciones de venta", MenuTheme.textIcon("conditions"));
 
         btInfo.addActionListener(_e   -> navigate.accept(CARD_EMPRESA_INFO));
         btFolios.addActionListener(_e -> navigate.accept(CARD_EMPRESA_FOLIOS));
