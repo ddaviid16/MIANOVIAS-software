@@ -70,7 +70,6 @@ public class menuPrincipal extends JFrame {
 
         // ===== Encabezado con Volver + Título
         JPanel header = new JPanel(new BorderLayout());
-        MenuTheme.styleAppBackground(header);
         btBack.setVisible(false);
         btBack.setFocusPainted(false);
         btBack.addActionListener(_e -> goBack());
@@ -83,7 +82,6 @@ public class menuPrincipal extends JFrame {
         header.add(left, BorderLayout.WEST);
         header.add(title, BorderLayout.CENTER);
 
-        MenuTheme.styleAppBackground(mainPanel);
         add(header, BorderLayout.NORTH);
         add(mainPanel, BorderLayout.CENTER);
 
@@ -170,11 +168,11 @@ public class menuPrincipal extends JFrame {
         center.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         MenuTheme.styleMenuPanel(center);
 
-        JButton btReportes   = botonGrande("Reportes", MenuTheme.textIcon("reports"));
-        JButton btEmpresa     = botonGrande("Empresa", MenuTheme.textIcon("company"));
-        JButton btClientes    = botonGrande("Clientes", MenuTheme.textIcon("clients"));
-        JButton btInventario  = botonGrande("Inventario", MenuTheme.textIcon("inventory"));
-        JButton btOperaciones = botonGrande("Operaciones", MenuTheme.textIcon("operations"));
+        JButton btReportes   = botonGrande("Reportes", MenuTheme.textIcon("▤"));
+        JButton btEmpresa     = botonGrande("Empresa", MenuTheme.textIcon("⌂"));
+        JButton btClientes    = botonGrande("Clientes", MenuTheme.textIcon("☺"));
+        JButton btInventario  = botonGrande("Inventario", MenuTheme.textIcon("▣"));
+        JButton btOperaciones = botonGrande("Operaciones", MenuTheme.textIcon("⚙"));
 
         btEmpresa.addActionListener(_e   -> showCard(CARD_EMPRESA,   "Empresa"));
         btClientes.addActionListener(_e  -> showCard(CARD_CLIENTES,  "Clientes"));
@@ -201,16 +199,16 @@ public class menuPrincipal extends JFrame {
 
         JPanel center = new JPanel(new FlowLayout(FlowLayout.CENTER, 24, 24));
 
-        JButton btReg = tileButton("Registro de clientes", MenuTheme.textIcon("register"));
+        JButton btReg = tileButton("Registro de clientes", MenuTheme.textIcon("✎"));
         btReg.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_REGISTRO, "Registro de clientes"));
 
-        JButton btEdit = tileButton("Editar información de cliente", MenuTheme.textIcon("edit"));
+        JButton btEdit = tileButton("Editar información de cliente", MenuTheme.textIcon("✐"));
         btEdit.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_EDITAR, "Editar información de cliente"));
 
-        JButton btCitas = tileButton("Agenda y Registro de citas", MenuTheme.textIcon("agenda"));
+        JButton btCitas = tileButton("Agenda y Registro de citas", MenuTheme.textIcon("◷"));
         btCitas.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_CITAS, "Agenda y Registro de citas"));
 
-        JButton btHist = tileButton("Registrar historial de cliente", MenuTheme.textIcon("history"));
+        JButton btHist = tileButton("Registrar historial de cliente", MenuTheme.textIcon("☰"));
         btHist.addActionListener(_e -> showCard(ClientesSubmenuPanel.CARD_CLIENTES_HIST, "Registrar historial de cliente"));
 
         center.add(btReg);
@@ -231,10 +229,10 @@ public class menuPrincipal extends JFrame {
         JPanel center = new JPanel(new FlowLayout(FlowLayout.CENTER, 24, 24));
         MenuTheme.styleMenuPanel(center);
 
-        JButton btArt = tileButton("Inventario de artículos", MenuTheme.textIcon("inventory"));
+        JButton btArt = tileButton("Inventario de artículos", MenuTheme.textIcon("◫"));
         btArt.addActionListener(_e -> showCard(CARD_INV_ART, "Inventario de artículos"));
 
-        JButton btObs = tileButton("Inventario de obsequios", MenuTheme.textIcon("gift"));
+        JButton btObs = tileButton("Inventario de obsequios", MenuTheme.textIcon("✧"));
         btObs.addActionListener(_e -> showCard(CARD_INV_OBS, "Inventario de obsequios"));
 
         center.add(btArt);
