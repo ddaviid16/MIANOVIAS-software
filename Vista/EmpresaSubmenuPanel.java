@@ -13,29 +13,33 @@ public class EmpresaSubmenuPanel extends JPanel {
     private static final String CARD_EMPRESA_FOLIOS   = "Asignación de Folios";
     private static final String CARD_EMPRESA_ASESORES = "Empleados";
     private static final String CARD_EMPRESA_CONDICIONES = "Condiciones de venta";
+    private static final String CARD_EMPRESA_PLANTILLA_CONDICIONES = "Plantilla hoja de condiciones";
 
     public EmpresaSubmenuPanel(Consumer<String> navigate) {
         this.navigate = navigate;
         setLayout(new BorderLayout());
 
-        // Cuadrícula limpia: 2 filas × 2 columnas
-        JPanel center = new JPanel(new GridLayout(2, 2, 18, 18));
+        JPanel center = new JPanel(new GridLayout(3, 2, 18, 18));
         center.setBorder(BorderFactory.createEmptyBorder(20, 60, 20, 60));
 
         JButton btInfo   = botonGrande("Información de la empresa");
         JButton btFolios = botonGrande("Asignación de Folios");
         JButton btAses   = botonGrande("Empleados");
         JButton btCond   = botonGrande("Condiciones de venta");
+        JButton btPlantilla = botonGrande("Plantilla hoja de condiciones");
 
         btInfo.addActionListener(_e   -> navigate.accept(CARD_EMPRESA_INFO));
         btFolios.addActionListener(_e -> navigate.accept(CARD_EMPRESA_FOLIOS));
         btAses.addActionListener(_e   -> navigate.accept(CARD_EMPRESA_ASESORES));
         btCond.addActionListener(_e   -> navigate.accept(CARD_EMPRESA_CONDICIONES));
+        btPlantilla.addActionListener(_e -> navigate.accept(CARD_EMPRESA_PLANTILLA_CONDICIONES));
 
         center.add(btInfo);
         center.add(btFolios);
         center.add(btAses);
         center.add(btCond);
+        center.add(btPlantilla);
+        center.add(new JLabel());
 
         add(center, BorderLayout.CENTER);
     }

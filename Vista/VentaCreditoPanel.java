@@ -88,6 +88,7 @@ import Modelo.NotaDetalle;
 import Modelo.PagoFormas;
 import Utilidades.CatalogoCFDI;
 import Utilidades.TelefonosUI;
+import Utilidades.PlantillaCondicionesConfig;
 
 
 public class VentaCreditoPanel extends JPanel {
@@ -2016,10 +2017,7 @@ private Printable construirPrintableCondiciones(
         ? memoEditable
         : obtenerCondicionesPredeterminadas();
     
-    // Fallback por si la BD está vacía, basado en tu foto
-    final String P1_INTRO = "En MIANOVIAS, ¡te damos la bienvenida a vivir esta gran experiencia!";
-    final String P5_ACUERDO = "ESTOY DE ACUERDO:";
-    final String P6_FIRMA = "NOMBRE Y FIRMA DEL CLIENTE";
+    PlantillaCondicionesConfig.Datos cfg = PlantillaCondicionesConfig.cargar();
 
 
     return (g, pf, pageIndex) -> {
@@ -2041,7 +2039,7 @@ private Printable construirPrintableCondiciones(
         g2.setFont(bodyFont);
         
         // 1. Párrafo de Bienvenida
-        y = drawWrappedSimple(g2, P1_INTRO, x, y, w);
+        y = drawWrappedSimple(g2, cfg.intro, x, y, w);
         y += 18; // Espacio extra
 
         // === 2. Bloque de Datos (usando los helpers) ===
@@ -2066,7 +2064,7 @@ private Printable construirPrintableCondiciones(
         String vCadera = vars.getOrDefault("cadera", "");
 
         // Dibujar los campos
-        y = drawFieldLine(g2, x, y, w, "NOMBRE DE LA NOVIA:", vNombre);
+        y = drawFieldLine(g2, x, y, w, cfg.lblNombreNovia, vNombre);
         y = drawTwoColsLine(g2, x, y, w, "FECHA DE COMPRA:", vCompra, "FECHA DE EVENTO:", vEvento);
         y = drawThreeColsLine(g2, x, y, w, 
             "MODELO:", vModelo, 
@@ -2108,13 +2106,13 @@ private Printable construirPrintableCondiciones(
         g2.setFont(labelFont);
         
         // Dibuja "ESTOY DE ACUERDO" SIN línea
-        g2.drawString(P5_ACUERDO, x, y + g2.getFontMetrics().getAscent());
+        g2.drawString("ESTOY DE ACUERDO:", x, y + g2.getFontMetrics().getAscent());
         y += 18; // Avanza una línea
         
         y += 36; // Espacio grande antes de la firma
         
         // Dibuja "NOMBRE Y FIRMA" CON línea
-        y = drawFieldLine(g2, x, y, w, P6_FIRMA, "");
+        y = drawFieldLine(g2, x, y, w, "NOMBRE Y FIRMA DEL CLIENTE", "");
         
         return Printable.PAGE_EXISTS;
     };

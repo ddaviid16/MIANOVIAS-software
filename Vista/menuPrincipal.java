@@ -138,6 +138,7 @@ public class menuPrincipal extends JFrame {
         registerLazyCard("Asignación de Folios", PanelFoliosIniciales::new);
         registerLazyCard("Empleados", AsesoresPanel::new);
         registerLazyCard("Condiciones de venta", CondicionesEmpresaPanel::new);
+        registerLazyCard("Plantilla hoja de condiciones", PlantillaCondicionesPanel::new);
 
         // Submenú Reportes (mismo patrón que Operaciones)
         addEagerCard(CARD_REPORTES, new ReportesPanel(card -> showCard(card, tituloDe(card))));
@@ -370,6 +371,7 @@ public class menuPrincipal extends JFrame {
             case "Información de la empresa":
             case "Asignación de Folios":
             case "Empleados":
+            case "Plantilla hoja de condiciones":
             case "Hoja de entrega":
             case "Agregar obsequios a nota":
             case "Cambio de código de artículo":
