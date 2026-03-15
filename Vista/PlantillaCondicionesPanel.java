@@ -10,8 +10,6 @@ public class PlantillaCondicionesPanel extends JPanel {
 
     private final JTextArea txtIntro = new JTextArea(4, 80);
     private final JTextField txtNombreNovia = new JTextField();
-    private final JTextField txtAcuerdo = new JTextField();
-    private final JTextField txtFirma = new JTextField();
 
     private final JButton btnEditar = new JButton("Editar");
     private final JButton btnGuardar = new JButton("Guardar cambios");
@@ -43,26 +41,10 @@ public class PlantillaCondicionesPanel extends JPanel {
         gc.gridy++;
         gc.gridx = 0;
         gc.weightx = 0;
-        form.add(new JLabel("Etiqueta campo novia:"), gc);
+        form.add(new JLabel("Linea \"Nombre de la novia\":"), gc);
         gc.gridx = 1;
         gc.weightx = 1;
         form.add(txtNombreNovia, gc);
-
-        gc.gridy++;
-        gc.gridx = 0;
-        gc.weightx = 0;
-        form.add(new JLabel("Texto de acuerdo:"), gc);
-        gc.gridx = 1;
-        gc.weightx = 1;
-        form.add(txtAcuerdo, gc);
-
-        gc.gridy++;
-        gc.gridx = 0;
-        gc.weightx = 0;
-        form.add(new JLabel("Texto de firma:"), gc);
-        gc.gridx = 1;
-        gc.weightx = 1;
-        form.add(txtFirma, gc);
 
         gc.gridy++;
         gc.gridx = 0;
@@ -71,11 +53,13 @@ public class PlantillaCondicionesPanel extends JPanel {
         gc.fill = GridBagConstraints.BOTH;
         gc.weighty = 1;
         JTextArea ayuda = new JTextArea(
-                "Notas:\n" +
-                "- Los valores (nombre, fechas, modelo, etc.) se seguirán llenando automáticamente.\n" +
-                "- Las líneas de subrayado permanecen iguales.\n" +
-                "- Esto NO requiere cambios de estructura en la base de datos.");
+                "NOTA: Al modificar estos campos, las siguientes impresiones y la re-impresión " +
+                "de notas se imprimirán con la modificación aplicada.\n" +
+                "Ejemplo: si cambias el mensaje superior hoy, las próximas notas y reimpresiones " +
+                "saldrán con ese nuevo texto.");
         ayuda.setEditable(false);
+        ayuda.setLineWrap(true);
+        ayuda.setWrapStyleWord(true);
         ayuda.setBackground(new Color(245, 245, 245));
         ayuda.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         form.add(ayuda, gc);
@@ -106,18 +90,14 @@ public class PlantillaCondicionesPanel extends JPanel {
         PlantillaCondicionesConfig.Datos d = PlantillaCondicionesConfig.cargar();
         txtIntro.setText(d.intro);
         txtNombreNovia.setText(d.lblNombreNovia);
-        txtAcuerdo.setText(d.lblAcuerdo);
-        txtFirma.setText(d.lblFirma);
         setEditMode(false);
     }
 
     private void guardarDatos() {
         String intro = txtIntro.getText().trim();
         String lblNovia = txtNombreNovia.getText().trim();
-        String lblAcuerdo = txtAcuerdo.getText().trim();
-        String lblFirma = txtFirma.getText().trim();
 
-        if (intro.isEmpty() || lblNovia.isEmpty() || lblAcuerdo.isEmpty() || lblFirma.isEmpty()) {
+        if (intro.isEmpty() || lblNovia.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Ningún campo puede estar vacío.");
             return;
         }
@@ -125,8 +105,6 @@ public class PlantillaCondicionesPanel extends JPanel {
         PlantillaCondicionesConfig.Datos d = new PlantillaCondicionesConfig.Datos();
         d.intro = intro;
         d.lblNombreNovia = lblNovia;
-        d.lblAcuerdo = lblAcuerdo;
-        d.lblFirma = lblFirma;
 
         try {
             PlantillaCondicionesConfig.guardar(d);
@@ -140,14 +118,10 @@ public class PlantillaCondicionesPanel extends JPanel {
     private void setEditMode(boolean enable) {
         txtIntro.setEditable(enable);
         txtNombreNovia.setEditable(enable);
-        txtAcuerdo.setEditable(enable);
-        txtFirma.setEditable(enable);
 
         Color bg = enable ? Color.WHITE : new Color(235, 235, 235);
         txtIntro.setBackground(bg);
         txtNombreNovia.setBackground(bg);
-        txtAcuerdo.setBackground(bg);
-        txtFirma.setBackground(bg);
 
         btnEditar.setEnabled(!enable);
         btnGuardar.setEnabled(enable);

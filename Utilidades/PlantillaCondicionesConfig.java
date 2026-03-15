@@ -20,8 +20,6 @@ public final class PlantillaCondicionesConfig {
     public static final class Datos {
         public String intro = "En MIANOVIAS, ¡te damos la bienvenida a vivir esta gran experiencia!";
         public String lblNombreNovia = "NOMBRE DE LA NOVIA:";
-        public String lblAcuerdo = "ESTOY DE ACUERDO:";
-        public String lblFirma = "NOMBRE Y FIRMA DEL CLIENTE";
     }
 
     public static Datos cargar() {
@@ -35,8 +33,6 @@ public final class PlantillaCondicionesConfig {
 
             out.intro = val(p, "intro", out.intro);
             out.lblNombreNovia = val(p, "lblNombreNovia", out.lblNombreNovia);
-            out.lblAcuerdo = val(p, "lblAcuerdo", out.lblAcuerdo);
-            out.lblFirma = val(p, "lblFirma", out.lblFirma);
         } catch (Exception ignore) {
             // Si no parsea, se mantienen defaults.
         }
@@ -47,8 +43,6 @@ public final class PlantillaCondicionesConfig {
         Properties p = new Properties();
         p.setProperty("intro", safe(d.intro));
         p.setProperty("lblNombreNovia", safe(d.lblNombreNovia));
-        p.setProperty("lblAcuerdo", safe(d.lblAcuerdo));
-        p.setProperty("lblFirma", safe(d.lblFirma));
 
         java.io.StringWriter sw = new java.io.StringWriter();
         p.store(sw, "Plantilla hoja condiciones");

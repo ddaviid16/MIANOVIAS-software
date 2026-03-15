@@ -947,13 +947,13 @@ private Printable construirPrintableCondiciones(
         g2.setFont(labelFont);
         
         // Dibuja "ESTOY DE ACUERDO" SIN línea
-        g2.drawString(cfg.lblAcuerdo, x, y + g2.getFontMetrics().getAscent());
+        g2.drawString("ESTOY DE ACUERDO:", x, y + g2.getFontMetrics().getAscent());
         y += 18; // Avanza una línea
         
         y += 36; // Espacio grande antes de la firma
         
         // Dibuja "NOMBRE Y FIRMA" CON línea
-        y = drawFieldLine(g2, x, y, w, cfg.lblFirma, "");
+        y = drawFieldLine(g2, x, y, w, "NOMBRE Y FIRMA DEL CLIENTE", "");
         
         return Printable.PAGE_EXISTS;
     };
