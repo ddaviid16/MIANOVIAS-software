@@ -99,7 +99,7 @@ public class ClientesPanel extends JPanel {
                 new JLabel("Edad:"), txtEdad);
 
         // ===== ¿Cómo se enteró? / Lugar del evento
-        cbComoSeEntero = new JComboBox<>(new String[]{"", "UBICACION", "RECOMENDACION", "GOOGLE MAPS", "TIKTOK"});
+        cbComoSeEntero = new JComboBox<>(new String[]{"", "UBICACION", "RECOMENDACION", "GOOGLE MAPS", "TIKTOK", "FACEBOOK", "INSTAGRAM"});
         cbLugar        = new JComboBox<>(new String[]{"", "HACIENDA", "JARDIN", "SALON", "PLAYA"});
         addRow(p, c, y++, new JLabel("¿Cómo se enteró?"), cbComoSeEntero,
                 new JLabel("Lugar del evento:"), cbLugar);
