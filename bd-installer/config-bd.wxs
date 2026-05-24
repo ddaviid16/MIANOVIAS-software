@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  config-bd.wxs — MSI auxiliar que configura MySQL y registra la conexion de Workbench.
+  Se compila en config-bd.msi y se encadena dentro del bundle de Burn.
+  Los scripts PowerShell se inyectan como Base64 en tiempo de compilacion.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+  <Product Id="*"
+           Name="MIANOVIAS — Configuracion Base de Datos"
+           Version="1.0.0.0"
+           Manufacturer="Local Deploy"
+           Language="1033"
+           UpgradeCode="{CF8A1D3E-4B92-4F7A-BC2E-A9D3C0E17F52}">
+
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"/>
+    <MajorUpgrade DowngradeErrorMessage="Ya hay una version mas reciente instalada."/>
+    <MediaTemplate EmbedCab="yes"/>
+
+    <!-- Directorio minimo requerido por WiX -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="MIANOVIAS BD Config">
+          <Component Id="CompPlaceholder" Guid="{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}">
+            <CreateFolder/>
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="MainFeature" Level="1">
+      <ComponentRef Id="CompPlaceholder"/>
+    </Feature>
+
+    <!-- ══════════════════════════════════════════════════════
+         CA 1 — Configurar contrasena de root en MySQL fresco
+         Deferred + Impersonate=yes: corre como el usuario que
+         inicio la instalacion (con privilegios elevados).
+    ══════════════════════════════════════════════════════ -->
+    <CustomAction Id="SetMySQLPwdCmd"
+                  Execute="immediate"
+                  Property="RunMySQLPwd"
+                  Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand $(var.MySQLPwdB64)"/>
+
+    <CustomAction Id="RunMySQLPwd"
+                  BinaryKey="WixCA"
+                  DllEntry="WixQuietExec64"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="ignore"/>
+
+    <!-- ══════════════════════════════════════════════════════
+         CA 2 — Registrar conexion MIANOVIAS en Workbench
+         Impersonate=yes garantiza que GetFolderPath devuelva
+         el AppData del usuario real, no el de SYSTEM.
+    ══════════════════════════════════════════════════════ -->
+    <CustomAction Id="SetWorkbenchCmd"
+                  Execute="immediate"
+                  Property="RunWorkbench"
+                  Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand $(var.WorkbenchB64)"/>
+
+    <CustomAction Id="RunWorkbench"
+                  BinaryKey="WixCA"
+                  DllEntry="WixQuietExec64"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="ignore"/>
+
+    <InstallExecuteSequence>
+      <Custom Action="SetMySQLPwdCmd" Before="RunMySQLPwd">NOT Installed</Custom>
+      <Custom Action="RunMySQLPwd"    After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="SetWorkbenchCmd" Before="RunWorkbench">NOT Installed</Custom>
+      <Custom Action="RunWorkbench"   After="RunMySQLPwd">NOT Installed</Custom>
+    </InstallExecuteSequence>
+
+  </Product>
+</Wix>

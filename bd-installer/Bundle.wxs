@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Bundle.wxs — Burn bootstrapper que encadena:
+    1. MySQL 8.0.43 Server (solo si no hay MySQL instalado)
+    2. config-bd.msi     (siempre: configura password + conexion Workbench)
+
+  Genera: setup-bd.exe
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:bal="http://schemas.microsoft.com/wix/BalExtension"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+  <Bundle Name="MIANOVIAS — Instalacion Base de Datos"
+          Version="1.0.0.0"
+          Manufacturer="Local Deploy"
+          UpgradeCode="{3F8B2C1A-9D47-4E6B-A5F3-C8E20B914D73}">
+
+    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.HyperlinkLicense">
+      <bal:WixStandardBootstrapperApplication
+          LicenseUrl=""
+          SuppressOptionsUI="yes"
+          SuppressRepair="yes"/>
+    </BootstrapperApplicationRef>
+
+    <!-- ── Deteccion de MySQL instalado ── -->
+    <util:RegistrySearch Id="SearchMySQL80"
+        Root="HKLM"
+        Key="SOFTWARE\MySQL AB\MySQL Server 8.0"
+        Value="Location"
+        Variable="MySQL80Location"
+        Result="value"
+        Win64="yes"/>
+
+    <util:RegistrySearch Id="SearchMySQL84"
+        Root="HKLM"
+        Key="SOFTWARE\MySQL AB\MySQL Server 8.4"
+        Value="Location"
+        Variable="MySQL84Location"
+        Result="value"
+        Win64="yes"/>
+
+    <util:RegistrySearch Id="SearchMySQL94"
+        Root="HKLM"
+        Key="SOFTWARE\MySQL AB\MySQL Server 9.4"
+        Value="Location"
+        Variable="MySQL94Location"
+        Result="value"
+        Win64="yes"/>
+
+    <Chain>
+
+      <!-- MySQL 8.0.43: se instala SOLO si no se detecta MySQL 8.0, 8.4 ni 9.4 -->
+      <MsiPackage Id="MySQLServer"
+                  Name="MySQL Server 8.0.43"
+                  SourceFile="mysql-8.0.43-winx64.msi"
+                  DisplayInternalUI="no"
+                  ForcePerMachine="yes"
+                  Vital="yes"
+                  InstallCondition="MySQL80Location = &quot;&quot; AND MySQL84Location = &quot;&quot; AND MySQL94Location = &quot;&quot;">
+        <!-- Instala el servicio con nombre MySQL y directorio por defecto -->
+        <MsiProperty Name="ALLUSERS"     Value="1"/>
+        <MsiProperty Name="SERVICENAME"  Value="MySQL"/>
+      </MsiPackage>
+
+      <!-- Configuracion (siempre se ejecuta): password + Workbench -->
+      <MsiPackage Id="ConfigBD"
+                  Name="Configuracion MIANOVIAS"
+                  SourceFile="config-bd.msi"
+                  DisplayInternalUI="no"
+                  ForcePerMachine="yes"
+                  Vital="yes"/>
+
+    </Chain>
+  </Bundle>
+</Wix>
