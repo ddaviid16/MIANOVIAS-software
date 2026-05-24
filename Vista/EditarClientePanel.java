@@ -132,7 +132,7 @@ p.add(new JLabel("Teléfono 1*:"), c);
                 new JLabel("Edad:"), txtEdad);
 
         // ===== ¿Cómo se enteró? / Lugar del evento
-        cbComoSeEntero = new JComboBox<>(new String[]{"", "UBICACION", "RECOMENDACION", "GOOGLE MAPS", "TIKTOK"});
+        cbComoSeEntero = new JComboBox<>(new String[]{"", "UBICACION", "RECOMENDACION", "GOOGLE MAPS", "TIKTOK", "FACEBOOK", "INSTAGRAM"});
         cbLugar        = new JComboBox<>(new String[]{"", "HACIENDA", "JARDIN", "SALON", "PLAYA"});
         addRow(p, c, y++, new JLabel("¿Cómo se enteró?"), cbComoSeEntero,
                 new JLabel("Lugar del evento:"), cbLugar);
@@ -525,17 +525,11 @@ p.add(new JLabel("Teléfono 1*:"), c);
     }
 
     private static String validarFechas(LocalDate evento, LocalDate p1, LocalDate p2, LocalDate entrega) {
-        LocalDate hoy = LocalDate.now();
         if (evento == null) return "La fecha de evento es obligatoria.";
 
-        if (!evento.isAfter(hoy))
-            return "La fecha de evento debe ser mayor a la fecha actual.";
-
         if (p1 != null) {
-            if (!p1.isAfter(hoy))
-                return "La fecha de prueba 1 debe ser mayor a la fecha actual.";
             if (!p1.isBefore(evento))
-                return "La fecha de prueba 1 debe ser menor a la fecha de evento.";
+                return "La fecha de prueba 1 debe ser anterior a la fecha de evento.";
         }
 
         if (p2 != null) {
@@ -544,14 +538,14 @@ p.add(new JLabel("Teléfono 1*:"), c);
             if (!p2.isAfter(p1))
                 return "La fecha de prueba 2 debe ser mayor a la fecha de prueba 1.";
             if (!p2.isBefore(evento))
-                return "La fecha de prueba 2 debe ser menor a la fecha de evento.";
+                return "La fecha de prueba 2 debe ser anterior a la fecha de evento.";
         }
 
         if (entrega != null) {
-            if (!entrega.isAfter(p2))
+            if (p2 != null && !entrega.isAfter(p2))
                 return "La fecha de entrega debe ser mayor a la fecha de prueba 2.";
             if (!entrega.isBefore(evento))
-                return "La fecha de entrega debe ser menor a la fecha de evento.";
+                return "La fecha de entrega debe ser anterior a la fecha de evento.";
         }
 
         return null;

@@ -1645,6 +1645,9 @@ private static class HojaDetallePrintable implements Printable {
             HEADER_PAGOS,
             ROW_PAGO,
             TOTAL_PAGOS,
+            TITLE_DEVOLUCIONES,
+            ROW_DEVOLUCION,
+            TOTAL_DEVOLUCIONES,
             SALDOS_RESUMEN
         }
         final Tipo tipo;
@@ -1818,13 +1821,31 @@ private static class HojaDetallePrintable implements Printable {
             }
         }
 
-        if (!pagosOrdenados.isEmpty()) {
+        // Separar pagos reales de devoluciones
+        List<PagoLinea> soloPagos = new ArrayList<>();
+        List<PagoLinea> soloDevoluciones = new ArrayList<>();
+        for (PagoLinea p : pagosOrdenados) {
+            if (p.esDevolucion) soloDevoluciones.add(p);
+            else soloPagos.add(p);
+        }
+
+        if (!soloPagos.isEmpty()) {
             lineas.add(new LineaMov(LineaMov.Tipo.TITLE_PAGOS));
             lineas.add(new LineaMov(LineaMov.Tipo.HEADER_PAGOS));
-            for (PagoLinea p : pagosOrdenados) {
+            for (PagoLinea p : soloPagos) {
                 lineas.add(new LineaMov(LineaMov.Tipo.ROW_PAGO, p));
             }
             lineas.add(new LineaMov(LineaMov.Tipo.TOTAL_PAGOS));
+        }
+
+        if (!soloDevoluciones.isEmpty()) {
+            lineas.add(new LineaMov(LineaMov.Tipo.SPACE));
+            lineas.add(new LineaMov(LineaMov.Tipo.TITLE_DEVOLUCIONES));
+            lineas.add(new LineaMov(LineaMov.Tipo.HEADER_PAGOS));
+            for (PagoLinea p : soloDevoluciones) {
+                lineas.add(new LineaMov(LineaMov.Tipo.ROW_DEVOLUCION, p));
+            }
+            lineas.add(new LineaMov(LineaMov.Tipo.TOTAL_DEVOLUCIONES));
         }
 
 
@@ -2138,7 +2159,7 @@ private static class HojaDetallePrintable implements Printable {
                 }
                 case TITLE_PAGOS: {
                     g2.setFont(fTitulo);
-                    g2.drawString("PAGOS Y DEVOLUCIONES", x, y);
+                    g2.drawString("PAGOS", x, y);
                     break;
                 }
                 case HEADER_PAGOS: {
@@ -2165,11 +2186,28 @@ private static class HojaDetallePrintable implements Printable {
                 }
                 case TOTAL_PAGOS: {
                     g2.setFont(fTitulo.deriveFont(10f));
-
-                    String txt = "TOTAL PAGOS: " + formatMoney(totalPagos)
-                            + "    TOTAL DEVOLUCIONES: " + formatMoney(totalDevoluciones);
-
-                    g2.drawString(txt, x, y);
+                    g2.drawString("TOTAL PAGOS: " + formatMoney(totalPagos), x, y);
+                    break;
+                }
+                case TITLE_DEVOLUCIONES: {
+                    g2.setFont(fTitulo);
+                    g2.drawString("DEVOLUCIONES", x, y);
+                    break;
+                }
+                case ROW_DEVOLUCION: {
+                    g2.setFont(fNormal);
+                    PagoLinea p = ln.pago;
+                    int xx = x;
+                    g2.drawString(valueOrEmpty(p.folio),            xx, y); xx += colFolio2;
+                    g2.drawString(formatDate(p.fecha),              xx, y); xx += colFecha2;
+                    g2.drawString(trimTo(g2, valueOrEmpty(p.concepto),
+                                        colConcepto - 4),          xx, y); xx += colConcepto;
+                    g2.drawString(formatMoney(p.importe),           xx, y);
+                    break;
+                }
+                case TOTAL_DEVOLUCIONES: {
+                    g2.setFont(fTitulo.deriveFont(10f));
+                    g2.drawString("TOTAL DEVOLUCIONES: " + formatMoney(totalDevoluciones), x, y);
                     break;
                 }
                 case SALDOS_RESUMEN: {
