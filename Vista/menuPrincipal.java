@@ -49,12 +49,14 @@ public class menuPrincipal extends JFrame {
         miCerrarSesion.addActionListener(_e -> cerrarSesion());
 
         JMenuItem miRespaldo = new JMenuItem("Respaldar base de datos…");
-        miRespaldo.addActionListener(_e ->
-            new BackupDialog((java.awt.Frame) SwingUtilities.getWindowAncestor(this)).setVisible(true));
+        miRespaldo.addActionListener(_e -> {
+            if (Utilidades.SeguridadUI.pedirYValidarClave(this))
+                new BackupDialog((java.awt.Frame) SwingUtilities.getWindowAncestor(this)).setVisible(true);
+        });
 
-        menuSis.add(miRespaldo);
-        menuSis.addSeparator();
         menuSis.add(miCerrarSesion);
+        menuSis.addSeparator();
+        menuSis.add(miRespaldo);
         mb.add(menuSis);
         setJMenuBar(mb);
 
