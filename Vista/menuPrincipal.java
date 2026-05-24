@@ -48,6 +48,12 @@ public class menuPrincipal extends JFrame {
 
         miCerrarSesion.addActionListener(_e -> cerrarSesion());
 
+        JMenuItem miRespaldo = new JMenuItem("Respaldar base de datos…");
+        miRespaldo.addActionListener(_e ->
+            new BackupDialog((java.awt.Frame) SwingUtilities.getWindowAncestor(this)).setVisible(true));
+
+        menuSis.add(miRespaldo);
+        menuSis.addSeparator();
         menuSis.add(miCerrarSesion);
         mb.add(menuSis);
         setJMenuBar(mb);
@@ -398,6 +404,7 @@ public static void main(String[] args) {
     } catch (Exception ignore) {}
 
     Conexion.BootstrapDB.ensure();
+    Conexion.MigradorBD.migrate();
 
     SwingUtilities.invokeLater(() -> {
 
