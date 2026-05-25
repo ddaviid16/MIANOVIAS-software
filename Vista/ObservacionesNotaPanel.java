@@ -4,6 +4,8 @@ import Controlador.NotasDAO;
 import Controlador.clienteDAO;
 import Modelo.ClienteResumen;
 import Modelo.Nota;
+import Modelo.NotaDetalle;
+import Utilidades.TelefonosUI;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -35,9 +37,16 @@ public class ObservacionesNotaPanel extends JPanel {
     };
     private final JTable tbNotas = new JTable(modelNotas);
 
-    // Info de nota cargada + observaciones
+    // Tabla de artículos de la nota seleccionada
+    private final DefaultTableModel modelDetalle = new DefaultTableModel(
+            new String[]{"Artículo", "Marca", "Talla", "Color", "Precio", "Subtotal", "St."}, 0) {
+        @Override public boolean isCellEditable(int r, int c) { return false; }
+    };
+    private final JTable tbDetalle = new JTable(modelDetalle);
+
+    // Info + observaciones
     private final JLabel    lblInfo    = new JLabel("Sin nota cargada");
-    private final JTextArea txaObs     = new JTextArea(8, 30);
+    private final JTextArea txaObs     = new JTextArea(5, 30);
     private final JButton   btnGuardar = new JButton("Guardar observaciones");
     private final JLabel    lblStatus  = new JLabel(" ");
 
@@ -67,10 +76,11 @@ public class ObservacionesNotaPanel extends JPanel {
         top.add(filaTel);
         add(top, BorderLayout.NORTH);
 
-        // ── Tabla de notas ────────────────────────────────────────────────────
+        TelefonosUI.instalar(txtTelefono);
+
+        // ── Tabla de notas (izquierda) ────────────────────────────────────────
         tbNotas.setRowHeight(22);
         tbNotas.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        // columna "#" oculta; contiene numero_nota para uso interno
         tbNotas.getColumnModel().getColumn(0).setMinWidth(0);
         tbNotas.getColumnModel().getColumn(0).setMaxWidth(0);
         tbNotas.getColumnModel().getColumn(0).setPreferredWidth(0);
@@ -79,26 +89,44 @@ public class ObservacionesNotaPanel extends JPanel {
         panelNotas.setBorder(BorderFactory.createTitledBorder("Notas del cliente"));
         panelNotas.add(new JScrollPane(tbNotas), BorderLayout.CENTER);
 
-        // ── Panel de observaciones ────────────────────────────────────────────
-        JPanel panelObs = new JPanel(new BorderLayout(6, 6));
-        panelObs.setBorder(BorderFactory.createTitledBorder("Observaciones de la nota"));
+        // ── Panel derecho: info + detalle + observaciones ─────────────────────
+        JPanel panelDerecho = new JPanel(new BorderLayout(6, 6));
+        panelDerecho.setBorder(BorderFactory.createTitledBorder("Detalle de la nota"));
 
         lblInfo.setFont(lblInfo.getFont().deriveFont(Font.BOLD));
-        panelObs.add(lblInfo, BorderLayout.NORTH);
+        panelDerecho.add(lblInfo, BorderLayout.NORTH);
+
+        // Tabla de artículos
+        tbDetalle.setRowHeight(21);
+        tbDetalle.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        tbDetalle.getColumnModel().getColumn(6).setPreferredWidth(30); // columna St.
+        JPanel panelDetalle = new JPanel(new BorderLayout());
+        panelDetalle.setBorder(BorderFactory.createTitledBorder("Artículos de la nota"));
+        panelDetalle.add(new JScrollPane(tbDetalle), BorderLayout.CENTER);
+
+        // Área de observaciones
+        JPanel panelObsForm = new JPanel(new BorderLayout(4, 4));
+        panelObsForm.setBorder(BorderFactory.createTitledBorder("Observaciones"));
 
         txaObs.setLineWrap(true);
         txaObs.setWrapStyleWord(true);
         txaObs.setEnabled(false);
-        panelObs.add(new JScrollPane(txaObs), BorderLayout.CENTER);
+        panelObsForm.add(new JScrollPane(txaObs), BorderLayout.CENTER);
 
         btnGuardar.setEnabled(false);
         btnGuardar.setFont(btnGuardar.getFont().deriveFont(Font.BOLD));
         JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 4));
         panelBoton.add(btnGuardar);
-        panelObs.add(panelBoton, BorderLayout.SOUTH);
+        panelObsForm.add(panelBoton, BorderLayout.SOUTH);
 
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panelNotas, panelObs);
-        split.setResizeWeight(0.42);
+        // Split vertical: artículos arriba, observaciones abajo
+        JSplitPane innerSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, panelDetalle, panelObsForm);
+        innerSplit.setResizeWeight(0.55);
+        panelDerecho.add(innerSplit, BorderLayout.CENTER);
+
+        // ── Split horizontal: lista de notas | detalle+obs ────────────────────
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panelNotas, panelDerecho);
+        split.setResizeWeight(0.36);
         add(split, BorderLayout.CENTER);
 
         // ── Estado ────────────────────────────────────────────────────────────
@@ -152,7 +180,7 @@ public class ObservacionesNotaPanel extends JPanel {
     // ── Búsqueda por teléfono ──────────────────────────────────────────────────
 
     private void buscarPorTelefonoAccion() {
-        String tel = txtTelefono.getText().trim();
+        String tel = TelefonosUI.soloDigitos(txtTelefono.getText().trim());
         if (tel.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                     "Escribe el teléfono del cliente.", "Atención", JOptionPane.WARNING_MESSAGE);
@@ -168,21 +196,22 @@ public class ObservacionesNotaPanel extends JPanel {
             List<NotasDAO.NotaResumen> lista = dao.listarNotasPorTelefonoResumen(tel);
             if (lista.isEmpty()) {
                 lblStatus.setForeground(new Color(90, 90, 90));
-                lblStatus.setText("No se encontraron notas para el teléfono: " + tel);
+                lblStatus.setText("No se encontraron notas para el teléfono: "
+                        + TelefonosUI.formatear(tel));
                 return;
             }
             for (NotasDAO.NotaResumen r : lista) {
                 modelNotas.addRow(new Object[]{
                         r.numero,
-                        r.folio   != null ? r.folio : "",
+                        r.folio  != null ? r.folio : "",
                         r.tipo,
-                        r.fecha   != null ? r.fecha.format(FMT) : "—",
-                        r.total   != null ? String.format("$%,.2f", r.total) : "—",
+                        r.fecha  != null ? r.fecha.format(FMT) : "—",
+                        r.total  != null ? String.format("$%,.2f", r.total) : "—",
                         r.status
                 });
             }
             lblStatus.setForeground(new Color(90, 90, 90));
-            lblStatus.setText(lista.size() + " nota(s) encontrada(s). Selecciona una para ver sus observaciones.");
+            lblStatus.setText(lista.size() + " nota(s) encontrada(s). Selecciona una para ver su detalle.");
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this,
                     "Error al buscar notas: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -198,9 +227,9 @@ public class ObservacionesNotaPanel extends JPanel {
         dlg.setVisible(true);
         ClienteResumen cr = dlg.getSeleccionado();
         if (cr == null) return;
-        String tel = Utilidades.TelefonosUI.soloDigitos(cr.getTelefono1());
+        String tel = TelefonosUI.soloDigitos(cr.getTelefono1());
         if (tel != null && !tel.isEmpty()) {
-            txtTelefono.setText(tel);
+            txtTelefono.setText(tel); // el filtro lo formatea automáticamente
             buscarPorTelefono(tel);
         } else {
             JOptionPane.showMessageDialog(this,
@@ -209,7 +238,7 @@ public class ObservacionesNotaPanel extends JPanel {
         }
     }
 
-    // ── Selección en tabla ─────────────────────────────────────────────────────
+    // ── Selección en tabla de notas ────────────────────────────────────────────
 
     private void cargarNotaSeleccionada() {
         int fila = tbNotas.getSelectedRow();
@@ -226,6 +255,37 @@ public class ObservacionesNotaPanel extends JPanel {
         numeroNotaActual = num;
         lblInfo.setText("Nota #" + num + "  |  Folio: " + folio
                 + "  |  Tipo: " + tipo + "  |  Fecha: " + fecha + "  |  Total: " + total);
+
+        // ── Cargar artículos de la nota ────────────────────────────────────────
+        modelDetalle.setRowCount(0);
+        try {
+            List<NotaDetalle> detalles = dao.listarDetalleDeNota(num);
+            for (NotaDetalle d : detalles) {
+                modelDetalle.addRow(new Object[]{
+                    d.getArticulo() != null ? d.getArticulo() : "",
+                    d.getMarca()    != null ? d.getMarca()    : "",
+                    d.getTalla()    != null ? d.getTalla()    : "",
+                    d.getColor()    != null ? d.getColor()    : "",
+                    d.getPrecio()   != null ? String.format("$%,.2f", d.getPrecio())    : "",
+                    d.getSubtotal() != null ? String.format("$%,.2f", d.getSubtotal()) : "",
+                    d.getStatus()   != null ? d.getStatus()  : "A"
+                });
+            }
+        } catch (SQLException ex) {
+            lblStatus.setForeground(Color.RED);
+            lblStatus.setText("Error al cargar detalle: " + ex.getMessage());
+        }
+
+        // ── Las notas tipo AB no llevan observaciones ──────────────────────────
+        boolean esAB = "AB".equalsIgnoreCase(tipo != null ? tipo.trim() : "");
+        if (esAB) {
+            txaObs.setText("Las notas de tipo Abono no requieren observaciones.");
+            txaObs.setEnabled(false);
+            btnGuardar.setEnabled(false);
+            return;
+        }
+
+        // ── Cargar observaciones existentes ────────────────────────────────────
         try {
             String obs = dao.obtenerObservacionesDeNota(num);
             txaObs.setText(obs);
@@ -242,6 +302,7 @@ public class ObservacionesNotaPanel extends JPanel {
     private void limpiarNota() {
         numeroNotaActual = null;
         lblInfo.setText("Sin nota cargada");
+        modelDetalle.setRowCount(0);
         txaObs.setText("");
         txaObs.setEnabled(false);
         btnGuardar.setEnabled(false);
@@ -300,9 +361,9 @@ public class ObservacionesNotaPanel extends JPanel {
             botones.add(btnCancel);
             botones.add(btnSel);
 
-            main.add(top,                  BorderLayout.NORTH);
+            main.add(top,                    BorderLayout.NORTH);
             main.add(new JScrollPane(tabla), BorderLayout.CENTER);
-            main.add(botones,              BorderLayout.SOUTH);
+            main.add(botones,                BorderLayout.SOUTH);
             setContentPane(main);
             setSize(800, 400);
 

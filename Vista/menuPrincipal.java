@@ -93,6 +93,16 @@ public class menuPrincipal extends JFrame {
         add(header, BorderLayout.NORTH);
         add(mainPanel, BorderLayout.CENTER);
 
+        // ── Header oscuro elegante ──────────────────────────────────────────
+        Color hdrBg = new Color(48, 38, 44);
+        header.setBackground(hdrBg);
+        left.setBackground(hdrBg);
+        title.setForeground(new Color(255, 248, 244));
+        btBack.setContentAreaFilled(false);
+        btBack.setBorderPainted(false);
+        btBack.setForeground(new Color(255, 218, 210));
+        btBack.setFont(btBack.getFont().deriveFont(Font.BOLD, 14f));
+
         // ====== Tarjetas
         addEagerCard(CARD_HOME, buildHomeCard());           // Menú principal
 
@@ -177,11 +187,11 @@ public class menuPrincipal extends JFrame {
         JPanel center = new JPanel(new GridLayout(2, 3, 18, 18));
         center.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JButton btReportes   = botonGrande("Reportes");
-        JButton btEmpresa     = botonGrande("Empresa");
-        JButton btClientes    = botonGrande("Clientes");
-        JButton btInventario  = botonGrande("Inventario");
-        JButton btOperaciones = botonGrande("Operaciones");
+        JButton btReportes    = botonIcono("≡", "Reportes");
+        JButton btEmpresa     = botonIcono("⚙", "Empresa");
+        JButton btClientes    = botonIcono("♥", "Clientes");
+        JButton btInventario  = botonIcono("■", "Inventario");
+        JButton btOperaciones = botonIcono("★", "Operaciones");
 
         btEmpresa.addActionListener(_e   -> showCard(CARD_EMPRESA,   "Empresa"));
         btClientes.addActionListener(_e  -> showCard(CARD_CLIENTES,  "Clientes"));
@@ -392,10 +402,21 @@ public class menuPrincipal extends JFrame {
     }
 
     private JButton botonGrande(String texto) {
-        JButton b = new JButton(texto);
+        JButton b = new JButton("<html><center>" + texto + "</center></html>");
         b.setFont(b.getFont().deriveFont(Font.BOLD, 18f));
         b.setFocusPainted(false);
         b.setPreferredSize(new Dimension(220, 120));
+        return b;
+    }
+
+    private JButton botonIcono(String icono, String texto) {
+        JButton b = new JButton(
+            "<html><center><font size='6'>" + icono + "</font><br>"
+            + "<b><font size='4'>" + texto + "</font></b></center></html>"
+        );
+        b.setFont(b.getFont().deriveFont(Font.PLAIN, 16f));
+        b.setFocusPainted(false);
+        b.setPreferredSize(new Dimension(220, 130));
         return b;
     }
 
@@ -405,14 +426,15 @@ public static void main(String[] args) {
         for (UIManager.LookAndFeelInfo i : UIManager.getInstalledLookAndFeels()) {
             if ("Nimbus".equals(i.getName())) {
                 // Paleta rosa-malva — coherente con los colores de la pantalla de carga
-                UIManager.put("nimbusBase",                 new Color(159, 107, 155));
-                UIManager.put("nimbusBlueGrey",             new Color(196, 174, 203));
-                UIManager.put("control",                    new Color(248, 244, 250));
-                UIManager.put("nimbusLightBackground",      new Color(255, 253, 255));
-                UIManager.put("nimbusFocus",                new Color(175, 100, 170));
-                UIManager.put("nimbusSelectionBackground",  new Color(180, 115, 175));
-                UIManager.put("nimbusSelectedText",         Color.WHITE);
-                UIManager.put("info",                       new Color(255, 248, 235));
+                // Rosa frambuesa profundo — elegante, maduro, feminino
+                UIManager.put("nimbusBase",                new Color(148, 55, 82));
+                UIManager.put("nimbusBlueGrey",            new Color(132, 112, 122));
+                UIManager.put("control",                   new Color(252, 246, 242));
+                UIManager.put("nimbusLightBackground",     new Color(255, 252, 249));
+                UIManager.put("nimbusFocus",               new Color(185, 50, 90));
+                UIManager.put("nimbusSelectionBackground", new Color(145, 42, 72));
+                UIManager.put("nimbusSelectedText",        Color.WHITE);
+                UIManager.put("info",                      new Color(255, 249, 235));
                 UIManager.setLookAndFeel(i.getClassName());
                 break;
             }
