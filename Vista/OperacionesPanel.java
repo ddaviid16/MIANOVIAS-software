@@ -17,6 +17,7 @@ public class OperacionesPanel extends JPanel {
     private static final String CARD_HOJA_ENTREGA    = "Hoja de entrega";
     private static final String CARD_AGREGAR_OBSEQUIOS = "Agregar obsequios a nota";
     private static final String CARD_CAMBIO_CODIGO_ART    = "Cambio de código de artículo";
+    private static final String CARD_OBSERVACIONES        = "Agregar observaciones a nota";
 
     public OperacionesPanel(Consumer<String> navigate) {
         this.navigate = navigate;
@@ -34,7 +35,8 @@ public class OperacionesPanel extends JPanel {
         JButton btHojaEntrega = botonGrande("Hoja de entrega");
         JButton btAgregarObsequios = botonGrande("Agregar obsequios a nota");
         JButton btCambioCodigoArticulo = botonGrande("Cambio de código de artículo");
-        JButton btAgregarFactura = botonGrande("Agregar datos de factura");
+        JButton btAgregarFactura   = botonGrande("Agregar datos de factura");
+        JButton btObservaciones   = botonGrande("Agregar observaciones a nota");
 
         // Navegación (cambia por tus constantes si son distintas)
         btContado.addActionListener(_e    -> navigate.accept(CARD_VENTA_CONTADO));
@@ -46,8 +48,8 @@ public class OperacionesPanel extends JPanel {
         btHojaEntrega.addActionListener(_e-> navigate.accept(CARD_HOJA_ENTREGA));
         btAgregarObsequios.addActionListener(_e -> navigate.accept(CARD_AGREGAR_OBSEQUIOS));
         btCambioCodigoArticulo.addActionListener(_e -> navigate.accept(CARD_CAMBIO_CODIGO_ART));
-        btAgregarFactura.addActionListener(_e -> navigate.accept("Agregar datos de factura"));
-        
+        btAgregarFactura.addActionListener(_e  -> navigate.accept("Agregar datos de factura"));
+        btObservaciones.addActionListener(_e  -> navigate.accept(CARD_OBSERVACIONES));
 
         center.add(btContado);
         center.add(btCredito);
@@ -59,6 +61,7 @@ public class OperacionesPanel extends JPanel {
         center.add(btAgregarObsequios);
         center.add(btCambioCodigoArticulo);
         center.add(btAgregarFactura);
+        center.add(btObservaciones);
 
         add(center, BorderLayout.CENTER);
     }
