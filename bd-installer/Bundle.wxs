@@ -10,7 +10,7 @@
      xmlns:bal="http://schemas.microsoft.com/wix/BalExtension"
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
-  <Bundle Name="MIANOVIAS — Instalacion Base de Datos"
+  <Bundle Name="MIANOVIAS - Instalacion Base de Datos"
           Version="1.0.0.0"
           Manufacturer="Local Deploy"
           UpgradeCode="{3F8B2C1A-9D47-4E6B-A5F3-C8E20B914D73}">

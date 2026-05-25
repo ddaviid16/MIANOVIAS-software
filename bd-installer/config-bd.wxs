@@ -1,17 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-  config-bd.wxs — MSI auxiliar que configura MySQL y registra la conexion de Workbench.
-  Se compila en config-bd.msi y se encadena dentro del bundle de Burn.
-  Los scripts PowerShell se inyectan como Base64 en tiempo de compilacion.
--->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
   <Product Id="*"
-           Name="MIANOVIAS — Configuracion Base de Datos"
+           Name="MIANOVIAS - Configuracion Base de Datos"
            Version="1.0.0.0"
            Manufacturer="Local Deploy"
            Language="1033"
+           Codepage="1252"
            UpgradeCode="{CF8A1D3E-4B92-4F7A-BC2E-A9D3C0E17F52}">
 
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"/>
@@ -33,11 +29,8 @@
       <ComponentRef Id="CompPlaceholder"/>
     </Feature>
 
-    <!-- ══════════════════════════════════════════════════════
-         CA 1 — Configurar contrasena de root en MySQL fresco
-         Deferred + Impersonate=yes: corre como el usuario que
-         inicio la instalacion (con privilegios elevados).
-    ══════════════════════════════════════════════════════ -->
+    <!-- CA 1: Configurar contrasena de root en MySQL fresco.
+         Deferred + Impersonate=yes: corre como el usuario que inicio la instalacion. -->
     <CustomAction Id="SetMySQLPwdCmd"
                   Execute="immediate"
                   Property="RunMySQLPwd"
@@ -50,11 +43,8 @@
                   Impersonate="yes"
                   Return="ignore"/>
 
-    <!-- ══════════════════════════════════════════════════════
-         CA 2 — Registrar conexion MIANOVIAS en Workbench
-         Impersonate=yes garantiza que GetFolderPath devuelva
-         el AppData del usuario real, no el de SYSTEM.
-    ══════════════════════════════════════════════════════ -->
+    <!-- CA 2: Registrar conexion MIANOVIAS en Workbench.
+         Impersonate=yes garantiza que GetFolderPath devuelva el AppData real del usuario. -->
     <CustomAction Id="SetWorkbenchCmd"
                   Execute="immediate"
                   Property="RunWorkbench"
