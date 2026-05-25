@@ -1010,4 +1010,19 @@ public String obtenerNombreAsesor(int idAsesor) throws SQLException {
         }
     }
 
+    /** Guarda (inserta o reemplaza) las observaciones de una nota. */
+    public void guardarObservacionesDeNota(int numeroNota, String texto) throws SQLException {
+        String sql =
+            "INSERT INTO notas_observaciones (numero_nota, observaciones) " +
+            "VALUES (?, ?) " +
+            "ON DUPLICATE KEY UPDATE observaciones = ?";
+        try (Connection cn = Conecta.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setInt(1, numeroNota);
+            ps.setString(2, texto);
+            ps.setString(3, texto);
+            ps.executeUpdate();
+        }
+    }
+
     }

@@ -139,6 +139,7 @@ public class menuPrincipal extends JFrame {
         registerLazyCard("Agregar obsequios a nota", AgregarObsequiosNotaPanel::new);
         registerLazyCard("Cambio de código de artículo", CambioCodigoArticuloPanel::new);
         registerLazyCard("Agregar datos de factura", FacturarPorFolioPanel::new);
+        registerLazyCard("Agregar observaciones a nota", ObservacionesNotaPanel::new);
 
         // Submenú Empresa (mismo patrón que Operaciones)
         addEagerCard(CARD_EMPRESA, new EmpresaSubmenuPanel(card -> showCard(card, tituloDe(card))));
@@ -384,7 +385,7 @@ public class menuPrincipal extends JFrame {
             case "Agregar obsequios a nota":
             case "Cambio de código de artículo":
             case "Agregar datos de factura":
-            
+            case "Agregar observaciones a nota":
                 return card;
         }
         return card;
@@ -401,8 +402,21 @@ public class menuPrincipal extends JFrame {
     // ====== Main
 public static void main(String[] args) {
     try {
-        for (UIManager.LookAndFeelInfo i : UIManager.getInstalledLookAndFeels())
-            if ("Nimbus".equals(i.getName())) { UIManager.setLookAndFeel(i.getClassName()); break; }
+        for (UIManager.LookAndFeelInfo i : UIManager.getInstalledLookAndFeels()) {
+            if ("Nimbus".equals(i.getName())) {
+                // Paleta rosa-malva — coherente con los colores de la pantalla de carga
+                UIManager.put("nimbusBase",                 new Color(159, 107, 155));
+                UIManager.put("nimbusBlueGrey",             new Color(196, 174, 203));
+                UIManager.put("control",                    new Color(248, 244, 250));
+                UIManager.put("nimbusLightBackground",      new Color(255, 253, 255));
+                UIManager.put("nimbusFocus",                new Color(175, 100, 170));
+                UIManager.put("nimbusSelectionBackground",  new Color(180, 115, 175));
+                UIManager.put("nimbusSelectedText",         Color.WHITE);
+                UIManager.put("info",                       new Color(255, 248, 235));
+                UIManager.setLookAndFeel(i.getClassName());
+                break;
+            }
+        }
     } catch (Exception ignore) {}
 
     Conexion.BootstrapDB.ensure();
