@@ -93,15 +93,6 @@ public class menuPrincipal extends JFrame {
         add(header, BorderLayout.NORTH);
         add(mainPanel, BorderLayout.CENTER);
 
-        // ── Header oscuro neutro ─────────────────────────────────────────────
-        Color hdrBg = new Color(40, 40, 40);
-        header.setBackground(hdrBg);
-        left.setBackground(hdrBg);
-        title.setForeground(new Color(255, 255, 255));
-        btBack.setContentAreaFilled(false);
-        btBack.setBorderPainted(false);
-        btBack.setForeground(new Color(200, 200, 200));
-        btBack.setFont(btBack.getFont().deriveFont(Font.BOLD, 14f));
 
         // ====== Tarjetas
         addEagerCard(CARD_HOME, buildHomeCard());           // Menú principal
@@ -415,15 +406,6 @@ public static void main(String[] args) {
         for (UIManager.LookAndFeelInfo i : UIManager.getInstalledLookAndFeels()) {
             if ("Nimbus".equals(i.getName())) {
                 // Paleta rosa-malva — coherente con los colores de la pantalla de carga
-                // Escala de grises neutra — elegante, corporativo
-                UIManager.put("nimbusBase",                new Color(50,  50,  50));
-                UIManager.put("nimbusBlueGrey",            new Color(102, 102, 102));
-                UIManager.put("control",                   new Color(220, 220, 220));
-                UIManager.put("nimbusLightBackground",     new Color(255, 255, 255));
-                UIManager.put("nimbusFocus",               new Color(30,  30,  30));
-                UIManager.put("nimbusSelectionBackground", new Color(50,  50,  50));
-                UIManager.put("nimbusSelectedText",        Color.WHITE);
-                UIManager.put("info",                      new Color(252, 252, 252));
                 UIManager.setLookAndFeel(i.getClassName());
                 break;
             }
