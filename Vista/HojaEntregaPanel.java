@@ -399,8 +399,24 @@ private void cargarFoliosPorTelefono() {
             }
         }
 
+        // Si la nota actual no tiene vestido, buscar en otras notas liquidadas del cliente
         if (principal == null) {
-            principal = det.get(0);
+            NotaDetalle vestidoOtraNota = buscarVestidoEnOtrasNotas(n);
+            if (vestidoOtraNota != null) {
+                // Todos los artículos de la nota actual son accesorios/otros
+                otros.setLength(0);
+                for (NotaDetalle d : det) {
+                    String articulo = n(d.getArticulo());
+                    if (!articulo.isBlank()) {
+                        if (otros.length() > 0) otros.append("\n");
+                        otros.append(articulo);
+                    }
+                }
+                principal = vestidoOtraNota;
+            } else {
+                // Sin vestido en ninguna nota: usar el primer artículo como fallback
+                principal = det.get(0);
+            }
         }
 
         if (principal != null) {
@@ -410,6 +426,31 @@ private void cargarFoliosPorTelefono() {
         }
 
         txtOtrosProductos.setText(otros.toString());
+    }
+
+    /**
+     * Busca el primer artículo de tipo VESTIDO en otras notas liquidadas del mismo
+     * cliente. Se invoca cuando la nota actual no contiene ningún vestido (p.ej. es
+     * una nota de accesorios comprados posteriormente).
+     */
+    private NotaDetalle buscarVestidoEnOtrasNotas(Nota notaCurrent) {
+        try {
+            String tel = notaCurrent.getTelefono();
+            if (tel == null || tel.isBlank()) return null;
+            tel = Utilidades.TelefonosUI.soloDigitos(tel);
+
+            List<Nota> otras = notasDAO.listarNotasLiquidadasPorTelefono(tel);
+            for (Nota otra : otras) {
+                if (otra.getNumeroNota().equals(notaCurrent.getNumeroNota())) continue;
+                List<NotaDetalle> detOtra = notasDAO.listarDetalleDeNota(otra.getNumeroNota());
+                for (NotaDetalle d : detOtra) {
+                    if (n(d.getArticulo()).toUpperCase().contains("VESTIDO")) {
+                        return d;
+                    }
+                }
+            }
+        } catch (Exception ignore) {}
+        return null;
     }
 
     // ================== IMPRESIÓN ==================
