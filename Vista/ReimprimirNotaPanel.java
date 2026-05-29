@@ -359,7 +359,96 @@ private String fechaLarga(java.time.LocalDate f) {
         }
     }
 
-private void cargarNotas() {
+// ──────────────────────────────────────────────────────────────────────────
+    /**
+     * Reimprimir una nota dado su folio. Puede llamarse desde paneles externos
+     * (p. ej. ObservacionesNotaPanel). Carga los datos desde la BD, configura
+     * el estado interno y ejecuta la lógica de impresión habitual.
+     *
+     * @param folio folio de la nota a reimprimir (p.ej. "CN-0001")
+     */
+    public void reimprimirPorFolio(String folio) {
+        if (folio == null || folio.isBlank()) return;
+
+        modelNotas.setRowCount(0);
+        modelDet.setRowCount(0);
+
+        final String sql =
+                "SELECT numero_nota, tipo, folio, DATE(fecha_registro) AS fecha, " +
+                "       COALESCE(total,0) AS total, COALESCE(saldo,0) AS saldo, " +
+                "       status, telefono " +
+                "FROM Notas " +
+                "WHERE folio = ?";
+
+        try (java.sql.Connection cn = Conexion.Conecta.getConnection();
+             java.sql.PreparedStatement ps = cn.prepareStatement(sql)) {
+
+            ps.setString(1, folio.trim());
+
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return;   // nota no encontrada
+
+                int    numero   = rs.getInt("numero_nota");
+                String tipo     = rs.getString("tipo");
+                java.sql.Date f = rs.getDate("fecha");
+                String fechaStr = (f == null) ? "" : f.toLocalDate().toString();
+                Double total    = rs.getDouble("total");
+                Double saldo    = rs.getDouble("saldo");
+                String status   = rs.getString("status");
+
+                // teléfono para el fallback en reimprimirDesdeUI
+                String telDig = TelefonosUI.soloDigitos(rs.getString("telefono"));
+                if (telDig != null && !telDig.isEmpty()) txtTelefono.setText(telDig);
+
+                // folio de referencia (aplica para abonos)
+                String folioRef = "";
+                String t = tipoKey(tipo);
+                boolean esAbono = t.equals("AB") || t.contains("ABONO") || t.contains("PAGO PARCIAL");
+                if (esAbono) {
+                    Integer numOrigen = leerNotaOrigenPorAbono(numero);
+                    if (numOrigen != null) {
+                        NotaHead head = leerNotaHead(numOrigen);
+                        if (head != null) folioRef = nullToEmpty(head.folio);
+                    }
+                }
+
+                modelNotas.addRow(new Object[]{
+                        numero,
+                        nullToEmpty(tipo),
+                        nullToEmpty(folio.trim()),
+                        fechaStr,
+                        total,
+                        saldo,
+                        folioRef,
+                        nullToEmpty(status)
+                });
+
+                // campo de instancia que usa reimprimirDesdeUI
+                fechaNota = (f != null) ? f.toLocalDate() : null;
+
+                ocultarColumnaNumeroNota();
+                tbNotas.setRowSelectionInterval(0, 0);
+            }
+
+        } catch (java.sql.SQLException ex) {
+            JOptionPane.showMessageDialog(
+                    SwingUtilities.getWindowAncestor(this),
+                    "Error al cargar la nota para reimprimir: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // Ejecutar la reimpresión con el estado ya configurado
+        if (modelNotas.getRowCount() > 0) {
+            reimprimirDesdeUI(
+                    (Integer) modelNotas.getValueAt(0, 0),
+                    (String)  modelNotas.getValueAt(0, 1)
+            );
+        }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private void cargarNotas() {
     modelNotas.setRowCount(0);
     modelDet.setRowCount(0);
 

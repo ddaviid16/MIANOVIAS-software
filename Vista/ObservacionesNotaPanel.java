@@ -45,12 +45,14 @@ public class ObservacionesNotaPanel extends JPanel {
     private final JTable tbDetalle = new JTable(modelDetalle);
 
     // Info + observaciones
-    private final JLabel    lblInfo    = new JLabel("Sin nota cargada");
-    private final JTextArea txaObs     = new JTextArea(5, 30);
-    private final JButton   btnGuardar = new JButton("Guardar observaciones");
-    private final JLabel    lblStatus  = new JLabel(" ");
+    private final JLabel    lblInfo       = new JLabel("Sin nota cargada");
+    private final JTextArea txaObs        = new JTextArea(5, 30);
+    private final JButton   btnGuardar    = new JButton("Guardar observaciones");
+    private final JButton   btnReimprimir = new JButton("Reimprimir nota");
+    private final JLabel    lblStatus     = new JLabel(" ");
 
     private Integer numeroNotaActual = null;
+    private String  folioActual      = null;
     private final NotasDAO dao = new NotasDAO();
 
     public ObservacionesNotaPanel() {
@@ -115,7 +117,10 @@ public class ObservacionesNotaPanel extends JPanel {
 
         btnGuardar.setEnabled(false);
         btnGuardar.setFont(btnGuardar.getFont().deriveFont(Font.BOLD));
-        JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 4));
+        btnReimprimir.setEnabled(false);
+
+        JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 4));
+        panelBoton.add(btnReimprimir);
         panelBoton.add(btnGuardar);
         panelObsForm.add(panelBoton, BorderLayout.SOUTH);
 
@@ -139,7 +144,8 @@ public class ObservacionesNotaPanel extends JPanel {
         txtTelefono.addActionListener(_e -> buscarPorTelefonoAccion());
         btnTelefono.addActionListener(_e -> buscarPorTelefonoAccion());
         btnNombre.addActionListener(_e   -> seleccionarPorNombre());
-        btnGuardar.addActionListener(_e  -> guardar());
+        btnGuardar.addActionListener(_e    -> guardar());
+        btnReimprimir.addActionListener(_e -> guardarYReimprimir());
 
         tbNotas.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) cargarNotaSeleccionada();
@@ -253,6 +259,7 @@ public class ObservacionesNotaPanel extends JPanel {
 
     private void cargarNota(int num, String folio, String tipo, String fecha, String total) {
         numeroNotaActual = num;
+        folioActual      = folio;
         lblInfo.setText("Nota #" + num + "  |  Folio: " + folio
                 + "  |  Tipo: " + tipo + "  |  Fecha: " + fecha + "  |  Total: " + total);
 
@@ -282,6 +289,7 @@ public class ObservacionesNotaPanel extends JPanel {
             txaObs.setText("Las notas de tipo Abono no requieren observaciones.");
             txaObs.setEnabled(false);
             btnGuardar.setEnabled(false);
+            btnReimprimir.setEnabled(true);   // se puede reimprimir aunque no tenga obs
             return;
         }
 
@@ -292,6 +300,7 @@ public class ObservacionesNotaPanel extends JPanel {
             txaObs.setCaretPosition(0);
             txaObs.setEnabled(true);
             btnGuardar.setEnabled(true);
+            btnReimprimir.setEnabled(true);
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this,
                     "Error al cargar observaciones: " + ex.getMessage(),
@@ -301,11 +310,30 @@ public class ObservacionesNotaPanel extends JPanel {
 
     private void limpiarNota() {
         numeroNotaActual = null;
+        folioActual      = null;
         lblInfo.setText("Sin nota cargada");
         modelDetalle.setRowCount(0);
         txaObs.setText("");
         txaObs.setEnabled(false);
         btnGuardar.setEnabled(false);
+        btnReimprimir.setEnabled(false);
+    }
+
+    // ── Guardar y reimprimir ───────────────────────────────────────────────────
+
+    private void guardarYReimprimir() {
+        if (numeroNotaActual == null || folioActual == null || folioActual.isBlank()) {
+            JOptionPane.showMessageDialog(this, "No hay nota cargada.",
+                    "Atención", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        // 1) Guardar observaciones (si el área está habilitada)
+        if (txaObs.isEnabled()) {
+            guardar();
+        }
+        // 2) Reimprimir usando la lógica existente de ReimprimirNotaPanel
+        ReimprimirNotaPanel rp = new ReimprimirNotaPanel();
+        rp.reimprimirPorFolio(folioActual);
     }
 
     // ── Guardar ────────────────────────────────────────────────────────────────
