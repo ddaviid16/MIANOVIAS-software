@@ -1638,7 +1638,7 @@ private NotaHead leerNotaHead(int numeroNota) {
                     }
                 }
             } catch (Exception ex) {
-                info.razonSocial = "MIANOVIAS";
+                info.razonSocial = "";
             }
             return info;
         }

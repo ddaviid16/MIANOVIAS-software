@@ -1171,7 +1171,7 @@ private EmpresaInfo cargarEmpresaInfo() {
             }
         }
     } catch (Exception ex) {
-        info.razonSocial = "MIANOVIAS";
+        info.razonSocial = "";
     }
     return info;
 }

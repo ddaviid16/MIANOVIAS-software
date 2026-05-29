@@ -462,7 +462,7 @@ private void cargarFoliosPorTelefono() {
             g.setFont(new Font("SansSerif", Font.BOLD, 22));
             String nombreEmp = (emp != null && emp.getRazonSocial() != null && !emp.getRazonSocial().isBlank())
                     ? emp.getRazonSocial()
-                    : "MIANOVIAS";
+                    : "";
             drawCentered(g, nombreEmp, (int) pageFormat.getImageableWidth() / 2, y);
             y += 22;
 

@@ -505,12 +505,12 @@ private void guardar(ActionEvent ev) {
                 }
             }
         } catch (Exception ex) {
-            info.razonSocial = "MIANOVIAS";
+            info.razonSocial = "";
         }
         return info;
     }
 
-    
+
     // ====== NOTA DE DEVOLUCIÓN ======
 // ====== NOTA DE DEVOLUCIÓN ======
 private Printable construirPrintableDevolucion(
