@@ -70,7 +70,7 @@ public class NotaImprimible implements Printable {
         List<String> lineas = new ArrayList<>();
         DateTimeFormatter FDT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-        lineas.add("MIANOVIAS — Documento provisional");
+        
         lineas.add("Folio: " + nz(nota.folio) + "    Tipo: " + nz(nota.tipoOperacion));
         lineas.add("Fecha/Hora: " + (nota.fechaHora==null? "": nota.fechaHora.format(FDT)));
         if (nz(nota.cliente).length() > 0)   lineas.add("Cliente: " + nota.cliente);

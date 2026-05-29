@@ -68,10 +68,10 @@ public class OperacionesPanel extends JPanel {
 
     /** Helper local para crear botones “grandes” con estilo consistente. */
     private JButton botonGrande(String texto) {
-        JButton b = new JButton(texto);
+        JButton b = new JButton("<html><center>" + texto + "</center></html>");
         b.setFont(b.getFont().deriveFont(Font.BOLD, 16f));
         b.setFocusPainted(false);
-        b.setPreferredSize(new Dimension(220, 100)); // ajusta tamaño a gusto
+        b.setPreferredSize(new Dimension(220, 100));
         return b;
     }
 }

@@ -93,6 +93,7 @@ public class menuPrincipal extends JFrame {
         add(header, BorderLayout.NORTH);
         add(mainPanel, BorderLayout.CENTER);
 
+
         // ====== Tarjetas
         addEagerCard(CARD_HOME, buildHomeCard());           // Menú principal
 
@@ -177,7 +178,7 @@ public class menuPrincipal extends JFrame {
         JPanel center = new JPanel(new GridLayout(2, 3, 18, 18));
         center.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JButton btReportes   = botonGrande("Reportes");
+        JButton btReportes    = botonGrande("Reportes");
         JButton btEmpresa     = botonGrande("Empresa");
         JButton btClientes    = botonGrande("Clientes");
         JButton btInventario  = botonGrande("Inventario");
@@ -405,14 +406,6 @@ public static void main(String[] args) {
         for (UIManager.LookAndFeelInfo i : UIManager.getInstalledLookAndFeels()) {
             if ("Nimbus".equals(i.getName())) {
                 // Paleta rosa-malva — coherente con los colores de la pantalla de carga
-                UIManager.put("nimbusBase",                 new Color(159, 107, 155));
-                UIManager.put("nimbusBlueGrey",             new Color(196, 174, 203));
-                UIManager.put("control",                    new Color(248, 244, 250));
-                UIManager.put("nimbusLightBackground",      new Color(255, 253, 255));
-                UIManager.put("nimbusFocus",                new Color(175, 100, 170));
-                UIManager.put("nimbusSelectionBackground",  new Color(180, 115, 175));
-                UIManager.put("nimbusSelectedText",         Color.WHITE);
-                UIManager.put("info",                       new Color(255, 248, 235));
                 UIManager.setLookAndFeel(i.getClassName());
                 break;
             }

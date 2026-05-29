@@ -13,7 +13,7 @@ import java.util.List;
 public class AjusteImprimible implements Printable {
 
     public static class Datos {
-        public String sucursalTitulo = "MIANOVIAS QUERÉTARO";
+        public String sucursalTitulo = ""; // se asigna desde EmpresaDAO al imprimir
         public String subtitulo      = "AUTORIZACIÓN AJUSTE DE VESTIDO";
 
         public String nombreNovia;

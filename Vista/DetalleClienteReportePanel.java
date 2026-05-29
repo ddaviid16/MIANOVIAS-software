@@ -1,7 +1,9 @@
 package Vista;
 
+import Controlador.EmpresaDAO;
 import Controlador.NotasDAO;
 import Controlador.clienteDAO;
+import Modelo.Empresa;
 import Utilidades.CatalogoCFDI;
 import Utilidades.TelefonosUI;
 import Controlador.FormasPagoDAO;
@@ -1905,8 +1907,14 @@ private static class HojaDetallePrintable implements Printable {
 
         // Encabezado
         if (draw) {
+            String nombreEmp = "";
+            try {
+                Empresa emp = new EmpresaDAO().buscarPorNumero(1);
+                if (emp != null && emp.getRazonSocial() != null && !emp.getRazonSocial().isBlank())
+                    nombreEmp = emp.getRazonSocial().trim().toUpperCase();
+            } catch (Exception ignore) {}
             g2.setFont(fTitulo);
-            drawCentered(g2, "MIANOVIAS QUERETARO", w, y);
+            drawCentered(g2, nombreEmp, w, y);
         }
         y += 16;
         if (draw) {

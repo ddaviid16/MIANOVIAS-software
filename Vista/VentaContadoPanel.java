@@ -2688,7 +2688,7 @@ private double parseMoney(Object o){
                 }
             }
         } catch (Exception ex) {
-            info.razonSocial = "MIANOVIAS";
+            info.razonSocial = "";
         }
         return info;
     }

@@ -1,7 +1,9 @@
 package Vista;
 
+import Controlador.EmpresaDAO;
 import Impresion.AjusteImprimible;
 import Impresion.VentanaPrevisualizacion;
+import Modelo.Empresa;
 
 import javax.swing.*;
 import java.awt.*;
@@ -120,6 +122,15 @@ public class EditarHojaAjusteDialog extends JDialog {
 
     private void imprimir() {
         AjusteImprimible.Datos d = new AjusteImprimible.Datos();
+
+        // Nombre de la empresa desde la BD (nunca hardcodeado)
+        try {
+            Empresa emp = new EmpresaDAO().buscarPorNumero(1);
+            if (emp != null && emp.getRazonSocial() != null && !emp.getRazonSocial().isBlank()) {
+                d.sucursalTitulo = emp.getRazonSocial().trim().toUpperCase();
+            }
+        } catch (Exception ignore) { /* conserva el valor por defecto si hay error de BD */ }
+
         d.nombreNovia   = txtNombre.getText().trim();
         d.modeloVestido = txtModelo.getText().trim();
         d.talla         = txtTalla.getText().trim();
