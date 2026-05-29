@@ -10,6 +10,18 @@ public final class BackupService {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm");
 
+    /** Rutas de instalación típicas de MySQL en Windows. */
+    private static final String[] DIRS_MYSQL_BIN = {
+        "C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin",
+        "C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin",
+        "C:\\Program Files\\MySQL\\MySQL Server 8.3\\bin",
+        "C:\\Program Files\\MySQL\\MySQL Server 8.2\\bin",
+        "C:\\Program Files\\MySQL\\MySQL Server 8.1\\bin",
+        "C:\\Program Files\\MySQL\\MySQL Server 5.7\\bin",
+        "C:\\xampp\\mysql\\bin",
+        "C:\\wamp64\\bin\\mysql\\mysql8.0.31\\bin",
+    };
+
     private BackupService() {}
 
     /**
@@ -80,27 +92,93 @@ public final class BackupService {
 
     // ─────────────────────────────────────────────────────────────────────────
 
+    /**
+     * Restaura la base de datos desde un archivo .sql generado previamente por
+     * {@link #respaldar(Path)}.  Usa el cliente {@code mysql.exe} para ejecutar
+     * el script SQL.
+     *
+     * @param archivoSql ruta al archivo .sql de respaldo
+     * @throws IOException si el cliente MySQL no se encuentra o el proceso falla
+     */
+    public static void restaurar(Path archivoSql) throws IOException {
+        if (archivoSql == null || !Files.isRegularFile(archivoSql))
+            throw new IOException("El archivo de respaldo no existe o no es válido:\n" + archivoSql);
+
+        Properties props = cargarProps();
+        String[] creds   = parsearUrl(props.getProperty("url", "jdbc:mysql://localhost:3306/tienda_vestidos"));
+        String host      = creds[0];
+        String port      = creds[1];
+        String dbName    = creds[2];
+        String user      = props.getProperty("user",     "root");
+        String pass      = props.getProperty("password", "MIA1234");
+
+        Path mysql = encontrarMysql(props);
+        if (mysql == null)
+            throw new IOException(
+                "No se encontró mysql.exe.\n" +
+                "Agrega la propiedad mysql.bin=C:\\...\\bin en config/db.properties " +
+                "o verifica que MySQL esté instalado.");
+
+        ProcessBuilder pb = new ProcessBuilder(
+            mysql.toString(),
+            "-h", host,
+            "-P", port,
+            "-u", user,
+            "--password=" + pass,
+            dbName
+        );
+        // Redirigir el archivo SQL como entrada estándar del proceso
+        pb.redirectInput(archivoSql.toFile());
+        pb.redirectErrorStream(false);
+
+        Process proc = pb.start();
+
+        // Consumir stderr
+        StringBuilder errBuf = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(proc.getErrorStream()))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (!line.contains("Using a password on the command line"))
+                    errBuf.append(line).append("\n");
+            }
+        }
+
+        int exit;
+        try {
+            exit = proc.waitFor();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("La restauración fue interrumpida.");
+        }
+
+        if (exit != 0)
+            throw new IOException(
+                "mysql terminó con error (código " + exit + "):\n" +
+                errBuf.toString().trim());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     private static Path encontrarMysqldump(Properties props) {
+        return encontrarEjecutable("mysqldump.exe", props);
+    }
+
+    private static Path encontrarMysql(Properties props) {
+        return encontrarEjecutable("mysql.exe", props);
+    }
+
+    /** Busca un ejecutable MySQL (mysqldump.exe, mysql.exe, etc.) en rutas conocidas. */
+    private static Path encontrarEjecutable(String exe, Properties props) {
         // 1) Ruta configurada por el usuario en db.properties  (mysql.bin = C:\...\bin)
         String mysqlBin = props.getProperty("mysql.bin");
         if (mysqlBin != null && !mysqlBin.isBlank()) {
-            Path p = Paths.get(mysqlBin.trim(), "mysqldump.exe");
+            Path p = Paths.get(mysqlBin.trim(), exe);
             if (Files.isExecutable(p)) return p;
         }
 
         // 2) Rutas comunes en Windows
-        String[] dirs = {
-            "C:\\Program Files\\MySQL\\MySQL Server 8.4\\bin",
-            "C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin",
-            "C:\\Program Files\\MySQL\\MySQL Server 8.3\\bin",
-            "C:\\Program Files\\MySQL\\MySQL Server 8.2\\bin",
-            "C:\\Program Files\\MySQL\\MySQL Server 8.1\\bin",
-            "C:\\Program Files\\MySQL\\MySQL Server 5.7\\bin",
-            "C:\\xampp\\mysql\\bin",
-            "C:\\wamp64\\bin\\mysql\\mysql8.0.31\\bin",
-        };
-        for (String dir : dirs) {
-            Path p = Paths.get(dir, "mysqldump.exe");
+        for (String dir : DIRS_MYSQL_BIN) {
+            Path p = Paths.get(dir, exe);
             if (Files.isExecutable(p)) return p;
         }
 
@@ -108,7 +186,7 @@ public final class BackupService {
         String pathEnv = System.getenv("PATH");
         if (pathEnv != null) {
             for (String part : pathEnv.split(File.pathSeparator)) {
-                Path p = Paths.get(part.trim(), "mysqldump.exe");
+                Path p = Paths.get(part.trim(), exe);
                 if (Files.isExecutable(p)) return p;
             }
         }

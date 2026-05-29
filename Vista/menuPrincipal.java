@@ -54,9 +54,41 @@ public class menuPrincipal extends JFrame {
                 new BackupDialog((java.awt.Frame) SwingUtilities.getWindowAncestor(this)).setVisible(true);
         });
 
+        JMenuItem miRestaurar = new JMenuItem("Restaurar base de datos…");
+        miRestaurar.addActionListener(_e -> {
+            // Paso 1: Advertencia clara antes de proceder
+            String[] opciones = { "Sí, continuar", "Cancelar" };
+            int confirmacion = JOptionPane.showOptionDialog(
+                this,
+                "<html><div style='width:320px'>" +
+                "<b style='font-size:1.1em'>⚠ Advertencia importante</b><br><br>" +
+                "Al restaurar la base de datos, se <b>sobreescribirán</b> todos los<br>" +
+                "datos existentes actualmente y serán sustituidos por los datos<br>" +
+                "del respaldo seleccionado.<br><br>" +
+                "<b>Esta acción no se puede deshacer.</b><br><br>" +
+                "¿Desea continuar?" +
+                "</div></html>",
+                "Restaurar base de datos",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE,
+                null,
+                opciones,
+                opciones[1]   // "Cancelar" es la opción por defecto
+            );
+            if (confirmacion != 0) return;   // el usuario canceló
+
+            // Paso 2: Validar contraseña del sistema
+            if (!Utilidades.SeguridadUI.pedirYValidarClave(this)) return;
+
+            // Paso 3: Abrir diálogo de selección de archivo y restauración
+            new RestaurarDialog((java.awt.Frame) SwingUtilities.getWindowAncestor(this))
+                    .setVisible(true);
+        });
+
         menuSis.add(miCerrarSesion);
         menuSis.addSeparator();
         menuSis.add(miRespaldo);
+        menuSis.add(miRestaurar);
         mb.add(menuSis);
         setJMenuBar(mb);
 
