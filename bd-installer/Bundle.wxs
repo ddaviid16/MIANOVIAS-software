@@ -22,41 +22,58 @@
           SuppressRepair="yes"/>
     </BootstrapperApplicationRef>
 
-    <!-- ── Deteccion de MySQL instalado ── -->
-    <util:RegistrySearch Id="SearchMySQL80"
+    <!-- ── Deteccion de MySQL instalado ──────────────────────────────────────
+         Se consulta el SCM (Service Control Manager) en lugar de las claves
+         de aplicacion SOFTWARE\MySQL AB, porque esas claves pueden quedar como
+         residuo tras una desinstalacion y provocar que el instalador salte MySQL
+         aunque no haya ningun servicio activo.
+         Si no existe ningun servicio MySQL en el SCM, la variable queda vacia
+         y la condicion es verdadera → se instala MySQL.
+    -->
+    <util:RegistrySearch Id="SearchMySQLSvc"
         Root="HKLM"
-        Key="SOFTWARE\MySQL AB\MySQL Server 8.0"
-        Value="Location"
-        Variable="MySQL80Location"
+        Key="SYSTEM\CurrentControlSet\Services\MySQL"
+        Value="ImagePath"
+        Variable="MySQLSvcPath"
         Result="value"
-        Win64="yes"/>
+        Win64="no"/>
 
-    <util:RegistrySearch Id="SearchMySQL84"
+    <util:RegistrySearch Id="SearchMySQL80Svc"
         Root="HKLM"
-        Key="SOFTWARE\MySQL AB\MySQL Server 8.4"
-        Value="Location"
-        Variable="MySQL84Location"
+        Key="SYSTEM\CurrentControlSet\Services\MySQL80"
+        Value="ImagePath"
+        Variable="MySQL80SvcPath"
         Result="value"
-        Win64="yes"/>
+        Win64="no"/>
 
-    <util:RegistrySearch Id="SearchMySQL94"
+    <util:RegistrySearch Id="SearchMySQL84Svc"
         Root="HKLM"
-        Key="SOFTWARE\MySQL AB\MySQL Server 9.4"
-        Value="Location"
-        Variable="MySQL94Location"
+        Key="SYSTEM\CurrentControlSet\Services\MySQL84"
+        Value="ImagePath"
+        Variable="MySQL84SvcPath"
         Result="value"
-        Win64="yes"/>
+        Win64="no"/>
+
+    <util:RegistrySearch Id="SearchMySQL57Svc"
+        Root="HKLM"
+        Key="SYSTEM\CurrentControlSet\Services\MySQL57"
+        Value="ImagePath"
+        Variable="MySQL57SvcPath"
+        Result="value"
+        Win64="no"/>
 
     <Chain>
 
-      <!-- MySQL 8.0.43: se instala SOLO si no se detecta MySQL 8.0, 8.4 ni 9.4 -->
+      <!-- MySQL 8.0.43: se instala SOLO si no existe ningun servicio MySQL en el SCM.
+           Usar el SCM es mas fiable que las claves de aplicacion, que pueden
+           quedar como residuo tras una desinstalacion. -->
       <MsiPackage Id="MySQLServer"
                   Name="MySQL Server 8.0.43"
                   SourceFile="mysql-8.0.43-winx64.msi"
                   DisplayInternalUI="no"
                   ForcePerMachine="yes"
                   Vital="yes"
-                  InstallCondition="MySQL80Location = &quot;&quot; AND MySQL84Location = &quot;&quot; AND MySQL94Location = &quot;&quot;">
+                  InstallCondition="MySQLSvcPath = &quot;&quot; AND MySQL80SvcPath = &quot;&quot; AND MySQL84SvcPath = &quot;&quot; AND MySQL57SvcPath = &quot;&quot;">
         <!-- Instala el servicio con nombre MySQL, inicio automatico y lo arranca -->
         <MsiProperty Name="ALLUSERS"        Value="1"/>
         <MsiProperty Name="SERVICENAME"     Value="MySQL"/>
