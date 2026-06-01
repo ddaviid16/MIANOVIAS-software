@@ -11,7 +11,8 @@
            UpgradeCode="{CF8A1D3E-4B92-4F7A-BC2E-A9D3C0E17F52}">
 
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"/>
-    <MajorUpgrade DowngradeErrorMessage="Ya hay una version mas reciente instalada."/>
+    <MajorUpgrade DowngradeErrorMessage="Ya hay una version mas reciente instalada."
+                  AllowSameVersionUpgrades="yes"/>
     <MediaTemplate EmbedCab="yes"/>
 
     <!-- ── Directorios ─────────────────────────────────────────────────────── -->
