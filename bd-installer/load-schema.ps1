@@ -1,9 +1,12 @@
-# load-schema.ps1
-# Carga el esquema inicial de tienda_vestidos en MySQL.
-#
-# El contenido SQL está embebido en Base64 (se inyecta en tiempo de build).
-# Usa CREATE TABLE IF NOT EXISTS, por lo que es seguro ejecutarlo en
+# load-schema.ps1  <rutaDelSQL>
+# Ejecuta el schema inicial de tienda_vestidos contra MySQL.
+# El archivo SQL usa CREATE TABLE IF NOT EXISTS, por lo que es seguro en
 # instalaciones nuevas Y en reinstalaciones: nunca borra datos existentes.
+
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$SqlPath
+)
 
 function Find-MySQLBin {
     $versions = '8.0','8.4','8.3','8.2','8.1','9.4','5.7'
@@ -21,22 +24,8 @@ function Find-MySQLBin {
 $bin = Find-MySQLBin
 if (-not $bin) { exit 0 }   # MySQL no encontrado; no hacer nada
 
-# ── Decodificar el SQL embebido y escribirlo a un archivo temporal ────────────
-$sqlB64  = '##SQL_B64##'
-$tmpSql  = Join-Path $env:TEMP 'mianovias_schema_init.sql'
+if (-not (Test-Path $SqlPath)) { exit 1 }
 
-try {
-    $sqlBytes = [Convert]::FromBase64String($sqlB64)
-    [System.IO.File]::WriteAllBytes($tmpSql, $sqlBytes)
-} catch {
-    exit 1
-}
-
-# ── Ejecutar el schema contra MySQL ──────────────────────────────────────────
 $mysql = "`"$bin\mysql.exe`""
-cmd /c "$mysql -u root `"--password=MIA1234`" < `"$tmpSql`" 2>&1" | Out-Null
-
-# Limpiar archivo temporal
-Remove-Item $tmpSql -Force -ErrorAction SilentlyContinue
-
+cmd /c "$mysql -u root `"--password=MIA1234`" < `"$SqlPath`" 2>&1" | Out-Null
 exit 0

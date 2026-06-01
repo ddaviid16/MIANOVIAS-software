@@ -30,11 +30,20 @@ if (-not (Test-Path $mysqlMsi)) {
     exit 1
 }
 
+$sqlPath = Join-Path (Split-Path $DIR) "sql\schema-tienda_vestidos.sql"
+if (-not (Test-Path $sqlPath)) {
+    Write-Host "[ERROR] No se encontro el archivo de schema:" -ForegroundColor Red
+    Write-Host "        $sqlPath" -ForegroundColor Yellow
+    exit 1
+}
+
 # -- Preparar carpeta de salida ----------------------------------------------
 if (Test-Path $OUT) { Remove-Item $OUT -Recurse -Force }
 New-Item -ItemType Directory -Path $OUT | Out-Null
 
 # -- Codificar scripts PS1 a Base64 (UTF-16LE, requerido por -EncodedCommand) -
+# Nota: load-schema.ps1 y schema-tienda_vestidos.sql se incluyen como archivos
+#       en el MSI (no se encodean), evitando el limite de longitud de Windows.
 Write-Host "[1/4] Codificando scripts PowerShell..."
 
 $mysqlB64 = [Convert]::ToBase64String(
@@ -48,22 +57,6 @@ $wbB64 = [Convert]::ToBase64String(
     )
 )
 
-# Leer el schema SQL, codificarlo en Base64 (UTF-8) e inyectarlo en load-schema.ps1
-$sqlPath     = Join-Path (Split-Path $DIR) "sql\schema-tienda_vestidos.sql"
-if (-not (Test-Path $sqlPath)) {
-    Write-Host "[ERROR] No se encontro el archivo de schema:" -ForegroundColor Red
-    Write-Host "        $sqlPath" -ForegroundColor Yellow
-    exit 1
-}
-$sqlB64      = [Convert]::ToBase64String(
-    [System.IO.File]::ReadAllBytes($sqlPath)
-)
-$schemaPs1   = (Get-Content -Raw (Join-Path $DIR "load-schema.ps1")) `
-                    -replace '##SQL_B64##', $sqlB64
-$schemaCmdB64 = [Convert]::ToBase64String(
-    [Text.Encoding]::Unicode.GetBytes($schemaPs1)
-)
-
 # -- Compilar config-bd.msi --------------------------------------------------
 Write-Host "[2/4] Compilando config-bd.msi..."
 
@@ -73,7 +66,6 @@ $logFile = Join-Path $OUT "build.log"
     -ext "$WIX\WixUtilExtension.dll" `
     "-dMySQLPwdB64=$mysqlB64" `
     "-dWorkbenchB64=$wbB64" `
-    "-dLoadSchemaB64=$schemaCmdB64" `
     -out "$OUT\config-bd.wixobj" `
     "$DIR\config-bd.wxs" 2>&1 | Tee-Object -FilePath $logFile
 

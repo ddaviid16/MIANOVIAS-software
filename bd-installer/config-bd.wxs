@@ -14,23 +14,43 @@
     <MajorUpgrade DowngradeErrorMessage="Ya hay una version mas reciente instalada."/>
     <MediaTemplate EmbedCab="yes"/>
 
-    <!-- Directorio minimo requerido por WiX -->
+    <!-- ── Directorios ─────────────────────────────────────────────────────── -->
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
         <Directory Id="INSTALLFOLDER" Name="MIANOVIAS BD Config">
+
+          <!-- Carpeta vacía de marcador (necesaria para WiX) -->
           <Component Id="CompPlaceholder" Guid="{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}">
             <CreateFolder/>
           </Component>
+
+          <!-- Script que carga el schema -->
+          <Component Id="CompLoadSchema" Guid="{B2C3D4E5-F601-7890-BCDE-F01234567891}">
+            <File Id="FileLoadSchema"
+                  Source="load-schema.ps1"
+                  KeyPath="yes"/>
+          </Component>
+
+          <!-- Archivo SQL con el schema inicial -->
+          <Component Id="CompSchemaSql" Guid="{C3D4E5F6-0712-7890-CDEF-012345678902}">
+            <File Id="FileSchemaSql"
+                  Source="..\sql\schema-tienda_vestidos.sql"
+                  KeyPath="yes"/>
+          </Component>
+
         </Directory>
       </Directory>
     </Directory>
 
     <Feature Id="MainFeature" Level="1">
       <ComponentRef Id="CompPlaceholder"/>
+      <ComponentRef Id="CompLoadSchema"/>
+      <ComponentRef Id="CompSchemaSql"/>
     </Feature>
 
-    <!-- CA 1: Configurar contrasena de root en MySQL fresco.
-         Deferred + Impersonate=yes: corre como el usuario que inicio la instalacion. -->
+    <!-- ── Custom Actions ─────────────────────────────────────────────────── -->
+
+    <!-- CA 1: Configurar contrasena de root en MySQL fresco. -->
     <CustomAction Id="SetMySQLPwdCmd"
                   Execute="immediate"
                   Property="RunMySQLPwd"
@@ -43,13 +63,13 @@
                   Impersonate="yes"
                   Return="ignore"/>
 
-    <!-- CA 2: Cargar esquema inicial de la base de datos.
-         Se ejecuta DESPUES de configurar la contrasena de root.
-         Usa CREATE TABLE IF NOT EXISTS, por lo que es seguro en reinstalaciones. -->
+    <!-- CA 2: Cargar el schema inicial de la base de datos.
+         Los archivos load-schema.ps1 y schema-tienda_vestidos.sql
+         ya estan en disco (los instalo InstallFiles antes). -->
     <CustomAction Id="SetLoadSchemaCmd"
                   Execute="immediate"
                   Property="RunLoadSchema"
-                  Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand $(var.LoadSchemaB64)"/>
+                  Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]load-schema.ps1&quot; &quot;[INSTALLFOLDER]schema-tienda_vestidos.sql&quot;"/>
 
     <CustomAction Id="RunLoadSchema"
                   BinaryKey="WixCA"
@@ -58,8 +78,7 @@
                   Impersonate="yes"
                   Return="ignore"/>
 
-    <!-- CA 3: Registrar conexion MIANOVIAS en Workbench.
-         Impersonate=yes garantiza que GetFolderPath devuelva el AppData real del usuario. -->
+    <!-- CA 3: Registrar conexion MIANOVIAS en Workbench. -->
     <CustomAction Id="SetWorkbenchCmd"
                   Execute="immediate"
                   Property="RunWorkbench"
@@ -74,14 +93,14 @@
 
     <InstallExecuteSequence>
       <!-- 1) Configurar contrasena de root -->
-      <Custom Action="SetMySQLPwdCmd"  Before="RunMySQLPwd">NOT Installed</Custom>
-      <Custom Action="RunMySQLPwd"     After="InstallFiles">NOT Installed</Custom>
-      <!-- 2) Cargar esquema (despues de tener contrasena) -->
+      <Custom Action="SetMySQLPwdCmd"   Before="RunMySQLPwd">NOT Installed</Custom>
+      <Custom Action="RunMySQLPwd"      After="InstallFiles">NOT Installed</Custom>
+      <!-- 2) Cargar schema (despues de tener contrasena; archivos ya en disco) -->
       <Custom Action="SetLoadSchemaCmd" Before="RunLoadSchema">NOT Installed</Custom>
       <Custom Action="RunLoadSchema"    After="RunMySQLPwd">NOT Installed</Custom>
-      <!-- 3) Registrar conexion Workbench (despues del esquema) -->
-      <Custom Action="SetWorkbenchCmd" Before="RunWorkbench">NOT Installed</Custom>
-      <Custom Action="RunWorkbench"    After="RunLoadSchema">NOT Installed</Custom>
+      <!-- 3) Registrar conexion Workbench -->
+      <Custom Action="SetWorkbenchCmd"  Before="RunWorkbench">NOT Installed</Custom>
+      <Custom Action="RunWorkbench"     After="RunLoadSchema">NOT Installed</Custom>
     </InstallExecuteSequence>
 
   </Product>
