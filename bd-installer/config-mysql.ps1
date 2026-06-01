@@ -13,9 +13,38 @@ function Find-MySQLBin {
     return $null
 }
 
+# ── Asegurar que el servicio MySQL este corriendo ─────────────────────────────
+# Intentamos con los nombres de servicio mas comunes.
+$serviceNames = @('MySQL', 'MySQL80', 'MySQL84', 'MySQL57')
+foreach ($svc in $serviceNames) {
+    $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
+    if ($s) {
+        # Configurar inicio automatico
+        try { Set-Service -Name $svc -StartupType Automatic -ErrorAction SilentlyContinue } catch {}
+        # Iniciar si no esta corriendo
+        if ($s.Status -ne 'Running') {
+            try { Start-Service -Name $svc -ErrorAction SilentlyContinue } catch {}
+        }
+        break
+    }
+}
+
+# Esperar a que MySQL este listo y aceptando conexiones (hasta 45 seg)
 $bin = Find-MySQLBin
 if (-not $bin) { exit 0 }
 $mysql = "`"$bin\mysql.exe`""
+
+$ready = $false
+for ($i = 0; $i -lt 15; $i++) {
+    $out = cmd /c "$mysql -u root --connect-expired-password -e `"SELECT 1`" 2>&1"
+    # Listo si la salida incluye "1" o si el error es de acceso (ya acepta conexiones)
+    if ($LASTEXITCODE -eq 0 -or ($out -match 'Access denied|ERROR 1045|temporary password')) {
+        $ready = $true
+        break
+    }
+    Start-Sleep -Seconds 3
+}
+if (-not $ready) { exit 0 }   # No respondio en 45s; salir sin romper la instalacion
 
 # Caso 1: sin contrasena (initialize-insecure)
 $out = cmd /c "$mysql -u root --connect-expired-password -e `"SELECT 1`" 2>&1"

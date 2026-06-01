@@ -57,9 +57,10 @@
                   ForcePerMachine="yes"
                   Vital="yes"
                   InstallCondition="MySQL80Location = &quot;&quot; AND MySQL84Location = &quot;&quot; AND MySQL94Location = &quot;&quot;">
-        <!-- Instala el servicio con nombre MySQL y directorio por defecto -->
-        <MsiProperty Name="ALLUSERS"     Value="1"/>
-        <MsiProperty Name="SERVICENAME"  Value="MySQL"/>
+        <!-- Instala el servicio con nombre MySQL, inicio automatico y lo arranca -->
+        <MsiProperty Name="ALLUSERS"        Value="1"/>
+        <MsiProperty Name="SERVICENAME"     Value="MySQL"/>
+        <MsiProperty Name="MYSQL_AUTOSTART" Value="1"/>
       </MsiPackage>
 
       <!-- Configuracion (siempre se ejecuta): password + Workbench -->
