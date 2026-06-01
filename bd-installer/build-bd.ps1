@@ -48,6 +48,22 @@ $wbB64 = [Convert]::ToBase64String(
     )
 )
 
+# Leer el schema SQL, codificarlo en Base64 (UTF-8) e inyectarlo en load-schema.ps1
+$sqlPath     = Join-Path (Split-Path $DIR) "sql\schema-tienda_vestidos.sql"
+if (-not (Test-Path $sqlPath)) {
+    Write-Host "[ERROR] No se encontro el archivo de schema:" -ForegroundColor Red
+    Write-Host "        $sqlPath" -ForegroundColor Yellow
+    exit 1
+}
+$sqlB64      = [Convert]::ToBase64String(
+    [System.IO.File]::ReadAllBytes($sqlPath)
+)
+$schemaPs1   = (Get-Content -Raw (Join-Path $DIR "load-schema.ps1")) `
+                    -replace '##SQL_B64##', $sqlB64
+$schemaCmdB64 = [Convert]::ToBase64String(
+    [Text.Encoding]::Unicode.GetBytes($schemaPs1)
+)
+
 # -- Compilar config-bd.msi --------------------------------------------------
 Write-Host "[2/4] Compilando config-bd.msi..."
 
@@ -57,6 +73,7 @@ $logFile = Join-Path $OUT "build.log"
     -ext "$WIX\WixUtilExtension.dll" `
     "-dMySQLPwdB64=$mysqlB64" `
     "-dWorkbenchB64=$wbB64" `
+    "-dLoadSchemaB64=$schemaCmdB64" `
     -out "$OUT\config-bd.wixobj" `
     "$DIR\config-bd.wxs" 2>&1 | Tee-Object -FilePath $logFile
 
@@ -110,6 +127,7 @@ Write-Host ""
 Write-Host "  Al ejecutarlo en la maquina del cliente:"
 Write-Host "    - MySQL NO instalado  -> instala MySQL 8.0.43 + configura root"
 Write-Host "    - MySQL YA instalado  -> omite la instalacion de MySQL"
-Write-Host "    - En ambos casos      -> registra la conexion MIANOVIAS en Workbench"
+Write-Host "    - En ambos casos      -> carga el esquema inicial (CREATE IF NOT EXISTS)"
+Write-Host "                            registra la conexion MIANOVIAS en Workbench"
 Write-Host "                            (solo si no existe ya)"
 Write-Host ""

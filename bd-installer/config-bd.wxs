@@ -43,7 +43,22 @@
                   Impersonate="yes"
                   Return="ignore"/>
 
-    <!-- CA 2: Registrar conexion MIANOVIAS en Workbench.
+    <!-- CA 2: Cargar esquema inicial de la base de datos.
+         Se ejecuta DESPUES de configurar la contrasena de root.
+         Usa CREATE TABLE IF NOT EXISTS, por lo que es seguro en reinstalaciones. -->
+    <CustomAction Id="SetLoadSchemaCmd"
+                  Execute="immediate"
+                  Property="RunLoadSchema"
+                  Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand $(var.LoadSchemaB64)"/>
+
+    <CustomAction Id="RunLoadSchema"
+                  BinaryKey="WixCA"
+                  DllEntry="WixQuietExec64"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="ignore"/>
+
+    <!-- CA 3: Registrar conexion MIANOVIAS en Workbench.
          Impersonate=yes garantiza que GetFolderPath devuelva el AppData real del usuario. -->
     <CustomAction Id="SetWorkbenchCmd"
                   Execute="immediate"
@@ -58,10 +73,15 @@
                   Return="ignore"/>
 
     <InstallExecuteSequence>
-      <Custom Action="SetMySQLPwdCmd" Before="RunMySQLPwd">NOT Installed</Custom>
-      <Custom Action="RunMySQLPwd"    After="InstallFiles">NOT Installed</Custom>
+      <!-- 1) Configurar contrasena de root -->
+      <Custom Action="SetMySQLPwdCmd"  Before="RunMySQLPwd">NOT Installed</Custom>
+      <Custom Action="RunMySQLPwd"     After="InstallFiles">NOT Installed</Custom>
+      <!-- 2) Cargar esquema (despues de tener contrasena) -->
+      <Custom Action="SetLoadSchemaCmd" Before="RunLoadSchema">NOT Installed</Custom>
+      <Custom Action="RunLoadSchema"    After="RunMySQLPwd">NOT Installed</Custom>
+      <!-- 3) Registrar conexion Workbench (despues del esquema) -->
       <Custom Action="SetWorkbenchCmd" Before="RunWorkbench">NOT Installed</Custom>
-      <Custom Action="RunWorkbench"   After="RunMySQLPwd">NOT Installed</Custom>
+      <Custom Action="RunWorkbench"    After="RunLoadSchema">NOT Installed</Custom>
     </InstallExecuteSequence>
 
   </Product>
