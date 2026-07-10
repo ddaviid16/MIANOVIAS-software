@@ -9,7 +9,10 @@ import Utilidades.TelefonosUI;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.text.AbstractDocument;
 import java.awt.*;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.sql.SQLException;
@@ -53,6 +56,7 @@ public class ObservacionesNotaPanel extends JPanel {
 
     private Integer numeroNotaActual = null;
     private String  folioActual      = null;
+    private String  lastTel          = null;
     private final NotasDAO dao = new NotasDAO();
 
     public ObservacionesNotaPanel() {
@@ -147,8 +151,17 @@ public class ObservacionesNotaPanel extends JPanel {
         btnGuardar.addActionListener(_e    -> guardar());
         btnReimprimir.addActionListener(_e -> guardarYReimprimir());
 
+        // Al escribir o borrar un dígito del teléfono, se re-busca automáticamente.
+        ((AbstractDocument) txtTelefono.getDocument())
+                .addDocumentListener((SimpleDocListener) this::onTelefonoCambiado);
+
         tbNotas.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) cargarNotaSeleccionada();
+        });
+
+        // Al salir de esta pestaña, limpiar toda la información cargada.
+        addComponentListener(new ComponentAdapter() {
+            @Override public void componentHidden(ComponentEvent e) { limpiarTodo(); }
         });
     }
 
@@ -196,6 +209,7 @@ public class ObservacionesNotaPanel extends JPanel {
     }
 
     private void buscarPorTelefono(String tel) {
+        lastTel = tel;
         limpiarNota();
         modelNotas.setRowCount(0);
         try {
@@ -235,8 +249,8 @@ public class ObservacionesNotaPanel extends JPanel {
         if (cr == null) return;
         String tel = TelefonosUI.soloDigitos(cr.getTelefono1());
         if (tel != null && !tel.isEmpty()) {
-            txtTelefono.setText(tel); // el filtro lo formatea automáticamente
-            buscarPorTelefono(tel);
+            lastTel = null;            // fuerza la búsqueda aunque sea el mismo número
+            txtTelefono.setText(tel);  // el DocumentListener formatea y busca
         } else {
             JOptionPane.showMessageDialog(this,
                     "El cliente seleccionado no tiene teléfono registrado.",
@@ -317,6 +331,34 @@ public class ObservacionesNotaPanel extends JPanel {
         txaObs.setEnabled(false);
         btnGuardar.setEnabled(false);
         btnReimprimir.setEnabled(false);
+    }
+
+    // ── Reacción al cambiar el teléfono (escribir / borrar dígitos) ──────────────
+
+    private void onTelefonoCambiado() {
+        String tel = TelefonosUI.soloDigitos(txtTelefono.getText().trim());
+        if (tel.isEmpty()) {
+            lastTel = null;
+            modelNotas.setRowCount(0);
+            limpiarNota();
+            lblStatus.setForeground(new Color(90, 90, 90));
+            lblStatus.setText(" ");
+            return;
+        }
+        if (tel.equals(lastTel)) return; // el filtro reformateó, pero los dígitos no cambiaron
+        buscarPorTelefono(tel);
+    }
+
+    // ── Limpieza total (al salir de la pestaña) ─────────────────────────────────
+
+    private void limpiarTodo() {
+        lastTel = null;
+        txtFolio.setText("");
+        txtTelefono.setText(""); // dispara onTelefonoCambiado(), que limpia lista y nota
+        modelNotas.setRowCount(0);
+        limpiarNota();
+        lblStatus.setForeground(new Color(90, 90, 90));
+        lblStatus.setText(" ");
     }
 
     // ── Guardar y reimprimir ───────────────────────────────────────────────────
@@ -441,5 +483,13 @@ public class ObservacionesNotaPanel extends JPanel {
         }
 
         ClienteResumen getSeleccionado() { return seleccionado; }
+    }
+
+    // ── DocumentListener simple: los tres eventos llaman al mismo método ─────────
+    private interface SimpleDocListener extends javax.swing.event.DocumentListener {
+        void on();
+        @Override default void insertUpdate(javax.swing.event.DocumentEvent e)  { on(); }
+        @Override default void removeUpdate(javax.swing.event.DocumentEvent e)  { on(); }
+        @Override default void changedUpdate(javax.swing.event.DocumentEvent e) { on(); }
     }
 }
