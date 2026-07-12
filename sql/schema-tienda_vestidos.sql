@@ -36,7 +36,10 @@ CREATE TABLE IF NOT EXISTS `asesor` (
   `nombre_completo` varchar(100) NOT NULL,
   `fecha_alta`      date DEFAULT NULL,
   `fecha_baja`      date DEFAULT NULL,
+  `tipo_empleado`   enum('A','M','MA') DEFAULT NULL,
   `status`          enum('A','C') DEFAULT 'A',
+  `password_login`        varbinary(64) DEFAULT NULL,
+  `permiso_cancelar_nota` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`numero_empleado`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -45,6 +48,7 @@ CREATE TABLE IF NOT EXISTS `asesor` (
 CREATE TABLE IF NOT EXISTS `clientes` (
   `telefono1`         varchar(15) NOT NULL,
   `telefono2`         varchar(15) NOT NULL,
+  `parentesco_tel2`   varchar(100) DEFAULT NULL,
   `nombre`            varchar(50) NOT NULL,
   `apellido_paterno`  varchar(50) NOT NULL,
   `apellido_materno`  varchar(50) DEFAULT NULL,
@@ -52,12 +56,33 @@ CREATE TABLE IF NOT EXISTS `clientes` (
   `como_se_entero`    enum('UBICACION','RECOMENDACION','GOOGLE MAPS','TIKTOK','FACEBOOK','INSTAGRAM') DEFAULT NULL,
   `fecha_evento`      date NOT NULL,
   `lugar_evento`      enum('HACIENDA','JARDIN','SALON','PLAYA') NOT NULL,
+  `fecha_cita1`       date DEFAULT NULL,
+  `hora_cita1`        time DEFAULT NULL,
+  `asesora_cita1`     varchar(100) DEFAULT NULL,
+  `obs_cita1`         varchar(255) DEFAULT NULL,
+  `fecha_cita2`       date DEFAULT NULL,
+  `hora_cita2`        time DEFAULT NULL,
+  `asesora_cita2`     varchar(100) DEFAULT NULL,
+  `obs_cita2`         varchar(255) DEFAULT NULL,
   `fecha_prueba1`     date DEFAULT NULL,
+  `hora_prueba1`      time DEFAULT NULL,
+  `modista_prueba1`   varchar(100) DEFAULT NULL,
+  `obs_prueba1`       varchar(255) DEFAULT NULL,
+
   `fecha_prueba2`     date DEFAULT NULL,
+  `hora_prueba2`      time DEFAULT NULL,
+  `modista_prueba2`   varchar(100) DEFAULT NULL,
+  `obs_prueba2`       varchar(255) DEFAULT NULL,
+
   `fecha_entrega`     date DEFAULT NULL,
+  `hora_entrega`      time DEFAULT NULL,
+  `asesora_entrega`   varchar(100) DEFAULT NULL,
+  `obs_entrega`       varchar(255) DEFAULT NULL,
+
   `busto`             decimal(5,2) NOT NULL,
   `cintura`           decimal(5,2) NOT NULL,
   `cadera`            decimal(5,2) NOT NULL,
+  `observaciones`     varchar(150) DEFAULT NULL,
   `status`            enum('A','C') NOT NULL DEFAULT 'A',
   `situacion_evento`  enum('CANCELA DEFINITIVO','POSPONE BODA INDEFINIDO','NORMAL') DEFAULT 'NORMAL',
   PRIMARY KEY (`telefono1`)
@@ -66,18 +91,26 @@ CREATE TABLE IF NOT EXISTS `clientes` (
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS `inventarios` (
-  `codigo_articulo` int NOT NULL,
-  `articulo`        varchar(100) NOT NULL,
-  `marca`           varchar(50) DEFAULT NULL,
-  `modelo`          varchar(50) DEFAULT NULL,
-  `talla`           varchar(10) DEFAULT NULL,
-  `color`           varchar(30) DEFAULT NULL,
-  `tipo`            enum('ARTICULO','OBSEQUIO') NOT NULL DEFAULT 'ARTICULO',
-  `precio`          decimal(10,2) NOT NULL,
-  `descuento`       decimal(5,2) DEFAULT '0.00',
-  `existencia`      int DEFAULT '0',
-  `fecha_registro`  date DEFAULT NULL,
-  `status`          enum('A','C') DEFAULT 'A',
+  `codigo_articulo` varchar(15) NOT NULL,
+  `articulo` varchar(100) NOT NULL,
+  `descripcion1` varchar(150) DEFAULT NULL,
+  `descripcion2` varchar(150) DEFAULT NULL,
+  `marca` varchar(50) DEFAULT NULL,
+  `modelo` varchar(100) DEFAULT NULL,
+  `talla` varchar(10) DEFAULT NULL,
+  `color` varchar(30) DEFAULT NULL,
+  `tipo` enum('ARTICULO','OBSEQUIO') NOT NULL DEFAULT 'ARTICULO',
+  `precio` decimal(10,2) NOT NULL,
+  `costo_iva` decimal(10,2) DEFAULT NULL,
+  `descuento` decimal(5,2) DEFAULT '0.00',
+  `existencia` int DEFAULT '0',
+  `nombre_novia` varchar(100) DEFAULT NULL,
+  `inventario_conteo` int DEFAULT NULL,
+  `fecha_registro` date DEFAULT NULL,
+  `remision` varchar(30) DEFAULT NULL,
+  `factura` varchar(30) DEFAULT NULL,
+  `fecha_pago` date DEFAULT NULL,
+  `status` enum('A','C') DEFAULT 'A',
   PRIMARY KEY (`codigo_articulo`),
   KEY `idx_inventarios_tipo` (`tipo`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -85,50 +118,48 @@ CREATE TABLE IF NOT EXISTS `inventarios` (
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS `inventarioobsequios` (
-  `codigo_articulo` int NOT NULL,
-  `articulo`        varchar(100) NOT NULL,
-  `marca`           varchar(50) DEFAULT NULL,
-  `modelo`          varchar(50) DEFAULT NULL,
-  `talla`           varchar(10) DEFAULT NULL,
-  `color`           varchar(30) DEFAULT NULL,
-  `precio`          decimal(10,2) NOT NULL DEFAULT '0.00',
-  `descuento`       decimal(5,2) DEFAULT '0.00',
-  `existencia`      int DEFAULT '0',
-  `status`          enum('A','C') NOT NULL DEFAULT 'A',
-  `fecha_registro`  date NOT NULL,
+  `codigo_articulo` varchar(15) NOT NULL,
+  `articulo` varchar(100) NOT NULL,
+  `marca` varchar(50) DEFAULT NULL,
+  `modelo` varchar(50) DEFAULT NULL,
+  `talla` varchar(10) DEFAULT NULL,
+  `color` varchar(30) DEFAULT NULL,
+  `precio` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `descuento` decimal(5,2) DEFAULT '0.00',
+  `existencia` int DEFAULT '0',
+  `status` enum('A','C') NOT NULL DEFAULT 'A',
+  `fecha_registro` date NOT NULL,
   PRIMARY KEY (`codigo_articulo`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
-
 CREATE TABLE IF NOT EXISTS `folios` (
-  `tipo`    varchar(5)  NOT NULL,
+  `tipo` varchar(5) NOT NULL,
   `prefijo` varchar(16) NOT NULL,
-  `ultimo`  int NOT NULL,
+  `ultimo` int NOT NULL,
   PRIMARY KEY (`tipo`),
   UNIQUE KEY `ux_folios_prefijo` (`prefijo`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
-
 CREATE TABLE IF NOT EXISTS `empresa` (
   `numero_empresa` int NOT NULL,
-  `razon_social`   varchar(100) NOT NULL,
-  `nombre_fiscal`  varchar(100) DEFAULT NULL,
-  `rfc`            varchar(13) DEFAULT NULL,
-  `calle_numero`   varchar(150) DEFAULT NULL,
-  `colonia`        varchar(100) DEFAULT NULL,
-  `codigo_postal`  char(5) DEFAULT NULL,
-  `ciudad`         varchar(100) DEFAULT NULL,
-  `estado`         varchar(100) DEFAULT NULL,
-  `whatsapp`       varchar(15) DEFAULT NULL,
-  `telefono`       varchar(15) DEFAULT NULL,
-  `instagram`      varchar(100) DEFAULT NULL,
-  `facebook`       varchar(100) DEFAULT NULL,
-  `tiktok`         varchar(100) DEFAULT NULL,
-  `correo`         varchar(100) DEFAULT NULL,
-  `pagina_web`     varchar(150) DEFAULT NULL,
-  `logo`           longblob,
+  `razon_social` varchar(100) NOT NULL,
+  `nombre_fiscal` varchar(100) DEFAULT NULL,
+  `rfc` varchar(13) DEFAULT NULL,
+  `calle_numero` varchar(150) DEFAULT NULL,
+  `colonia` varchar(100) DEFAULT NULL,
+  `codigo_postal` char(5) DEFAULT NULL,
+  `ciudad` varchar(100) DEFAULT NULL,
+  `estado` varchar(100) DEFAULT NULL,
+  `whatsapp` varchar(15) DEFAULT NULL,
+  `telefono` varchar(15) DEFAULT NULL,
+  `instagram` varchar(100) DEFAULT NULL,
+  `facebook` varchar(100) DEFAULT NULL,
+  `tiktok` varchar(100) DEFAULT NULL,
+  `correo` varchar(100) DEFAULT NULL,
+  `pagina_web` varchar(150) DEFAULT NULL,
+  `logo` longblob,
   PRIMARY KEY (`numero_empresa`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -148,6 +179,12 @@ EN CASO DE QUE MODIFIQUES LA FECHA DE TU EVENTO Y/O ESTES EMBARAZADA Y/O ESTES E
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `schema_migrations` (
+  `version` int NOT NULL,
+  `descripcion` varchar(200) NOT NULL,
+  `aplicada_en` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`version`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `seguridad_app` (
   `id`        int PRIMARY KEY,
@@ -156,30 +193,28 @@ CREATE TABLE IF NOT EXISTS `seguridad_app` (
 );
 
 -- -----------------------------------------------------------------------------
-
 CREATE TABLE IF NOT EXISTS `cortes_caja` (
-  `id`                    int NOT NULL AUTO_INCREMENT,
-  `fecha`                 date NOT NULL,
-  `tarjeta_debito`        decimal(12,2) DEFAULT NULL,
-  `tarjeta_credito`       decimal(12,2) DEFAULT NULL,
-  `american_express`      decimal(12,2) DEFAULT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
+  `fecha` date NOT NULL,
+  `tarjeta_debito` decimal(12,2) DEFAULT NULL,
+  `tarjeta_credito` decimal(12,2) DEFAULT NULL,
+  `american_express` decimal(12,2) DEFAULT NULL,
   `transferencia_bancaria` decimal(12,2) DEFAULT NULL,
-  `deposito_bancario`     decimal(12,2) DEFAULT NULL,
-  `efectivo`              decimal(12,2) DEFAULT NULL,
-  `retiros`               decimal(12,2) DEFAULT NULL,
-  `efectivo_neto`         decimal(12,2) DEFAULT NULL,
+  `deposito_bancario` decimal(12,2) DEFAULT NULL,
+  `efectivo` decimal(12,2) DEFAULT NULL,
+  `retiros` decimal(12,2) DEFAULT NULL,
+  `efectivo_neto` decimal(12,2) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_cortes_fecha` (`fecha`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
-
 CREATE TABLE IF NOT EXISTS `gastos_caja` (
-  `id`          int NOT NULL AUTO_INCREMENT,
-  `ts`          datetime NOT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
+  `ts` datetime NOT NULL,
   `efectivo_dia` decimal(12,2) DEFAULT NULL,
-  `retiro`      decimal(12,2) NOT NULL,
-  `motivo`      varchar(255) DEFAULT NULL,
+  `retiro` decimal(12,2) NOT NULL,
+  `motivo` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -214,150 +249,146 @@ CREATE TABLE IF NOT EXISTS `ventas_vendedor_diario` (
 -- =============================================================================
 -- TABLAS CON DEPENDENCIAS DE FK
 -- =============================================================================
-
 CREATE TABLE IF NOT EXISTS `notas` (
-  `numero_nota`     int NOT NULL AUTO_INCREMENT,
-  `fecha_registro`  datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `telefono`        varchar(15) DEFAULT NULL,
-  `asesor`          int DEFAULT NULL,
-  `tipo`            enum('CN','CR','AB','DV') NOT NULL,
-  `total`           decimal(10,2) NOT NULL,
-  `saldo`           decimal(10,2) NOT NULL DEFAULT '0.00',
-  `status`          enum('A','C') DEFAULT 'A',
-  `folio`           varchar(12) NOT NULL,
+  `numero_nota` int NOT NULL AUTO_INCREMENT,
+  `fecha_registro` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `telefono` varchar(15) DEFAULT NULL,
+  `asesor` int DEFAULT NULL,
+  `tipo` enum('CN','CR','AB','DV') NOT NULL,
+  `total` decimal(10,2) NOT NULL,
+  `saldo` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `status` enum('A','C','D') DEFAULT 'A',
+  `folio` varchar(12) NOT NULL,
   `nota_relacionada` int DEFAULT NULL,
   PRIMARY KEY (`numero_nota`),
   KEY `fk_notas_cliente` (`telefono`),
   KEY `fk_notas_asesor` (`asesor`),
   KEY `idx_notas_rel` (`tipo`),
-  CONSTRAINT `fk_notas_asesor`  FOREIGN KEY (`asesor`)   REFERENCES `asesor`   (`numero_empleado`),
+  CONSTRAINT `fk_notas_asesor` FOREIGN KEY (`asesor`) REFERENCES `asesor` (`numero_empleado`),
   CONSTRAINT `fk_notas_cliente` FOREIGN KEY (`telefono`) REFERENCES `clientes` (`telefono1`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS `nota_detalle` (
-  `id`              int NOT NULL AUTO_INCREMENT,
-  `numero_nota`     int NOT NULL,
-  `fecha_registro`  datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `articulo`        varchar(100) DEFAULT NULL,
-  `marca`           varchar(50) DEFAULT NULL,
-  `modelo`          varchar(50) DEFAULT NULL,
-  `talla`           varchar(10) DEFAULT NULL,
-  `color`           varchar(30) DEFAULT NULL,
-  `precio`          decimal(10,2) DEFAULT NULL,
-  `descuento`       decimal(5,2) DEFAULT '0.00',
-  `subtotal`        decimal(10,2) NOT NULL,
-  `fecha_evento`    date DEFAULT NULL,
-  `telefono`        varchar(15) DEFAULT NULL,
-  `codigo_articulo` int DEFAULT NULL,
-  `status`          enum('A','C') DEFAULT 'A',
-  `fecha_entrega`   date DEFAULT NULL,
+CREATE TABLE  IF NOT EXISTS `nota_detalle` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `numero_nota` int NOT NULL,
+  `fecha_registro` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `articulo` varchar(100) DEFAULT NULL,
+  `marca` varchar(50) DEFAULT NULL,
+  `modelo` varchar(50) DEFAULT NULL,
+  `talla` varchar(10) DEFAULT NULL,
+  `color` varchar(30) DEFAULT NULL,
+  `precio` decimal(10,2) DEFAULT NULL,
+  `descuento` decimal(5,2) DEFAULT '0.00',
+  `subtotal` decimal(10,2) NOT NULL,
+  `fecha_evento` date DEFAULT NULL,
+  `telefono` varchar(15) DEFAULT NULL,
+  `codigo_articulo` varchar(15) DEFAULT NULL,
+  `status` enum('A','C','D') DEFAULT 'A',
+  `fecha_entrega` date DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `telefono` (`telefono`),
-  KEY `codigo_articulo` (`codigo_articulo`),
   KEY `idx_det_nota` (`numero_nota`),
-  CONSTRAINT `fk_det_nota`          FOREIGN KEY (`numero_nota`)     REFERENCES `notas`      (`numero_nota`) ON DELETE CASCADE,
-  CONSTRAINT `nota_detalle_ibfk_1`  FOREIGN KEY (`telefono`)        REFERENCES `clientes`   (`telefono1`),
-  CONSTRAINT `nota_detalle_ibfk_2`  FOREIGN KEY (`codigo_articulo`) REFERENCES `inventarios` (`codigo_articulo`)
+  KEY `nota_detalle_ibfk2` (`codigo_articulo`),
+  CONSTRAINT `fk_det_nota` FOREIGN KEY (`numero_nota`) REFERENCES `notas` (`numero_nota`) ON DELETE CASCADE,
+  CONSTRAINT `nota_detalle_ibfk2` FOREIGN KEY (`codigo_articulo`) REFERENCES `inventarios` (`codigo_articulo`),
+  CONSTRAINT `nota_detalle_ibfk_1` FOREIGN KEY (`telefono`) REFERENCES `clientes` (`telefono1`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
-
 CREATE TABLE IF NOT EXISTS `formas_pago` (
-  `numero_nota`           int NOT NULL,
-  `fecha_operacion`       date DEFAULT NULL,
-  `tarjeta_credito`       decimal(10,2) DEFAULT NULL,
-  `tarjeta_debito`        decimal(10,2) DEFAULT NULL,
-  `american_express`      decimal(10,2) DEFAULT NULL,
+  `numero_nota` int NOT NULL,
+  `fecha_operacion` date DEFAULT NULL,
+  `tarjeta_credito` decimal(10,2) DEFAULT NULL,
+  `tarjeta_debito` decimal(10,2) DEFAULT NULL,
+  `american_express` decimal(10,2) DEFAULT NULL,
   `transferencia_bancaria` decimal(10,2) DEFAULT NULL,
-  `deposito_bancario`     decimal(10,2) DEFAULT NULL,
-  `efectivo`              decimal(10,2) DEFAULT NULL,
-  `devolucion`            decimal(12,2) DEFAULT NULL,
-  `tipo_operacion`        enum('CR','CN','AB','DV') DEFAULT NULL,
-  `status`                enum('A','C') DEFAULT 'A',
-  `referencia_dv`         varchar(20) DEFAULT NULL,
+  `deposito_bancario` decimal(10,2) DEFAULT NULL,
+  `efectivo` decimal(10,2) DEFAULT NULL,
+  `devolucion` decimal(12,2) DEFAULT NULL,
+  `tipo_operacion` enum('CR','CN','AB','DV') DEFAULT NULL,
+  `status` enum('A','C') DEFAULT 'A',
+  `referencia_dv` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`numero_nota`),
   CONSTRAINT `fk_fp_notas` FOREIGN KEY (`numero_nota`) REFERENCES `notas` (`numero_nota`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
-
 CREATE TABLE IF NOT EXISTS `cambios_fecha_evento` (
-  `numero_nota`         int NOT NULL,
-  `telefono`            varchar(15) DEFAULT NULL,
+  `numero_nota` int NOT NULL,
+  `telefono` varchar(15) DEFAULT NULL,
   `fecha_inicial_evento` date DEFAULT NULL,
-  `nueva_fecha`         date DEFAULT NULL,
-  `asesor`              int DEFAULT NULL,
-  `status`              enum('A','C') DEFAULT 'A',
-  `motivo_cambio`       text,
+  `nueva_fecha` date DEFAULT NULL,
+  `asesor` int DEFAULT NULL,
+  `status` enum('A','C') DEFAULT 'A',
+  `motivo_cambio` text,
   PRIMARY KEY (`numero_nota`),
   KEY `telefono` (`telefono`),
   KEY `asesor` (`asesor`),
   CONSTRAINT `cambios_fecha_evento_ibfk_2` FOREIGN KEY (`telefono`) REFERENCES `clientes` (`telefono1`),
-  CONSTRAINT `cambios_fecha_evento_ibfk_3` FOREIGN KEY (`asesor`)   REFERENCES `asesor`   (`numero_empleado`),
-  CONSTRAINT `fk_cambios_fecha_evento`     FOREIGN KEY (`numero_nota`) REFERENCES `notas` (`numero_nota`)
+  CONSTRAINT `cambios_fecha_evento_ibfk_3` FOREIGN KEY (`asesor`) REFERENCES `asesor` (`numero_empleado`),
+  CONSTRAINT `fk_cambios_fecha_evento` FOREIGN KEY (`numero_nota`) REFERENCES `notas` (`numero_nota`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS `cancelacion_eventos` (
-  `numero_nota`        int NOT NULL,
-  `telefono`           varchar(15) DEFAULT NULL,
-  `fecha_operacion`    date DEFAULT NULL,
-  `monto_compras`      decimal(10,2) DEFAULT NULL,
-  `monto_abonos`       decimal(10,2) DEFAULT NULL,
-  `saldo_pendiente`    decimal(10,2) DEFAULT NULL,
+  `numero_nota` int NOT NULL,
+  `telefono` varchar(15) DEFAULT NULL,
+  `fecha_operacion` date DEFAULT NULL,
+  `monto_compras` decimal(10,2) DEFAULT NULL,
+  `monto_abonos` decimal(10,2) DEFAULT NULL,
+  `saldo_pendiente` decimal(10,2) DEFAULT NULL,
   `motivo_cancelacion` text,
-  `status`             enum('A','C') DEFAULT 'A',
-  `situacion_evento`   enum('CANCELA DEFINITIVO','POSPONE BODA INDEFINIDO','NORMAL') DEFAULT NULL,
+  `status` enum('A','C') DEFAULT 'A',
+  `situacion_evento` enum('CANCELA DEFINITIVO','POSPONE BODA INDEFINIDO','NORMAL') DEFAULT NULL,
   PRIMARY KEY (`numero_nota`),
   KEY `telefono` (`telefono`),
-  CONSTRAINT `cancelacion_eventos_ibfk_2` FOREIGN KEY (`telefono`)   REFERENCES `clientes` (`telefono1`),
-  CONSTRAINT `fk_cancelacion_evento`      FOREIGN KEY (`numero_nota`) REFERENCES `notas`   (`numero_nota`)
+  CONSTRAINT `cancelacion_eventos_ibfk_2` FOREIGN KEY (`telefono`) REFERENCES `clientes` (`telefono1`),
+  CONSTRAINT `fk_cancelacion_evento` FOREIGN KEY (`numero_nota`) REFERENCES `notas` (`numero_nota`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS `cancelados` (
-  `numero_nota`        int NOT NULL,
-  `fecha_cancelacion`  date DEFAULT NULL,
+  `numero_nota` int NOT NULL,
+  `fecha_cancelacion` date DEFAULT NULL,
   `motivo_cancelacion` text,
-  `status`             enum('A','C') DEFAULT 'A',
-  `asesor`             int DEFAULT NULL,
+  `status` enum('A','C') DEFAULT 'A',
+  `asesor` int DEFAULT NULL,
   PRIMARY KEY (`numero_nota`),
   KEY `asesor` (`asesor`),
-  CONSTRAINT `cancelados_ibfk_2`    FOREIGN KEY (`asesor`)      REFERENCES `asesor` (`numero_empleado`),
-  CONSTRAINT `fk_cancelados_notas`  FOREIGN KEY (`numero_nota`) REFERENCES `notas`  (`numero_nota`)
+  CONSTRAINT `cancelados_ibfk_2` FOREIGN KEY (`asesor`) REFERENCES `asesor` (`numero_empleado`),
+  CONSTRAINT `fk_cancelados_notas` FOREIGN KEY (`numero_nota`) REFERENCES `notas` (`numero_nota`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS `devoluciones` (
   `numero_nota_dv` int NOT NULL,
-  `nota_origen`    int NOT NULL,
-  `motivo`         varchar(500) DEFAULT NULL,
-  `fecha`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `monto_usado`    decimal(10,2) DEFAULT '0.00',
+  `nota_origen` int NOT NULL,
+  `motivo` varchar(500) DEFAULT NULL,
+  `fecha` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `monto_usado` decimal(10,2) DEFAULT '0.00',
   PRIMARY KEY (`numero_nota_dv`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS `devoluciones_det` (
-  `id`                  int NOT NULL AUTO_INCREMENT,
-  `numero_nota_origen`  int NOT NULL,
-  `codigo_articulo`     int NOT NULL,
-  `cantidad`            int NOT NULL,
-  `numero_nota_dv`      int NOT NULL,
-  `motivo`              varchar(500) DEFAULT NULL,
-  `fecha_registro`      timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `id` int NOT NULL AUTO_INCREMENT,
+  `numero_nota_origen` int NOT NULL,
+  `codigo_articulo` varchar(15) DEFAULT NULL,
+  `cantidad` int NOT NULL,
+  `numero_nota_dv` int NOT NULL,
+  `motivo` varchar(500) DEFAULT NULL,
+  `fecha_registro` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_origen_codigo` (`numero_nota_origen`,`codigo_articulo`),
-  KEY `fk_devdet_dv`  (`numero_nota_dv`),
+  KEY `fk_devdet_dv` (`numero_nota_dv`),
   KEY `fk_devdet_art` (`codigo_articulo`),
-  CONSTRAINT `fk_devdet_art`    FOREIGN KEY (`codigo_articulo`)    REFERENCES `inventarios` (`codigo_articulo`),
-  CONSTRAINT `fk_devdet_dv`     FOREIGN KEY (`numero_nota_dv`)     REFERENCES `notas` (`numero_nota`) ON DELETE CASCADE,
+  CONSTRAINT `fk_devdet_art` FOREIGN KEY (`codigo_articulo`) REFERENCES `inventarios` (`codigo_articulo`),
+  CONSTRAINT `fk_devdet_dv` FOREIGN KEY (`numero_nota_dv`) REFERENCES `notas` (`numero_nota`) ON DELETE CASCADE,
   CONSTRAINT `fk_devdet_origen` FOREIGN KEY (`numero_nota_origen`) REFERENCES `notas` (`numero_nota`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -365,16 +396,18 @@ CREATE TABLE IF NOT EXISTS `devoluciones_det` (
 
 CREATE TABLE IF NOT EXISTS `factura_datos` (
   `numero_nota` int NOT NULL,
-  `persona`     enum('PF','PM') NOT NULL,
-  `rfc`         varchar(13) NOT NULL,
-  `regimen`     varchar(4) NOT NULL,
-  `uso_cfdi`    varchar(4) NOT NULL,
-  `correo`      varchar(120) DEFAULT NULL,
-  `created_at`  datetime DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`  datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `persona` enum('PF','PM') NOT NULL,
+  `rfc` varchar(13) NOT NULL,
+  `regimen` varchar(4) NOT NULL,
+  `uso_cfdi` varchar(4) NOT NULL,
+  `correo` varchar(120) DEFAULT NULL,
+  `codigo_postal` varchar(5) NOT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`numero_nota`),
   CONSTRAINT `fk_facturadatos_nota` FOREIGN KEY (`numero_nota`) REFERENCES `notas` (`numero_nota`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 
 -- -----------------------------------------------------------------------------
 
@@ -398,23 +431,23 @@ CREATE TABLE IF NOT EXISTS `notas_observaciones` (
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS `obsequios` (
-  `numero_nota`    int NOT NULL,
-  `telefono`       varchar(15) DEFAULT NULL,
+  `numero_nota` int NOT NULL,
+  `telefono` varchar(15) DEFAULT NULL,
   `fecha_operacion` date DEFAULT NULL,
-  `obsequio1`      varchar(100) DEFAULT NULL,
-  `obsequio2`      varchar(100) DEFAULT NULL,
-  `obsequio3`      varchar(100) DEFAULT NULL,
-  `obsequio4`      varchar(100) DEFAULT NULL,
-  `obsequio5`      varchar(100) DEFAULT NULL,
+  `obsequio1` varchar(100) DEFAULT NULL,
+  `obsequio2` varchar(100) DEFAULT NULL,
+  `obsequio3` varchar(100) DEFAULT NULL,
+  `obsequio4` varchar(100) DEFAULT NULL,
+  `obsequio5` varchar(100) DEFAULT NULL,
   `tipo_operacion` enum('CN','CR','AB','DV') DEFAULT NULL,
-  `asesor`         int DEFAULT NULL,
-  `status`         enum('A','C') DEFAULT 'A',
-  `fecha_evento`   date DEFAULT NULL,
-  `obsequio1_cod`  int DEFAULT NULL,
-  `obsequio2_cod`  int DEFAULT NULL,
-  `obsequio3_cod`  int DEFAULT NULL,
-  `obsequio4_cod`  int DEFAULT NULL,
-  `obsequio5_cod`  int DEFAULT NULL,
+  `asesor` int DEFAULT NULL,
+  `status` enum('A','C') DEFAULT 'A',
+  `fecha_evento` date DEFAULT NULL,
+  `obsequio1_cod` varchar(15) DEFAULT NULL,
+  `obsequio2_cod` varchar(15) DEFAULT NULL,
+  `obsequio3_cod` varchar(15) DEFAULT NULL,
+  `obsequio4_cod` varchar(15) DEFAULT NULL,
+  `obsequio5_cod` varchar(15) DEFAULT NULL,
   PRIMARY KEY (`numero_nota`),
   KEY `telefono` (`telefono`),
   KEY `asesor` (`asesor`),
@@ -423,56 +456,92 @@ CREATE TABLE IF NOT EXISTS `obsequios` (
   KEY `fk_obs_cod3` (`obsequio3_cod`),
   KEY `fk_obs_cod4` (`obsequio4_cod`),
   KEY `fk_obs_cod5` (`obsequio5_cod`),
-  CONSTRAINT `fk_obs_cod1`  FOREIGN KEY (`obsequio1_cod`) REFERENCES `inventarioobsequios` (`codigo_articulo`),
-  CONSTRAINT `fk_obs_cod2`  FOREIGN KEY (`obsequio2_cod`) REFERENCES `inventarioobsequios` (`codigo_articulo`),
-  CONSTRAINT `fk_obs_cod3`  FOREIGN KEY (`obsequio3_cod`) REFERENCES `inventarioobsequios` (`codigo_articulo`),
-  CONSTRAINT `fk_obs_cod4`  FOREIGN KEY (`obsequio4_cod`) REFERENCES `inventarioobsequios` (`codigo_articulo`),
-  CONSTRAINT `fk_obs_cod5`  FOREIGN KEY (`obsequio5_cod`) REFERENCES `inventarioobsequios` (`codigo_articulo`),
-  CONSTRAINT `fk_obsequios`  FOREIGN KEY (`numero_nota`) REFERENCES `notas`    (`numero_nota`),
-  CONSTRAINT `obsequios_ibfk_2` FOREIGN KEY (`telefono`)  REFERENCES `clientes` (`telefono1`),
-  CONSTRAINT `obsequios_ibfk_3` FOREIGN KEY (`asesor`)    REFERENCES `asesor`   (`numero_empleado`)
+  CONSTRAINT `fk_obs_cod1` FOREIGN KEY (`obsequio1_cod`) REFERENCES `inventarioobsequios` (`codigo_articulo`),
+  CONSTRAINT `fk_obs_cod2` FOREIGN KEY (`obsequio2_cod`) REFERENCES `inventarioobsequios` (`codigo_articulo`),
+  CONSTRAINT `fk_obs_cod3` FOREIGN KEY (`obsequio3_cod`) REFERENCES `inventarioobsequios` (`codigo_articulo`),
+  CONSTRAINT `fk_obs_cod4` FOREIGN KEY (`obsequio4_cod`) REFERENCES `inventarioobsequios` (`codigo_articulo`),
+  CONSTRAINT `fk_obs_cod5` FOREIGN KEY (`obsequio5_cod`) REFERENCES `inventarioobsequios` (`codigo_articulo`),
+  CONSTRAINT `fk_obsequios` FOREIGN KEY (`numero_nota`) REFERENCES `notas` (`numero_nota`),
+  CONSTRAINT `obsequios_ibfk_2` FOREIGN KEY (`telefono`) REFERENCES `clientes` (`telefono1`),
+  CONSTRAINT `obsequios_ibfk_3` FOREIGN KEY (`asesor`) REFERENCES `asesor` (`numero_empleado`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS `pago_notadv` (
-  `id`                    int NOT NULL AUTO_INCREMENT,
-  `numero_nota_destino`   int NOT NULL,
-  `numero_nota_dv`        int NOT NULL,
-  `monto`                 decimal(10,2) NOT NULL,
-  `fecha_aplicacion`      date NOT NULL DEFAULT (curdate()),
+  `id` int NOT NULL AUTO_INCREMENT,
+  `numero_nota_destino` int NOT NULL,
+  `numero_nota_dv` int NOT NULL,
+  `monto` decimal(10,2) NOT NULL,
+  `fecha_aplicacion` date NOT NULL DEFAULT (curdate()),
   PRIMARY KEY (`id`),
   KEY `numero_nota_destino` (`numero_nota_destino`),
-  KEY `numero_nota_dv`      (`numero_nota_dv`),
+  KEY `numero_nota_dv` (`numero_nota_dv`),
   CONSTRAINT `pago_notadv_ibfk_1` FOREIGN KEY (`numero_nota_destino`) REFERENCES `notas` (`numero_nota`),
-  CONSTRAINT `pago_notadv_ibfk_2` FOREIGN KEY (`numero_nota_dv`)      REFERENCES `notas` (`numero_nota`)
+  CONSTRAINT `pago_notadv_ibfk_2` FOREIGN KEY (`numero_nota_dv`) REFERENCES `notas` (`numero_nota`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 
 -- -----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS `pedidos` (
-  `numero_nota`    int NOT NULL,
+  `numero_nota` int NOT NULL,
   `fecha_registro` date DEFAULT NULL,
-  `articulo`       varchar(100) DEFAULT NULL,
-  `marca`          varchar(50) DEFAULT NULL,
-  `modelo`         varchar(50) DEFAULT NULL,
-  `talla`          varchar(10) DEFAULT NULL,
-  `color`          varchar(30) DEFAULT NULL,
-  `precio`         decimal(10,2) DEFAULT NULL,
-  `descuento`      decimal(5,2) DEFAULT '0.00',
-  `fecha_evento`   date DEFAULT NULL,
-  `telefono`       varchar(15) DEFAULT NULL,
-  `codigo_articulo` int DEFAULT NULL,
-  `status`         enum('A','C') DEFAULT 'A',
-  `id`             int NOT NULL AUTO_INCREMENT,
-  `en_tienda`      char(1) NOT NULL DEFAULT 'N',
-  `en_tienda_ts`   datetime DEFAULT NULL,
+  `articulo` varchar(100) DEFAULT NULL,
+  `marca` varchar(50) DEFAULT NULL,
+  `modelo` varchar(50) DEFAULT NULL,
+  `talla` varchar(10) DEFAULT NULL,
+  `color` varchar(30) DEFAULT NULL,
+  `precio` decimal(10,2) DEFAULT NULL,
+  `descuento` decimal(5,2) DEFAULT '0.00',
+  `fecha_evento` date DEFAULT NULL,
+  `telefono` varchar(15) DEFAULT NULL,
+  `codigo_articulo` varchar(15) DEFAULT NULL,
+  `status` enum('A','C') DEFAULT 'A',
+  `id` int NOT NULL AUTO_INCREMENT,
+  `en_tienda` char(1) NOT NULL DEFAULT 'N',
+  `en_tienda_ts` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `telefono` (`telefono`),
-  KEY `codigo_articulo` (`codigo_articulo`),
   KEY `idx_pedidos_nota` (`numero_nota`),
-  CONSTRAINT `pedidos_ibfk_1` FOREIGN KEY (`telefono`)        REFERENCES `clientes`   (`telefono1`),
+  KEY `pedidos_ibfk_2` (`codigo_articulo`),
+  CONSTRAINT `pedidos_ibfk_1` FOREIGN KEY (`telefono`) REFERENCES `clientes` (`telefono1`),
   CONSTRAINT `pedidos_ibfk_2` FOREIGN KEY (`codigo_articulo`) REFERENCES `inventarios` (`codigo_articulo`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- -----------------------------------------------------------------------------
+-- Trabajos de MODISTA asociados a una nota (artículos manufacturados sin código
+-- de inventario). Sin esta tabla, las ventas con artículos "MODISTA" fallan.
+CREATE TABLE IF NOT EXISTS `manufacturas` (
+  `id_manufactura` int NOT NULL AUTO_INCREMENT,
+  `numero_nota`    int NOT NULL,
+  `articulo`       varchar(100) NOT NULL,
+  `descripcion`    varchar(100) DEFAULT NULL,
+  `precio`         decimal(10,2) NOT NULL,
+  `descuento`      decimal(5,2) DEFAULT NULL,
+  `fecha_registro` date NOT NULL,
+  `fecha_entrega`  date DEFAULT NULL,
+  `observaciones`  varchar(255) DEFAULT NULL,
+  `telefono`       varchar(15) DEFAULT NULL,
+  `status`         enum('A','C') DEFAULT 'A',
+  PRIMARY KEY (`id_manufactura`),
+  KEY `fk_manufacturas_notas` (`numero_nota`),
+  KEY `fk_manufacturas` (`telefono`),
+  CONSTRAINT `fk_manufacturas` FOREIGN KEY (`telefono`) REFERENCES `clientes` (`telefono1`),
+  CONSTRAINT `fk_manufacturas_notas` FOREIGN KEY (`numero_nota`) REFERENCES `notas` (`numero_nota`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- -----------------------------------------------------------------------------
+-- Historial/saldo migrado del cliente (una fila por teléfono).
+CREATE TABLE IF NOT EXISTS `historialcliente` (
+  `telefono1`     varchar(15) NOT NULL,
+  `saldo_migrado` decimal(10,2) DEFAULT NULL,
+  `fecha_saldo`   date DEFAULT NULL,
+  `obsequios`     text,
+  `observacion`   text,
+  PRIMARY KEY (`telefono1`),
+  CONSTRAINT `fk_hist_cli` FOREIGN KEY (`telefono1`) REFERENCES `clientes` (`telefono1`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- =============================================================================

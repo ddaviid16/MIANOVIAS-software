@@ -648,9 +648,9 @@ private String fechaLarga(java.time.LocalDate f) {
 
                 yCursor += lineH / 2;
                 g2.drawString("Código Artículo: " + safe(t.codigoArticulo), textX, yCursor); yCursor += lineH;
-                g2.drawString("Artículo: " + safe(t.articulo), textX, yCursor);               yCursor += lineH;
-                g2.drawString("Marca: " + safe(t.marca), textX, yCursor);                     yCursor += lineH;
-                g2.drawString("Modelo: " + safe(t.modelo), textX, yCursor);                   yCursor += lineH;
+                yCursor = drawWrappedSimple(g2, "Artículo: " + safe(t.articulo), textX, yCursor, iw - 2 * margin);
+                yCursor = drawWrappedSimple(g2, "Marca: " + safe(t.marca), textX, yCursor, iw - 2 * margin);
+                yCursor = drawWrappedSimple(g2, "Modelo: " + safe(t.modelo), textX, yCursor, iw - 2 * margin);
                 g2.drawString("Talla: " + safe(t.talla) + "   Color: " + safe(t.color),
                             textX, yCursor);
                 yCursor += lineH * 2;

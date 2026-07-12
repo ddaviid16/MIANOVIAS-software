@@ -37,10 +37,43 @@ public final class MigradorBD {
             "Agregar FACEBOOK e INSTAGRAM a como_se_entero",
             "ALTER TABLE clientes MODIFY COLUMN como_se_entero " +
             "ENUM('UBICACION','RECOMENDACION','GOOGLE MAPS','TIKTOK','FACEBOOK','INSTAGRAM') " +
-            "DEFAULT NULL")
+            "DEFAULT NULL"),
+
+        new Migracion(3,
+            "Crear tabla manufacturas (artículos MODISTA) si falta",
+            "CREATE TABLE IF NOT EXISTS manufacturas (" +
+            "  id_manufactura INT NOT NULL AUTO_INCREMENT, " +
+            "  numero_nota    INT NOT NULL, " +
+            "  articulo       VARCHAR(100) NOT NULL, " +
+            "  descripcion    VARCHAR(100) DEFAULT NULL, " +
+            "  precio         DECIMAL(10,2) NOT NULL, " +
+            "  descuento      DECIMAL(5,2) DEFAULT NULL, " +
+            "  fecha_registro DATE NOT NULL, " +
+            "  fecha_entrega  DATE DEFAULT NULL, " +
+            "  observaciones  VARCHAR(255) DEFAULT NULL, " +
+            "  telefono       VARCHAR(15) DEFAULT NULL, " +
+            "  status         ENUM('A','C') DEFAULT 'A', " +
+            "  PRIMARY KEY (id_manufactura), " +
+            "  KEY fk_manufacturas_notas (numero_nota), " +
+            "  KEY fk_manufacturas (telefono), " +
+            "  CONSTRAINT fk_manufacturas FOREIGN KEY (telefono) REFERENCES clientes (telefono1), " +
+            "  CONSTRAINT fk_manufacturas_notas FOREIGN KEY (numero_nota) REFERENCES notas (numero_nota) ON DELETE CASCADE ON UPDATE CASCADE" +
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"),
+
+        new Migracion(4,
+            "Crear tabla historialcliente (saldo/historial migrado) si falta",
+            "CREATE TABLE IF NOT EXISTS historialcliente (" +
+            "  telefono1     VARCHAR(15) NOT NULL, " +
+            "  saldo_migrado DECIMAL(10,2) DEFAULT NULL, " +
+            "  fecha_saldo   DATE DEFAULT NULL, " +
+            "  obsequios     TEXT, " +
+            "  observacion   TEXT, " +
+            "  PRIMARY KEY (telefono1), " +
+            "  CONSTRAINT fk_hist_cli FOREIGN KEY (telefono1) REFERENCES clientes (telefono1)" +
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci")
 
         // ── PRÓXIMAS MIGRACIONES ────────────────────────────────────────────
-        // new Migracion(3, "Descripción del cambio", "ALTER TABLE ..."),
+        // new Migracion(5, "Descripción del cambio", "ALTER TABLE ..."),
     };
 
     private MigradorBD() {}

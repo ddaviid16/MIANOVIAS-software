@@ -1783,9 +1783,28 @@ private void cargarAsesores() {
             return;
         }
 
+        // Límite de caracteres (coincide con la BD: varchar(100)). No se agrega al
+        // carrito si excede, pero NO se borra lo escrito para no capturarlo de nuevo.
+        final int MAX_MODISTA = 100;
+        String descripcion = tDescripcion.getText().trim();
+        if (art.length() > MAX_MODISTA) {
+            JOptionPane.showMessageDialog(dlg,
+                    "El artículo no puede exceder " + MAX_MODISTA + " caracteres (actual: "
+                    + art.length() + ").\nAcórtalo antes de agregar al carrito.",
+                    "Texto demasiado largo", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (descripcion.length() > MAX_MODISTA) {
+            JOptionPane.showMessageDialog(dlg,
+                    "La descripción no puede exceder " + MAX_MODISTA + " caracteres (actual: "
+                    + descripcion.length() + ").\nAcórtala antes de agregar al carrito.",
+                    "Texto demasiado largo", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         Manufactura m = new Manufactura();
         m.setArticulo(art);
-        m.setDescripcion(tDescripcion.getText().trim());
+        m.setDescripcion(descripcion);
         m.setPrecio(precio);
         m.setDescuento(desc);
         m.setFechaRegistro(getFechaVentaEfectiva());           // fecha de venta
@@ -3685,9 +3704,9 @@ private void dibujarTarjeta(Graphics2D g2, TarjetaVentaData t,
 
     yCursor += lineH / 2;
     g2.drawString("Código Artículo: " + safe(t.codigoArticulo), textX, yCursor); yCursor += lineH;
-    g2.drawString("Artículo: " + safe(t.articulo), textX, yCursor);               yCursor += lineH;
-    g2.drawString("Marca: " + safe(t.marca), textX, yCursor);                     yCursor += lineH;
-    g2.drawString("Modelo: " + safe(t.modelo), textX, yCursor);                   yCursor += lineH;
+    yCursor = drawWrappedSimple(g2, "Artículo: " + safe(t.articulo), textX, yCursor, iw - 2 * margin);
+    yCursor = drawWrappedSimple(g2, "Marca: " + safe(t.marca), textX, yCursor, iw - 2 * margin);
+    yCursor = drawWrappedSimple(g2, "Modelo: " + safe(t.modelo), textX, yCursor, iw - 2 * margin);
     g2.drawString("Talla: " + safe(t.talla) + "   Color: " + safe(t.color),
                   textX, yCursor);
     yCursor += lineH * 2;
